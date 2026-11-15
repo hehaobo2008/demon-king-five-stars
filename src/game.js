@@ -1,8 +1,6 @@
 // 道具摆放规则：纯逻辑，不碰 DOM。
 // 三种道具共用 放置扣钱 / 移动免费 / 收回全额退款；路牌额外有朝向（dir：0上 1右 2下 3左）。
 
-import { SKELETON } from './map.js'
-
 export const ITEMS = {
   chest: { name: '宝箱', price: 20 },
   shield: { name: '盾牌架', price: 30 },
@@ -21,12 +19,13 @@ export const EVENT_LABELS = {
   badge: '拿到勇者徽章',
   safe: '平安过了弩机',
   shot: '被弩箭射中',
+  supply: '走补给廊',
 }
 
 export const tileKey = (x, y) => x + ',' + y
 
-export function createGame(grid) {
-  return { grid, gold: START_GOLD, items: new Map(), log: [] }
+export function createGame(grid, reserved = []) {
+  return { grid, gold: START_GOLD, items: new Map(), log: [], reserved }
 }
 
 export function addLog(game, kind) {
@@ -47,7 +46,7 @@ export function isFloor(grid, x, y) {
 // ignoreKey：移动时忽略道具自身原格
 export function placeReason(game, x, y, ignoreKey = null) {
   if (!isFloor(game.grid, x, y)) return 'wall'
-  if (x === SKELETON.x && y === SKELETON.y) return 'reserved'
+  if (game.reserved && game.reserved.some((r) => r.x === x && r.y === y)) return 'reserved'
   const k = tileKey(x, y)
   if (game.items.has(k) && k !== ignoreKey) return 'occupied'
   return 'ok'

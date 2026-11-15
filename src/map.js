@@ -43,9 +43,9 @@ const RECTS = [
   { ...ROOMS.entrance, zone: 'entrance' },
   { zone: 'corridor', x1: 10, y1: 3, x2: 11, y2: 15 },
   { zone: 'corridor', x1: 7, y1: 14, x2: 9, y2: 14 }, // 入口 → 主通道
-  { ...ROOMS.sideA, zone: 'side' }, // 侧室 A（左上）
+  { ...ROOMS.sideA, zone: 'sideA' }, // 侧室 A（左上，青灰地砖）
   { zone: 'corridor', x1: 8, y1: 5, x2: 9, y2: 5 }, // 侧室 A → 主通道
-  { ...ROOMS.sideB, zone: 'side' }, // 侧室 B（右中）
+  { ...ROOMS.sideB, zone: 'sideB' }, // 侧室 B（右中，深木）
   { zone: 'corridor', x1: 12, y1: 11, x2: 13, y2: 11 }, // 侧室 B → 主通道
   { ...ROOMS.challenge, zone: 'challenge' }, // 挑战房（右上）
   { zone: 'corridor', x1: 12, y1: 4, x2: 13, y2: 4 }, // 挑战房 → 主通道
@@ -64,6 +64,47 @@ export const SKELETON = { x: 19, y: 4 }
 // 通道机械弩：装在东墙 (12,9)，射线横扫通道第 9 行；客人停在射线前 (10,10)
 export const CROSSBOW = { x: 12, y: 9 }
 export const TRAP_STOP = { x: 10, y: 10 }
+
+// ===== 第二单：回形军械库（与首单完全独立的第二张地图） =====
+// 回形环廊：左/上是木质补给廊，右/下是石廊近路；中央是军械库实体块。
+// 岔口 (6,13) 摆路牌，朝上(0) → 补给廊；其他方向或不摆 → 右转近路（经过机械弩）。
+export const MAP2 = {
+  spawn: { x: 2, y: 15 },
+  junction: { x: 6, y: 13, dir: 0 },
+  skeleton: { x: 21, y: 5 },
+  challenge: { x: 20, y: 5 },
+  crossbow: { x: 19, y: 8 },
+  beamLeft: 17,
+  trapStop: { x: 17, y: 9 },
+  trapBeam: { x: 17, y: 8 },
+  trapFar: { x: 17, y: 7 },
+  doors: {
+    entrance: { x: 5, y: 14 },
+    supply: { x: 19, y: 4 },
+    short: { x: 19, y: 7 },
+  },
+}
+
+const RECTS2 = [
+  { zone: 'entrance', x1: 1, y1: 13, x2: 4, y2: 16 },
+  { zone: 'corridor', x1: 5, y1: 13, x2: 18, y2: 14 }, // 下侧石廊
+  { zone: 'corridor', x1: 17, y1: 6, x2: 18, y2: 12 }, // 右侧石廊（弩线所在）
+  { zone: 'supply', x1: 5, y1: 4, x2: 6, y2: 12 }, // 左侧补给廊（木质）
+  { zone: 'supply', x1: 5, y1: 4, x2: 18, y2: 5 }, // 上侧补给廊
+  { zone: 'challenge', x1: 19, y1: 2, x2: 22, y2: 7 }, // 训练房
+]
+
+export function buildGrid2() {
+  const grid = Array.from({ length: ROWS }, () => Array(COLS).fill('wall'))
+  for (const r of RECTS2) {
+    for (let y = r.y1; y <= r.y2; y++) {
+      for (let x = r.x1; x <= r.x2; x++) {
+        grid[y][x] = r.zone
+      }
+    }
+  }
+  return grid
+}
 
 // 侧室标签单独给锚点
 export const SIDE_LABELS = [

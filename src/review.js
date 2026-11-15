@@ -10,11 +10,12 @@ const EVENT_TEXT = {
   badge: '拿到了勇者徽章',
   safe: '平安过了机械弩',
   shot: '被弩箭射中',
+  supply: '从补给廊绕到了训练房',
 }
 
 const EVENT_PRIORITY = {
   1: ['badge', 'chest', 'block', 'hit', 'shield'],
-  2: ['badge', 'safe', 'shot', 'block', 'hit', 'chest', 'shield'],
+  2: ['badge', 'safe', 'supply', 'shot', 'block', 'hit', 'shield'],
 }
 
 const COMMENT_5 = '侧室那只箱子当然是我发现的，那一锤也是我算好才挡的。'
@@ -26,6 +27,8 @@ const COMMENT2_5 = '我就看准了空档才迈那一步，机械弩停得刚刚
 const COMMENT2_4 = '空档我看得准准的，弩箭碰不到我；就是最后那锤没算进去。'
 const COMMENT2_3_BLOCK = '我以为看准了空档……那一步是走眼了。锤倒是挡住了。'
 const COMMENT2_3_PLAIN = '我以为看准了空档，结果是走眼了——弩箭和锤子都没躲过。'
+const COMMENT2_5_SUPPLY = '路牌一指我就绕了补给廊，多走几步换个稳妥；守卫那锤也挡下来了。'
+const COMMENT2_4_SUPPLY = '补给廊绕得又稳又顺，就是最后那锤没算进去。'
 
 function pickEvents(kinds, order) {
   return EVENT_PRIORITY[order]
@@ -52,27 +55,29 @@ export function buildReview(log, order = 1) {
 
   if (order === 2) {
     const hasSafe = kinds.has('safe')
+    const hasSupply = kinds.has('supply')
     const hasBlock = kinds.has('block')
+    const hasPass = hasSafe || hasSupply
 
     let stars = 3 // 拿到徽章保底
-    if (hasSafe) stars += 1
-    if (hasSafe && hasBlock) stars += 1
+    if (hasPass) stars += 1
+    if (hasPass && hasBlock) stars += 1
 
     const missing = []
-    if (!hasSafe) {
-      missing.push('第四颗星：没能平安过弩（预警四秒内点「暂停机械弩」）')
+    if (!hasPass) {
+      missing.push('第四颗星：没能平安通行（近路要四秒内按暂停，或把路牌转朝上走补给廊）')
     }
-    if (hasSafe && !hasBlock) {
+    if (hasPass && !hasBlock) {
       missing.push('第五颗星：没挡住守卫那一锤')
-    } else if (!hasSafe && hasBlock) {
-      missing.push('第五颗星：还差平安过弩（格挡已做到）')
-    } else if (!hasSafe && !hasBlock) {
-      missing.push('第五颗星：要先平安过弩，再挡住守卫那一锤')
+    } else if (!hasPass && hasBlock) {
+      missing.push('第五颗星：还差一次平安通行（格挡已做到）')
+    } else if (!hasPass && !hasBlock) {
+      missing.push('第五颗星：要先平安通行，再挡住守卫那一锤')
     }
 
     let comment
-    if (stars === 5) comment = COMMENT2_5
-    else if (stars === 4) comment = COMMENT2_4
+    if (stars === 5) comment = hasSupply ? COMMENT2_5_SUPPLY : COMMENT2_5
+    else if (stars === 4) comment = hasSupply ? COMMENT2_4_SUPPLY : COMMENT2_4
     else comment = hasBlock ? COMMENT2_3_BLOCK : COMMENT2_3_PLAIN
 
     return { status: 'rated', stars, events, comment, missing }

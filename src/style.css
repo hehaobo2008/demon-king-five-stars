@@ -135,6 +135,78 @@ h1 {
   border-top-color: #3a2a1c;
 }
 
+/* 战斗台词在留白处：气泡在锚点下方，小尖角朝上指回场上 */
+.bubble.tail-up {
+  transform: translate(-50%, 8px);
+}
+
+.bubble.tail-up::after {
+  top: -7px;
+  bottom: auto;
+  border-top-color: transparent;
+  border-bottom-color: #3a2a1c;
+}
+
+/* 首单上手引导旁注 */
+.coach {
+  position: absolute;
+  transform: translateY(-50%);
+  max-width: 200px;
+  padding: 6px 8px;
+  background: rgba(36, 30, 23, 0.94);
+  border: 2px solid var(--brass);
+  color: var(--ink);
+  font-size: 11.5px;
+  line-height: 1.5;
+  pointer-events: none;
+  z-index: 4;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.45);
+}
+
+.coach::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 6px solid transparent;
+  border-right-color: var(--brass);
+}
+
+.coach.arrow-right::before {
+  left: auto;
+  right: -10px;
+  border-right-color: transparent;
+  border-left-color: var(--brass);
+}
+
+/* 弩机警报：独立于普通台词的红色警示 */
+.alarm {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  padding: 3px 9px;
+  background: #2a120e;
+  border: 2px solid #ef7d57;
+  color: #ffd9a0;
+  font-size: 12px;
+  line-height: 1.4; /* 抵消 .canvas-wrap 的 line-height:0，避免文字压扁 */
+  letter-spacing: 1px;
+  white-space: nowrap;
+  box-shadow: 0 0 0 1px #000, 0 0 12px rgba(239, 125, 87, 0.35);
+  pointer-events: none;
+  z-index: 5;
+  animation: alarm-blink 0.5s infinite alternate;
+}
+
+@keyframes alarm-blink {
+  from {
+    filter: brightness(1);
+  }
+  to {
+    filter: brightness(1.35);
+  }
+}
+
 .review {
   position: absolute;
   inset: 0;
@@ -269,6 +341,21 @@ h1 {
   flex: none;
 }
 
+.guest-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.guest-avatar {
+  width: 26px;
+  height: auto;
+  image-rendering: pixelated;
+  border: 2px solid var(--wood);
+  background: #1d1812;
+  flex: none;
+}
+
 .guest-title {
   font-size: 12px;
   color: var(--brass);
@@ -304,6 +391,23 @@ h1 {
 .btn.primary {
   background: var(--red);
   border-color: #4a1d1a;
+}
+
+/* 两件都备好后，开门营业提亮 */
+.btn.primary.ready {
+  background: var(--red-bright);
+  border-color: var(--brass-bright);
+  box-shadow: 0 0 0 2px rgba(232, 201, 122, 0.4), 2px 2px 0 var(--shadow);
+  animation: cta-glow 0.9s infinite alternate;
+}
+
+@keyframes cta-glow {
+  from {
+    filter: brightness(1);
+  }
+  to {
+    filter: brightness(1.22);
+  }
 }
 
 .btn:disabled {

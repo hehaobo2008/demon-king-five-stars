@@ -1,5 +1,5 @@
 import './style.css'
-import { COLS, ROWS, SKELETON, TRAP_STOP, buildGrid } from './map.js'
+import { COLS, ROWS, MAP2, ROOMS, SKELETON, TRAP_STOP, buildGrid, buildGrid2 } from './map.js'
 import {
   ITEMS,
   DIR_NAMES,
@@ -16,7 +16,7 @@ import {
 } from './game.js'
 import { planRoute, WALK } from './walk.js'
 import { buildReview } from './review.js'
-import { makeBaseMap, renderScene, itemDataURL } from './render.js'
+import { makeBaseMap, renderScene, itemDataURL, charAvatarDataURL, TORCHES_BY_ORDER } from './render.js'
 
 const canvas = document.getElementById('game')
 const ctx = canvas.getContext('2d')
@@ -24,6 +24,9 @@ const sidebar = document.getElementById('sidebar')
 const goldEl = document.getElementById('gold')
 const statusEl = document.getElementById('status')
 const bubbleEl = document.getElementById('bubble')
+const coachEl = document.getElementById('coach')
+const alarmEl = document.getElementById('alarm')
+const chestCardEl = document.querySelector('.card[data-type="chest"]')
 const btnOpen = document.getElementById('btn-open')
 const btnReset = document.getElementById('btn-reset')
 const btnTrap = document.getElementById('btn-trap')
@@ -33,6 +36,7 @@ const tab1 = document.getElementById('tab-order1')
 const tab2 = document.getElementById('tab-order2')
 const guestTitleEl = document.getElementById('guest-title')
 const guestQuoteEl = document.getElementById('guest-quote')
+const guestAvatarEl = document.getElementById('guest-avatar')
 const logListEl = document.getElementById('log-list')
 const reviewCard = document.getElementById('review-card')
 const reviewTitle = document.getElementById('review-title')
@@ -44,8 +48,31 @@ const btnAgain = document.getElementById('btn-again')
 const ghost = document.getElementById('ghost')
 const ghostImg = ghost.querySelector('img')
 
-const game = createGame(buildGrid())
-const base = makeBaseMap()
+// 每单独立存档：地图、场布、余额、日志互不影响
+const MAP_DEFS = {
+  1: {
+    skeleton: SKELETON,
+    crossbow: { x: 12, y: 9 },
+    beamLeft: 9,
+    trapStop: TRAP_STOP,
+    arena: { x: 18.5, y: 7.6 },
+  },
+  2: {
+    skeleton: MAP2.skeleton,
+    crossbow: MAP2.crossbow,
+    beamLeft: MAP2.beamLeft,
+    trapStop: MAP2.trapStop,
+    arena: { x: 20, y: 9.2 },
+  },
+}
+const games = {
+  1: createGame(buildGrid(), [SKELETON]),
+  2: createGame(buildGrid2(), [MAP2.skeleton]),
+}
+let game = games[1]
+const bases = { 1: makeBaseMap(1), 2: makeBaseMap(2) }
+let base = bases[1]
+let currentMap = MAP_DEFS[1]
 
 // 调试/测试缝：浏览器控制台与自动化实测可读状态
 window.__game = game
@@ -57,6 +84,10 @@ window.__ui = () => ({
   trapMode: crossbow.mode,
   trapUsed: crossbow.used,
   trapWindow: crossbow.windowOpen,
+  onbStep,
+  guide: guideState
+    ? { room: guideState.room || null, tile: guideState.tile || null }
+    : null,
   guest: guest
     ? {
         x: +guest.x.toFixed(2),
@@ -75,15 +106,22 @@ window.__ui = () => ({
 let mode = 'setup'
 let order = 1 // 1 首单剑士 | 2 二单机关迷
 let secondUnlocked = false
-const crossbow = { mode: 'idle', used: false, pressed: false, boltStart: 0, windowOpen: false }
+const crossbow = {
+  mode: 'idle',
+  used: false,
+  pressed: false,
+  boltStart: 0,
+  windowOpen: false,
+  warnStart: 0,
+}
 const ORDER_INFO = {
   1: {
     title: '今日预约 · 新手剑士',
-    quote: '「我是新手剑士，想拿到勇者徽章。看见宝箱的话，我一定会去看看。」',
+    quote: '「我是新手剑士，想拿到勇者徽章。侧室的宝箱我要开，守卫那一锤我也想挡。」',
   },
   2: {
     title: '今日预约 · 机关迷',
-    quote: '「我是机关迷，想拿勇者徽章，也想平平安安过了那道弩。」',
+    quote: '「我是机关迷，想拿勇者徽章。路牌朝上我就绕补给廊；不然就走近路，赌一把弩机。」',
   },
 }
 let guest = null
@@ -91,9 +129,32 @@ let walker = null
 let pending = null
 let drag = null
 let bounce = null
-const skeleton = { x: SKELETON.x, y: SKELETON.y, pose: 'idle' }
+let bubbleAnchor = null
+
+// 首单上手引导（首单真的拿过五星后才收起）
+let onboardingRetired = false
+let onbStep = 'off' // chest | shield | done | off
+let guideState = null // { room } | { tile } | null
+const GUIDE_ROOM = ROOMS.sideA
+// 建议盾格偏好：依次挑「实际会经过且未被占用」的空地
+const SHIELD_SPOT_PREFS = [
+  [11, 12],
+  [10, 12],
+  [10, 13],
+  [11, 13],
+  [10, 11],
+  [10, 10],
+  [11, 14],
+  [10, 14],
+  [10, 9],
+  [10, 8],
+  [10, 7],
+  [10, 6],
+]
+const skeleton = { x: currentMap.skeleton.x, y: currentMap.skeleton.y, pose: 'idle' }
 let fx = null
 let stagger = null
+let runHasTrap = true
 
 const BOUNCE_MS = 240
 const DRAG_THRESHOLD = 5
@@ -105,6 +166,9 @@ for (const el of cardEls) {
   el.querySelector('img').src = itemDataURL(type)
   el.querySelector('.price').textContent = ITEMS[type].price
 }
+
+// 预约头像（随订单切换）
+guestAvatarEl.src = charAvatarDataURL('knight')
 
 // 画布内容区（去掉 CSS 边框）在视口中的位置与尺寸：命中判定只认画出来的地砖区
 function canvasBox() {
@@ -164,20 +228,34 @@ function status(msg) {
   statusEl.textContent = msg
 }
 
-function showBubble(text) {
+function showBubble(text, at = null) {
+  bubbleAnchor = at
   bubbleEl.textContent = text
+  bubbleEl.classList.toggle('tail-up', !!at)
   bubbleEl.hidden = false
   positionBubble()
 }
 
 function hideBubble() {
   bubbleEl.hidden = true
+  bubbleEl.classList.remove('tail-up')
+  bubbleAnchor = null
 }
 
 function positionBubble() {
-  if (!guest) return
-  bubbleEl.style.left = ((guest.x + 0.5) / COLS) * 100 + '%'
-  bubbleEl.style.top = (guest.y / ROWS) * 100 + '%'
+  const pos = bubbleAnchor || (guest ? { x: guest.x, y: guest.y } : null)
+  if (!pos) return
+  const parent = bubbleEl.parentElement
+  const W = parent ? parent.clientWidth : COLS * 32
+  const w = bubbleEl.offsetWidth || 200
+  let cxPx = ((pos.x + 0.5) / COLS) * W
+  // 水平收进画布内：二单右侧也别被裁掉
+  const minX = w / 2 + 4
+  const maxX = W - w / 2 - 4
+  if (cxPx < minX) cxPx = minX
+  if (cxPx > maxX) cxPx = maxX
+  bubbleEl.style.left = cxPx + 'px'
+  bubbleEl.style.top = (pos.y / ROWS) * 100 + '%'
 }
 
 function updateLogUI() {
@@ -200,6 +278,8 @@ function updateLogUI() {
 
 function showReview() {
   const r = buildReview(game.log, order)
+  // 首单真的拿过五星后才收起上手引导；3/4 星回来仍按现状提示
+  if (order === 1 && r.status === 'rated' && r.stars === 5) onboardingRetired = true
   reviewTitle.textContent = order === 2 ? '机关迷的评价单' : '新手剑士的评价单'
   reviewStars.textContent = ''
   if (r.status === 'incomplete') {
@@ -265,10 +345,12 @@ function updateHUD() {
   }
   btnOpen.disabled = mode !== 'setup'
   updateTrapButton()
+  updateOnboarding()
 }
 
 function updateTrapButton() {
-  btnTrap.hidden = !(secondUnlocked && order === 2)
+  btnTrap.hidden =
+    !(secondUnlocked && order === 2) || (mode === 'business' && !runHasTrap)
   if (btnTrap.hidden) return
   const armed =
     mode === 'business' && crossbow.windowOpen && crossbow.mode === 'warning' && !crossbow.used
@@ -279,13 +361,149 @@ function updateTrapButton() {
 function setOrder(n) {
   if (mode !== 'setup') return
   order = n
+  game = games[n]
+  base = bases[n]
+  currentMap = MAP_DEFS[n]
+  window.__game = game
+  skeleton.x = currentMap.skeleton.x
+  skeleton.y = currentMap.skeleton.y
   const info = ORDER_INFO[order]
   guestTitleEl.textContent = info.title
   guestQuoteEl.textContent = info.quote
+  guestAvatarEl.src = charAvatarDataURL(order === 2 ? 'fan' : 'knight')
   orderTabs.hidden = !secondUnlocked
   tab1.classList.toggle('active', order === 1)
   tab2.classList.toggle('active', order === 2)
-  updateTrapButton()
+  status(
+    order === 2
+      ? '路牌放在岔口并朝上，客人就绕补给廊；其他方向走近路。'
+      : '把道具拖到空地砖上摆放',
+  )
+  // 二单商店只上这单用得上的道具
+  chestCardEl.hidden = order === 2
+  updateLogUI()
+  updateHUD()
+}
+
+// ---------- 首单上手引导 ----------
+
+function itemInRoom(item, room) {
+  return item.x >= room.x1 && item.x <= room.x2 && item.y >= room.y1 && item.y <= room.y2
+}
+
+// 首单实际会踩到的地砖（含开箱/路牌绕行），用于判断「盾牌放得走不走得到」
+function walkedTilesOrder1() {
+  const set = new Set()
+  const plan = planRoute(game, 1)
+  if (plan) {
+    for (const a of plan.actions) {
+      if (a.type === 'move') {
+        for (const t of a.path) set.add(tileKey(t.x, t.y))
+      }
+    }
+  }
+  return set
+}
+
+function setCoach(text, leftPct, topPct, arrowRight = false) {
+  coachEl.textContent = text
+  coachEl.style.left = leftPct + '%'
+  coachEl.style.top = topPct + '%'
+  coachEl.classList.toggle('arrow-right', arrowRight)
+  coachEl.hidden = false
+}
+
+function suggestShieldTile(walked) {
+  for (const [x, y] of SHIELD_SPOT_PREFS) {
+    if (walked.has(tileKey(x, y)) && placeReason(game, x, y) === 'ok') return { x, y }
+  }
+  for (const k of walked) {
+    const [x, y] = k.split(',').map(Number)
+    if (placeReason(game, x, y) === 'ok') return { x, y }
+  }
+  return null
+}
+
+function coachSpotForTile(t) {
+  return {
+    left: Math.min(72, ((t.x + 1.25) / COLS) * 100),
+    top: Math.min(86, Math.max(8, ((t.y + 0.5) / ROWS) * 100)),
+  }
+}
+
+function updateOnboarding() {
+  btnOpen.classList.remove('ready')
+  if (mode !== 'setup') {
+    coachEl.hidden = true
+    guideState = null
+    onbStep = 'off'
+    return
+  }
+  if (order === 2) {
+    // 二单：岔口地标 + 路牌朝向提示
+    onbStep = 'route'
+    guideState = { room: null, tile: { x: MAP2.junction.x, y: MAP2.junction.y } }
+    const sign = game.items.get(tileKey(MAP2.junction.x, MAP2.junction.y))
+    let text
+    if (!sign || sign.type !== 'sign') {
+      text = '路牌放这格朝上，客人就绕补给廊；不放或转错就走近路。'
+    } else if (sign.dir === MAP2.junction.dir) {
+      text = '路牌朝上：这趟走补给廊。'
+    } else {
+      text = '路牌没朝上：这趟走近路（弩机）。'
+    }
+    // 提示挂到岔口上方军械库南墙的空处，避开右侧走道
+    setCoach(text, 38, 64)
+    return
+  }
+  if (onboardingRetired) {
+    coachEl.hidden = true
+    guideState = null
+    onbStep = 'off'
+    return
+  }
+  const items = [...game.items.values()]
+  const chests = items.filter((it) => it.type === 'chest')
+  const chestInRoom = chests.find(
+    (it) => itemInRoom(it, ROOMS.sideA) || itemInRoom(it, ROOMS.sideB),
+  )
+
+  if (!chestInRoom) {
+    onbStep = 'chest'
+    guideState = { room: GUIDE_ROOM, tile: null }
+    setCoach(
+      chests.length
+        ? '宝箱要放进亮起的侧室，他才会进去开。'
+        : '把宝箱拖进亮起的侧室，他会进去开箱。',
+      34,
+      28,
+    )
+    return
+  }
+
+  const walked = walkedTilesOrder1()
+  const shields = items.filter((it) => it.type === 'shield')
+  const goodShield = shields.find((it) => walked.has(tileKey(it.x, it.y)))
+
+  if (!goodShield) {
+    onbStep = 'shield'
+    const spot = suggestShieldTile(walked)
+    guideState = spot ? { room: null, tile: spot } : null
+    const where = spot ? coachSpotForTile(spot) : { left: 51, top: 64 }
+    setCoach(
+      shields.length
+        ? '这格剑士走不到，把盾牌挪到亮起的建议格。'
+        : '再摆一面盾，拖到亮起的建议格。他路过时会捡起来挡锤。',
+      where.left,
+      where.top,
+    )
+    return
+  }
+
+  onbStep = 'done'
+  guideState = null
+  btnOpen.classList.add('ready')
+  setCoach('两件都备好了，点「开门营业」迎客。', 55, 80, true)
 }
 
 function trySwitchOrder(n) {
@@ -317,12 +535,22 @@ function startBusiness() {
     status('客人找不到去挑战房的路')
     return
   }
+  runHasTrap = plan.actions.some((a) => a.type === 'trap')
   pending = null
   drag = null
   hideGhost()
   sidebar.classList.remove('drop-refund')
   mode = 'business'
-  guest = { x: plan.start.x, y: plan.start.y, hasShield: false, hasBadge: false }
+  guest = {
+    x: plan.start.x,
+    y: plan.start.y,
+    hasShield: false,
+    hasBadge: false,
+    variant: order === 2 ? 'fan' : 'knight',
+    facing: 'down',
+    walkPhase: 0,
+    moving: false,
+  }
   walker = { actions: plan.actions, i: 0, actionStart: performance.now() }
   skeleton.pose = 'idle'
   fx = null
@@ -332,6 +560,8 @@ function startBusiness() {
   crossbow.pressed = false
   crossbow.boltStart = 0
   crossbow.windowOpen = false
+  crossbow.warnStart = 0
+  alarmEl.hidden = true
   hideBubble()
   status('营业中：客人正在探索……')
   updateHUD()
@@ -351,6 +581,9 @@ function resetBusiness() {
   crossbow.pressed = false
   crossbow.boltStart = 0
   crossbow.windowOpen = false
+  crossbow.warnStart = 0
+  alarmEl.hidden = true
+  runHasTrap = true
   restoreItems(game)
   game.log.length = 0
   updateLogUI()
@@ -409,6 +642,7 @@ function stepWalker(t) {
         const last = a.path[a.path.length - 1]
         guest.x = last.x
         guest.y = last.y
+        guest.moving = false
         advanceWalker(t)
         continue
       }
@@ -418,12 +652,20 @@ function stepWalker(t) {
       const p1 = a.path[idx + 1]
       guest.x = p0.x + (p1.x - p0.x) * frac
       guest.y = p0.y + (p1.y - p0.y) * frac
+      const dx = p1.x - p0.x
+      const dy = p1.y - p0.y
+      if (dx || dy) {
+        guest.facing =
+          Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up'
+      }
+      guest.moving = true
+      guest.walkPhase = Math.floor(el / 85) % 2
       return
     }
     if (a.type === 'bubble') {
       if (!a.started) {
         a.started = true
-        showBubble(a.text)
+        showBubble(a.text, a.arena ? currentMap.arena : null)
       }
       if (t - walker.actionStart >= a.wait) {
         advanceWalker(t)
@@ -469,6 +711,12 @@ function stepWalker(t) {
       advanceWalker(t)
       continue
     }
+    if (a.type === 'face') {
+      guest.facing = a.dir
+      guest.moving = false
+      advanceWalker(t)
+      continue
+    }
     if (a.type === 'badge') {
       guest.hasBadge = true
       advanceWalker(t)
@@ -484,6 +732,10 @@ function stepWalker(t) {
       if (!a.started) {
         a.started = true
         fx = { kind: a.kind, at: a.at, start: t, ms: a.ms, t: 0 }
+        if (a.kind === 'block' && guest) {
+          guest.blockStart = t
+          guest.blockMs = a.ms
+        }
       }
       if (t - walker.actionStart >= a.ms) {
         fx = null
@@ -507,8 +759,8 @@ function stepWalker(t) {
     }
     if (a.type === 'trap') {
       // 机械弩：预警四秒 → 暂停后先跨过亮线再记平安；错过则先步入亮线格、沿亮线中箭
-      const beamTile = { x: TRAP_STOP.x, y: TRAP_STOP.y - 1 }
-      const farTile = { x: TRAP_STOP.x, y: TRAP_STOP.y - 2 }
+      const beamTile = a.beam
+      const farTile = a.far
       if (!a.started) {
         a.started = true
         a.phase = 'warn'
@@ -516,8 +768,10 @@ function stepWalker(t) {
         crossbow.mode = 'warning'
         crossbow.pressed = false
         crossbow.windowOpen = true
+        crossbow.warnStart = t
         updateTrapButton()
-        showBubble('前面有机械弩……')
+        // 警报期间收起白色台词气泡，让客人、亮线和弩机露出来
+        hideBubble()
         status('弩机预警！4 秒内点「暂停机械弩」')
       }
       if (a.phase === 'warn') {
@@ -560,9 +814,13 @@ function stepWalker(t) {
         const el = Math.min(340, t - a.phaseStart)
         guest.x = a.crossFrom.x
         guest.y = a.crossFrom.y - Math.min(2, el / 170)
+        guest.facing = 'up'
+        guest.moving = true
+        guest.walkPhase = Math.floor((t - a.phaseStart) / 85) % 2
         if (t - a.phaseStart >= 340) {
           guest.x = farTile.x
           guest.y = farTile.y
+          guest.moving = false
           // 先走到另一侧，才记「平安过弩」
           addLog(game, 'safe')
           updateLogUI()
@@ -599,9 +857,13 @@ function stepWalker(t) {
         const el = Math.min(170, t - a.phaseStart)
         guest.x = a.stepFrom.x
         guest.y = a.stepFrom.y + (beamTile.y - a.stepFrom.y) * (el / 170)
+        guest.facing = 'up'
+        guest.moving = true
+        guest.walkPhase = Math.floor((t - a.phaseStart) / 85) % 2
         if (t - a.phaseStart >= 170) {
           guest.x = beamTile.x
           guest.y = beamTile.y
+          guest.moving = false
           tryPickupAt(beamTile)
           crossbow.mode = 'firing'
           crossbow.boltStart = t
@@ -627,6 +889,25 @@ function stepWalker(t) {
       }
       if (a.phase === 'hit') {
         if (t - a.phaseStart >= 1600) {
+          a.phase = 'recover'
+          a.phaseStart = t
+          a.recoverFrom = { x: guest.x, y: guest.y }
+        }
+        return
+      }
+      if (a.phase === 'recover') {
+        // 中箭后从亮线格再走一步到另一侧，逐格不断
+        const el = Math.min(170, t - a.phaseStart)
+        guest.x = a.recoverFrom.x
+        guest.y = a.recoverFrom.y + (farTile.y - a.recoverFrom.y) * (el / 170)
+        guest.facing = 'up'
+        guest.moving = true
+        guest.walkPhase = Math.floor((t - a.phaseStart) / 85) % 2
+        if (t - a.phaseStart >= 170) {
+          guest.x = farTile.x
+          guest.y = farTile.y
+          guest.moving = false
+          tryPickupAt(farTile)
           patchNextMove()
           advanceWalker(t)
         }
@@ -764,6 +1045,7 @@ window.addEventListener('pointerup', () => {
     if (item && item.type === 'sign') {
       const dir = rotateItem(game, item.x, item.y)
       status(`路牌顺时针转了 90°，现在朝${DIR_NAMES[dir]}`)
+      updateHUD()
     }
     return
   }
@@ -860,28 +1142,52 @@ function frame(t) {
     }
   }
   stepWalker(t)
-  if (guest && !bubbleEl.hidden) positionBubble()
+  if (!bubbleEl.hidden) positionBubble()
   if (fx) {
     fx.t = t - fx.start
     if (fx.t >= fx.ms) fx = null
   }
   let offsetY = 0
+  let offsetX = 0
   if (stagger) {
     const el = t - stagger.start
     if (el >= stagger.ms) stagger = null
-    else offsetY = Math.sin(el * 0.08) * 4
+    else {
+      const p = el / stagger.ms
+      offsetX = -Math.sin(p * Math.PI) * 7 // 吃锤才后撤
+      offsetY = Math.sin(p * Math.PI * 4) * 1.5
+    }
+  }
+  const blocking = !!(guest && guest.blockStart && t - guest.blockStart < guest.blockMs)
+
+  // 二单警报：独立于普通台词的红色警示，显示剩余秒数
+  if (order === 2 && crossbow.mode === 'warning' && crossbow.windowOpen) {
+    const remain = Math.max(0, 4000 - (t - crossbow.warnStart))
+    alarmEl.hidden = false
+    alarmEl.textContent = `⚠ 弩机预警 ${Math.max(1, Math.ceil(remain / 1000))}s`
+    const cb = currentMap.crossbow
+    alarmEl.style.left = ((cb.x + 0.5) / COLS) * 100 + '%'
+    alarmEl.style.top = ((cb.y - 0.9) / ROWS) * 100 + '%'
+  } else if (!alarmEl.hidden) {
+    alarmEl.hidden = true
   }
   const hiddenKey =
     drag && drag.source !== 'shop' ? tileKey(drag.source.x, drag.source.y) : null
   renderScene(ctx, base, game, drag ? drag.target : null, hiddenKey, {
-    guest: guest ? { ...guest, offsetY } : null,
+    guest: guest ? { ...guest, offsetY, offsetX, blocking } : null,
     skeleton,
     fx,
+    guide: guideState,
+    torches: TORCHES_BY_ORDER[order],
     crossbow:
       order === 2
         ? {
             mode: crossbow.mode,
             boltT: crossbow.mode === 'firing' ? t - crossbow.boltStart : 0,
+            x: currentMap.crossbow.x,
+            y: currentMap.crossbow.y,
+            beamLeft: currentMap.beamLeft,
+            stopX: currentMap.trapStop.x,
           }
         : null,
   })

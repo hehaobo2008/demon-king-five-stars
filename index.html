@@ -17,6 +17,8 @@
         <div class="canvas-wrap">
           <canvas id="game" width="768" height="576" aria-label="魔王的地牢地图"></canvas>
           <div id="bubble" class="bubble" hidden></div>
+          <div id="coach" class="coach" hidden></div>
+          <div id="alarm" class="alarm" hidden></div>
 
           <div id="review-card" class="review" hidden>
             <div class="review-panel">
@@ -42,8 +44,11 @@
           </div>
 
           <section class="guest-reserve">
-            <div class="guest-title" id="guest-title">今日预约 · 新手剑士</div>
-            <p class="guest-quote" id="guest-quote">「我是新手剑士，想拿到勇者徽章。看见宝箱的话，我一定会去看看。」</p>
+            <div class="guest-head">
+              <img id="guest-avatar" class="guest-avatar" alt="预约客人头像" />
+              <div class="guest-title" id="guest-title">今日预约 · 新手剑士</div>
+            </div>
+            <p class="guest-quote" id="guest-quote">「我是新手剑士，想拿到勇者徽章。侧室的宝箱我要开，守卫那一锤我也想挡。」</p>
             <div class="btn-row">
               <button id="btn-open" class="btn primary">开门营业</button>
               <button id="btn-reset" class="btn">重新布置</button>
