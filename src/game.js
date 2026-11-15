@@ -12,14 +12,14 @@ export const DIR_NAMES = ['上', '右', '下', '左']
 
 // 营业事件：只记录真实发生的
 export const EVENT_LABELS = {
-  chest: '开箱',
-  shield: '拿盾',
-  block: '格挡成功',
-  hit: '挨了一下',
-  badge: '拿到勇者徽章',
-  safe: '平安过了弩机',
+  chest: '打开宝箱',
+  shield: '捡起盾牌',
+  block: '挡住守卫一锤',
+  hit: '挨了守卫一锤',
+  badge: '勇者徽章到手',
+  safe: '平安通过机械弩',
   shot: '被弩箭射中',
-  supply: '走补给廊',
+  supply: '绕行补给廊',
 }
 
 export const tileKey = (x, y) => x + ',' + y

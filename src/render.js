@@ -1812,6 +1812,220 @@ export function drawCoinFrame(ctx, f) {
   }
 }
 
+// 营业记录小图标：12×12 像素矩阵（金绿=得分事件，暗红叉=受挫）
+const LOG_ICON_ART = {
+  chest: {
+    pal: { o: '#1a1c2c', Y: '#ffcd75', y: '#c9a24b', b: '#8a6a2b', G: '#7fd66a' },
+    rows: [
+      '............',
+      '.oooooooooo.',
+      '.oYyyyyyyYo.',
+      '.oYyyyyyyYo.',
+      '.oooooooooo.',
+      '.oyyyyyyyyo.',
+      '.oyybbbyyyo.',
+      '.oyybGGbyyo.',
+      '.oyybbbyyyo.',
+      '.oyyyyyyyyo.',
+      '..oooooooo..',
+      '............',
+    ],
+  },
+  shield: {
+    pal: { o: '#1a1c2c', Y: '#ffcd75', y: '#c9a24b', G: '#5fbf5f', l: '#a7f070' },
+    rows: [
+      '............',
+      '.oooooooooo.',
+      '.oYyyyyyyYo.',
+      '.oYyyyyyyYo.',
+      '.oYyGGGGyYo.',
+      '.oYyGllGyYo.',
+      '.oYyGllGyYo.',
+      '..oYyGGyYo..',
+      '...oYyyYo...',
+      '....oYYo....',
+      '.....oo.....',
+      '............',
+    ],
+  },
+  block: {
+    pal: { o: '#1a1c2c', Y: '#ffcd75', y: '#c9a24b', G: '#5fbf5f', l: '#a7f070' },
+    rows: [
+      '............',
+      '.oooooooooo.',
+      '.oYyyyyyyYo.',
+      '.oYyyyyyyYo.',
+      '.oYyyGGyyYo.',
+      '.oYyGllGyYo.',
+      '.oYyyGGyyYo.',
+      '..oYyGGyYo..',
+      '...oYyyYo...',
+      '....oYYo....',
+      '.....oo.....',
+      '............',
+    ],
+  },
+  safe: {
+    pal: { o: '#1a1c2c', G: '#5fbf5f', l: '#a7f070' },
+    rows: [
+      '............',
+      '..........oo',
+      '.........oGo',
+      '........oGo.',
+      '..oo...oGo..',
+      '.oGo..oGo...',
+      '..oGooGo....',
+      '...oGoGo....',
+      '....oGo.....',
+      '.....o......',
+      '............',
+      '............',
+    ],
+  },
+  hit: {
+    pal: { o: '#1a1c2c', R: '#b34c54' },
+    rows: [
+      '............',
+      '.oo......oo.',
+      '.oRRo..oRRo.',
+      '..oRRooRRo..',
+      '...oRRRRo...',
+      '....oRRo....',
+      '...oRRRRo...',
+      '..oRRooRRo..',
+      '.oRRo..oRRo.',
+      '.oo......oo.',
+      '............',
+      '............',
+    ],
+  },
+  badge: {
+    pal: { o: '#1a1c2c', Y: '#ffcd75', y: '#c9a24b' },
+    rows: [
+      '............',
+      '.o..o..o..o.',
+      '.oYoYoYoYoY.',
+      '.oYyyyyyyYo.',
+      '.oYyyyyyyYo.',
+      '.oYyYYYyyYo.',
+      '.oYyyyyyyYo.',
+      '..oooooooo..',
+      '............',
+      '............',
+      '............',
+      '............',
+    ],
+  },
+  supply: {
+    pal: { y: '#c9a24b', G: '#5fbf5f' },
+    rows: [
+      '............',
+      '..y.........',
+      '..yGGo......',
+      '..yGGGo.....',
+      '..yGGo......',
+      '..y.........',
+      '..y.........',
+      '..y.........',
+      '..y.........',
+      '..y.........',
+      '..y.........',
+      '............',
+    ],
+  },
+}
+LOG_ICON_ART.shot = LOG_ICON_ART.hit
+
+const logIconCache = new Map()
+
+export function logIconDataURL(kind) {
+  if (logIconCache.has(kind)) return logIconCache.get(kind)
+  const def = LOG_ICON_ART[kind]
+  if (!def) return ''
+  const w = 12
+  const h = def.rows.length
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = h
+  const ctx = c.getContext('2d')
+  for (let r = 0; r < h; r++) {
+    const row = def.rows[r]
+    for (let i = 0; i < w; i++) {
+      const ch = row[i]
+      if (!ch || ch === '.') continue
+      ctx.fillStyle = def.pal[ch] || '#ffcd75'
+      ctx.fillRect(i, r, 1, 1)
+    }
+  }
+  const url = c.toDataURL()
+  logIconCache.set(kind, url)
+  return url
+}
+
+// 木匾边的像素喇叭：静音时变灰并带一道暗红斜杠
+const SPEAKER_ROWS = [
+  '................',
+  '................',
+  '....YYY.........',
+  '....YYY.........',
+  '..YYYYYYY.......',
+  '.YYYYYYYYY......',
+  '.YYYYYYYYY......',
+  '.YYYYYYYYY......',
+  '..YYYYYYY.......',
+  '....YYY.........',
+  '....YYY.........',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+]
+const WAVE_PIXELS = [
+  [11, 4],
+  [12, 5],
+  [12, 6],
+  [11, 7],
+  [13, 3],
+  [14, 4],
+  [14, 5],
+  [14, 6],
+  [14, 7],
+  [13, 8],
+]
+const speakerCache = new Map()
+
+export function speakerDataURL(muted = false) {
+  const key = muted ? 'muted' : 'on'
+  if (speakerCache.has(key)) return speakerCache.get(key)
+  const c = document.createElement('canvas')
+  c.width = 16
+  c.height = 16
+  const ctx = c.getContext('2d')
+  const stamp = (color, ox = 0, oy = 0) => {
+    ctx.fillStyle = color
+    for (let r = 0; r < SPEAKER_ROWS.length; r++) {
+      const row = SPEAKER_ROWS[r]
+      for (let i = 0; i < 16; i++) {
+        if (row[i] !== 'Y') continue
+        ctx.fillRect(i + ox, r + oy, 1, 1)
+      }
+    }
+  }
+  stamp('#1a1c2c', 1, 1)
+  stamp(muted ? '#8a8070' : '#e8c97a')
+  if (muted) {
+    ctx.fillStyle = '#d95757'
+    for (let i = 0; i < 9; i++) ctx.fillRect(4 + i, 12 - i, 2, 2)
+  } else {
+    ctx.fillStyle = '#a7f070'
+    for (const [x, y] of WAVE_PIXELS) ctx.fillRect(x, y, 1, 1)
+  }
+  const url = c.toDataURL()
+  speakerCache.set(key, url)
+  return url
+}
+
 // 简洁像素沙漏（8×10）
 export function hourglassDataURL() {
   const rows = [

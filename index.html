@@ -11,6 +11,9 @@
       <header class="plaque">
         <h1>魔王也要五星好评</h1>
         <p class="subtitle">先摆好道具，再开门迎客。</p>
+        <button id="btn-sound" class="sound-toggle" type="button" aria-pressed="false" aria-label="音效开关">
+          <img id="sound-icon" alt="" />
+        </button>
       </header>
 
       <div class="play-area">
@@ -27,16 +30,22 @@
           </div>
 
           <div id="review-card" class="review" hidden>
-            <div class="review-panel">
-              <div class="review-title" id="review-title">新手剑士的评价单</div>
-              <div id="review-stars" class="review-stars"></div>
-              <ul id="review-events" class="review-events"></ul>
-              <p id="review-comment" class="review-comment"></p>
-              <ul id="review-missing" class="review-missing"></ul>
-              <div class="btn-row">
-                <button id="btn-next" class="btn primary" hidden>接下一单</button>
-                <button id="btn-again" class="btn primary">再布置一趟</button>
+            <div class="receipt">
+              <div class="review-panel">
+                <div class="review-head">
+                  <div class="review-title" id="review-title">新手剑士的评价单</div>
+                  <div id="review-seal" class="review-seal">五星神店</div>
+                </div>
+                <div id="review-stars" class="review-stars" role="img" aria-label="星级"></div>
+                <ul id="review-events" class="review-events"></ul>
+                <p id="review-comment" class="review-comment"></p>
+                <ul id="review-missing" class="review-missing"></ul>
+                <div class="btn-row">
+                  <button id="btn-next" class="btn primary" hidden>接下一单</button>
+                  <button id="btn-again" class="btn primary">再布置一趟</button>
+                </div>
               </div>
+              <div class="receipt-teeth" aria-hidden="true"></div>
             </div>
           </div>
         </div>

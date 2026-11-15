@@ -30,17 +30,15 @@ const COMMENT2_3_PLAIN = '我以为看准了空档，结果是走眼了——弩
 const COMMENT2_5_SUPPLY = '路牌一指我就绕了补给廊，多走几步换个稳妥；守卫那锤也挡下来了。'
 const COMMENT2_4_SUPPLY = '补给廊绕得又稳又顺，就是最后那锤没算进去。'
 
-function pickEvents(kinds, order) {
-  return EVENT_PRIORITY[order]
-    .filter((k) => kinds.has(k))
-    .slice(0, 3)
-    .map((k) => EVENT_TEXT[k])
+function pickEventKinds(kinds, order) {
+  return EVENT_PRIORITY[order].filter((k) => kinds.has(k)).slice(0, 3)
 }
 
 export function buildReview(log, order = 1) {
   const kinds = new Set(log.map((e) => e.kind))
   const hasBadge = kinds.has('badge')
-  const events = pickEvents(kinds, order)
+  const eventKinds = pickEventKinds(kinds, order)
+  const events = eventKinds.map((k) => EVENT_TEXT[k])
 
   // 先检查预约是否完成：没有徽章就没有星级，只列实际发生的事
   if (!hasBadge) {
@@ -48,6 +46,7 @@ export function buildReview(log, order = 1) {
       status: 'incomplete',
       stars: 0,
       events,
+      eventKinds,
       comment: '',
       missing: ['预约未完成：没拿到勇者徽章'],
     }
@@ -80,7 +79,7 @@ export function buildReview(log, order = 1) {
     else if (stars === 4) comment = hasSupply ? COMMENT2_4_SUPPLY : COMMENT2_4
     else comment = hasBlock ? COMMENT2_3_BLOCK : COMMENT2_3_PLAIN
 
-    return { status: 'rated', stars, events, comment, missing }
+    return { status: 'rated', stars, events, eventKinds, comment, missing }
   }
 
   const hasChest = kinds.has('chest')
@@ -105,5 +104,5 @@ export function buildReview(log, order = 1) {
   else if (stars === 4) comment = COMMENT_4
   else comment = hasBlock ? COMMENT_3_BLOCK : COMMENT_3_PLAIN
 
-  return { status: 'rated', stars, events, comment, missing }
+  return { status: 'rated', stars, events, eventKinds, comment, missing }
 }

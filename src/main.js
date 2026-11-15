@@ -25,11 +25,16 @@ import {
   cursorDataURL,
   drawCoinFrame,
   hourglassDataURL,
+  logIconDataURL,
+  speakerDataURL,
   TORCHES_BY_ORDER,
 } from './render.js'
+import { sfx } from './sfx.js'
 
 const canvas = document.getElementById('game')
 const ctx = canvas.getContext('2d')
+const btnSound = document.getElementById('btn-sound')
+const soundIconEl = document.getElementById('sound-icon')
 const sidebar = document.getElementById('sidebar')
 const goldEl = document.getElementById('gold')
 const goldBoxEl = goldEl.parentElement
@@ -62,8 +67,10 @@ const guestTitleEl = document.getElementById('guest-title')
 const guestQuoteEl = document.getElementById('guest-quote')
 const guestAvatarEl = document.getElementById('guest-avatar')
 const logListEl = document.getElementById('log-list')
+const runLogEl = document.querySelector('.run-log')
 const reviewCard = document.getElementById('review-card')
 const reviewTitle = document.getElementById('review-title')
+const reviewSealEl = document.getElementById('review-seal')
 const reviewStars = document.getElementById('review-stars')
 const reviewEvents = document.getElementById('review-events')
 const reviewComment = document.getElementById('review-comment')
@@ -148,6 +155,9 @@ let footprintsBase = []
 let footprintPreview = null
 let footprintPreviewKey = ''
 let trapUiSig = ''
+let logShownOrder = 0
+let logShownCount = 0
+let reviewStampPlayed = false
 const crossbow = {
   mode: 'idle',
   used: false,
@@ -224,9 +234,35 @@ for (const el of cardEls) {
 guestAvatarEl.src = charAvatarDataURL('knight')
 coachAvatarEl.src = stewardAvatarDataURL()
 
-// 本地像素金币与警报沙漏
+// 本地像素金币、警报沙漏、记录等待图标与喇叭
 drawCoinFrame(coinCtx, 0)
 alarmIconEl.src = hourglassDataURL()
+const WAIT_LOG_ICON = hourglassDataURL()
+
+function updateSoundButton() {
+  const muted = sfx.isMuted()
+  btnSound.classList.toggle('muted', muted)
+  btnSound.setAttribute('aria-pressed', muted ? 'true' : 'false')
+  btnSound.setAttribute('aria-label', muted ? '音效已关，点击开启' : '音效开启，点击静音')
+  btnSound.title = muted ? '音效已关 · 点击开启' : '音效开启 · 点击静音'
+  soundIconEl.src = speakerDataURL(muted)
+}
+
+let audioGestureSeen = false
+function unlockAudioOnce() {
+  if (audioGestureSeen) return
+  audioGestureSeen = true
+  sfx.unlock()
+  window.removeEventListener('pointerdown', unlockAudioOnce, true)
+  window.removeEventListener('keydown', unlockAudioOnce, true)
+}
+window.addEventListener('pointerdown', unlockAudioOnce, true)
+window.addEventListener('keydown', unlockAudioOnce, true)
+btnSound.addEventListener('click', () => {
+  sfx.toggle()
+  updateSoundButton()
+})
+updateSoundButton()
 
 // 原创小铁手光标：默认与拖拽两态
 const CURSOR_HAND = cursorDataURL('hand')
@@ -375,20 +411,67 @@ function positionBubble() {
   bubbleEl.style.top = (pos.y / ROWS) * 100 + '%'
 }
 
-function updateLogUI() {
+function makeLogEntry(entry, animate) {
+  const li = document.createElement('li')
+  li.className = 'log-entry' + (animate ? ' is-new' : '')
+  const iconUrl = logIconDataURL(entry.kind)
+  if (iconUrl) {
+    const icon = document.createElement('img')
+    icon.className = 'log-icon'
+    icon.alt = ''
+    icon.draggable = false
+    icon.src = iconUrl
+    li.appendChild(icon)
+  }
+  const text = document.createElement('span')
+  text.className = 'log-text'
+  text.textContent = entry.label
+  li.appendChild(text)
+  return li
+}
+
+function showLogWaiting() {
   logListEl.textContent = ''
+  const li = document.createElement('li')
+  li.className = 'log-waiting'
+  const img = document.createElement('img')
+  img.src = WAIT_LOG_ICON
+  img.alt = ''
+  img.draggable = false
+  const text = document.createElement('span')
+  text.textContent = '还没有记录 · 等客人出发'
+  li.append(img, text)
+  logListEl.appendChild(li)
+}
+
+function updateLogUI() {
   if (!game.log.length) {
-    const li = document.createElement('li')
-    li.className = 'empty'
-    li.textContent = '（暂无记录）'
-    logListEl.appendChild(li)
+    if (logShownOrder !== order || !logListEl.querySelector('.log-waiting')) {
+      showLogWaiting()
+    }
+    runLogEl.classList.add('waiting')
+    logShownOrder = order
+    logShownCount = 0
     return
   }
-  for (const entry of game.log) {
-    const li = document.createElement('li')
-    li.textContent = entry.label
-    logListEl.appendChild(li)
+
+  runLogEl.classList.remove('waiting')
+  if (logShownOrder !== order || logShownCount > game.log.length) {
+    // 换单或重开后的首次铺开：旧记录静态显示，不重放滑入
+    logListEl.textContent = ''
+    for (const entry of game.log) logListEl.appendChild(makeLogEntry(entry, false))
+    logShownCount = game.log.length
+  } else {
+    // 只追加新增记录；已有节点保持原样
+    const wait = logListEl.querySelector('.log-waiting')
+    if (wait) wait.remove()
+    for (let i = logShownCount; i < game.log.length; i++) {
+      logListEl.appendChild(makeLogEntry(game.log[i], true))
+    }
+    logShownCount = game.log.length
   }
+  logShownOrder = order
+  logListEl.scrollTop = logListEl.scrollHeight
 }
 
 // ---------- 评价单 ----------
@@ -398,27 +481,49 @@ function showReview() {
   // 首单真的拿过五星后才收起上手引导；3/4 星回来仍按现状提示
   if (order === 1 && r.status === 'rated' && r.stars === 5) onboardingRetired = true
   reviewTitle.textContent = order === 2 ? '机关迷的评价单' : '新手剑士的评价单'
+
+  // 右上角真实星级印章
+  const sealText = { 5: '五星神店', 4: '瑕不掩瑜', 3: '差强人意' }[r.stars]
+  reviewSealEl.className = 'review-seal' + (r.status === 'incomplete' ? ' void' : '')
+  reviewSealEl.innerHTML =
+    r.status === 'incomplete' ? '预约<br>未完成' : sealText || '尚未评星'
+  void reviewSealEl.offsetWidth
+  reviewSealEl.classList.add('stamped')
+
+  // 五颗独立星块：得几颗依次落墨，第五颗多一点金光
+  const awarded = r.status === 'rated' ? r.stars : 0
   reviewStars.textContent = ''
-  if (r.status === 'incomplete') {
-    const s = document.createElement('span')
-    s.className = 'incomplete'
-    s.textContent = '预约未完成'
-    reviewStars.appendChild(s)
-  } else {
-    const on = document.createElement('span')
-    on.className = 'on'
-    on.textContent = '★'.repeat(r.stars)
-    const off = document.createElement('span')
-    off.textContent = '☆'.repeat(5 - r.stars)
-    reviewStars.append(on, off)
+  reviewStars.setAttribute(
+    'aria-label',
+    awarded ? `${awarded} 颗星（共 5 颗）` : '预约未完成，没有星级',
+  )
+  for (let i = 0; i < 5; i++) {
+    const chip = document.createElement('span')
+    chip.className =
+      'star-chip' +
+      (i < awarded ? ' inked' : '') +
+      (awarded === 5 && i === 4 ? ' gold' : '')
+    chip.style.setProperty('--d', i * 150 + 'ms')
+    chip.setAttribute('aria-hidden', 'true')
+    const ghost = document.createElement('span')
+    ghost.className = 'star-ghost'
+    ghost.textContent = '☆'
+    const glyph = document.createElement('span')
+    glyph.className = 'star-glyph'
+    glyph.textContent = '★'
+    chip.append(ghost, glyph)
+    reviewStars.appendChild(chip)
   }
 
   reviewEvents.textContent = ''
-  for (const text of r.events) {
+  r.events.forEach((text, i) => {
+    const kind = r.eventKinds ? r.eventKinds[i] : ''
+    const setback = kind === 'hit' || kind === 'shot'
     const li = document.createElement('li')
-    li.textContent = '✓ ' + text
+    li.className = setback ? 'is-setback' : 'is-done'
+    li.textContent = text
     reviewEvents.appendChild(li)
-  }
+  })
 
   reviewComment.textContent = r.comment ? '「' + r.comment + '」' : ''
   reviewComment.hidden = !r.comment
@@ -435,6 +540,11 @@ function showReview() {
   btnNext.hidden = !(order === 1 && r.status === 'rated' && r.stars >= 4)
 
   reviewCard.hidden = false
+  // 一张票只盖一次章；只随真评价出现
+  if (!reviewStampPlayed) {
+    reviewStampPlayed = true
+    sfx.stamp()
+  }
 }
 
 function hideReview() {
@@ -809,6 +919,7 @@ function startBusiness() {
   stagger = null
   badgeFly = null
   spark = null
+  reviewStampPlayed = false
   crossbow.mode = 'idle'
   crossbow.used = false
   crossbow.pressed = false
@@ -838,6 +949,7 @@ function resetBusiness() {
   stagger = null
   badgeFly = null
   spark = null
+  reviewStampPlayed = false
   crossbow.mode = 'idle'
   crossbow.used = false
   crossbow.pressed = false
@@ -942,6 +1054,7 @@ function stepWalker(t, realT) {
       if (openChest(game, a.x, a.y)) {
         addLog(game, 'chest')
         updateLogUI()
+        sfx.chest()
         // 真开箱：跳一粒金光
         spark = { x: a.x, y: a.y, start: t, ms: 520 }
       }
@@ -1004,6 +1117,7 @@ function stepWalker(t, realT) {
         if (a.kind === 'block' && guest) {
           guest.blockStart = t
           guest.blockMs = a.ms
+          sfx.block()
         }
       }
       if (t - walker.actionStart >= a.ms) {
@@ -1209,6 +1323,7 @@ function startDrag(source, type, dir, e) {
   bounce = null
   pop = null
   clearFootprintPreview()
+  sfx.grab()
   const b = canvasBox()
   drag = {
     source,
@@ -1330,6 +1445,7 @@ window.addEventListener('pointerup', () => {
     if (item && item.type === 'sign') {
       const dir = rotateItem(game, item.x, item.y)
       setPop('sign', item.x, item.y, dir)
+      sfx.sign()
       status(`路牌顺时针转了 90°，现在朝${DIR_NAMES[dir]}`)
       updateHUD()
     }
@@ -1364,11 +1480,15 @@ window.addEventListener('pointerup', () => {
     if (d.source === 'shop') {
       placeFromShop(game, d.type, d.target.x, d.target.y)
       setPop(d.type, d.target.x, d.target.y, 0)
+      sfx.land()
       status(`放下${def.name}，-${def.price} 金`)
     } else {
       const same = d.target.x === d.source.x && d.target.y === d.source.y
       moveItem(game, d.source, d.target)
-      if (!same) setPop(d.type, d.target.x, d.target.y, d.dir)
+      if (!same) {
+        setPop(d.type, d.target.x, d.target.y, d.dir)
+        sfx.land()
+      }
       status(same ? `${def.name}留在原格` : `挪动${def.name}，不花金币`)
     }
     hideGhost()
