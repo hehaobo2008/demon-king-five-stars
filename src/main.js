@@ -68,6 +68,7 @@ const MAP_DEFS = {
     beamLeft: 9,
     trapStop: TRAP_STOP,
     arena: { x: 18.5, y: 7.6 },
+    stand: { x: 23, y: 3 },
   },
   2: {
     skeleton: MAP2.skeleton,
@@ -75,6 +76,7 @@ const MAP_DEFS = {
     beamLeft: MAP2.beamLeft,
     trapStop: MAP2.trapStop,
     arena: { x: 20, y: 9.2 },
+    stand: { x: 23, y: 2 },
   },
 }
 const games = {
@@ -169,6 +171,15 @@ const skeleton = { x: currentMap.skeleton.x, y: currentMap.skeleton.y, pose: 'id
 let fx = null
 let stagger = null
 let runHasTrap = true
+let badgeFly = null
+let spark = null
+const reducedMotionMedia = window.matchMedia('(prefers-reduced-motion: reduce)')
+let reducedMotion = reducedMotionMedia.matches
+if (reducedMotionMedia.addEventListener) {
+  reducedMotionMedia.addEventListener('change', (e) => {
+    reducedMotion = e.matches
+  })
+}
 
 const BOUNCE_MS = 240
 const DRAG_THRESHOLD = 5
@@ -298,11 +309,15 @@ function status(msg, kind) {
   statusEl.textContent = msg
 }
 
-function showBubble(text, at = null) {
+function showBubble(text, at = null, tone = null) {
   bubbleAnchor = at
   bubbleEl.textContent = text
-  bubbleEl.classList.toggle('tail-up', !!at)
+  bubbleEl.className = 'bubble' + (at ? ' tail-up' : '') + (tone ? ' tone-' + tone : '')
   bubbleEl.hidden = false
+  // 重新触发轻弹动画
+  bubbleEl.style.animation = 'none'
+  void bubbleEl.offsetWidth
+  bubbleEl.style.animation = ''
   positionBubble()
 }
 
@@ -628,6 +643,8 @@ function startBusiness() {
   skeleton.pose = 'idle'
   fx = null
   stagger = null
+  badgeFly = null
+  spark = null
   crossbow.mode = 'idle'
   crossbow.used = false
   crossbow.pressed = false
@@ -649,6 +666,8 @@ function resetBusiness() {
   skeleton.pose = 'idle'
   fx = null
   stagger = null
+  badgeFly = null
+  spark = null
   crossbow.mode = 'idle'
   crossbow.used = false
   crossbow.pressed = false
@@ -657,6 +676,7 @@ function resetBusiness() {
   crossbow.warnStart = 0
   alarmEl.hidden = true
   runHasTrap = true
+  game.badgeTaken = false
   restoreItems(game)
   game.log.length = 0
   updateLogUI()
@@ -738,7 +758,7 @@ function stepWalker(t) {
     if (a.type === 'bubble') {
       if (!a.started) {
         a.started = true
-        showBubble(a.text, a.arena ? currentMap.arena : null)
+        showBubble(a.text, a.arena ? currentMap.arena : null, a.tone || null)
       }
       if (t - walker.actionStart >= a.wait) {
         advanceWalker(t)
@@ -750,6 +770,8 @@ function stepWalker(t) {
       if (openChest(game, a.x, a.y)) {
         addLog(game, 'chest')
         updateLogUI()
+        // 真开箱：跳一粒金光
+        spark = { x: a.x, y: a.y, start: t, ms: 520 }
       }
       advanceWalker(t)
       continue
@@ -792,6 +814,8 @@ function stepWalker(t) {
     }
     if (a.type === 'badge') {
       guest.hasBadge = true
+      game.badgeTaken = true
+      badgeFly = { start: t, dur: reducedMotion ? 0 : 650 }
       advanceWalker(t)
       continue
     }
@@ -951,7 +975,7 @@ function stepWalker(t) {
           crossbow.mode = 'spent'
           fx = { kind: 'hit', at: beamTile, start: t, ms: 380 }
           stagger = { start: t, ms: 460 }
-          showBubble('中箭了！')
+          showBubble('中箭了！', null, 'hurt')
           status('没来得及暂停，客人中箭了')
           addLog(game, 'shot')
           updateLogUI()
@@ -1256,14 +1280,61 @@ function frame(t) {
   }
   const hiddenKey =
     drag && drag.source !== 'shop' ? tileKey(drag.source.x, drag.source.y) : null
+
+  // 徽章飞行 / 开箱金光 进度
+  let badgeFlyScene = null
+  if (badgeFly) {
+    const p = badgeFly.dur <= 0 ? 1 : Math.min(1, (t - badgeFly.start) / badgeFly.dur)
+    badgeFlyScene = { p }
+    if (p >= 1) badgeFly = null
+  }
+  let sparkScene = null
+  if (spark) {
+    const el = t - spark.start
+    if (el >= spark.ms) spark = null
+    else sparkScene = { x: spark.x, y: spark.y, t: el, ms: spark.ms }
+  }
+  // 受击闪白：只在真的命中帧（约 80ms）
+  let flash = null
+  if (fx && fx.t < 80) {
+    flash = fx.kind === 'hit' ? 'guest' : fx.kind === 'slash' ? 'skeleton' : null
+  }
+  // 整像素轻抖：挨打约 4px、格挡 2px，收在前 120ms；减少动效不抖
+  let shakeX = 0
+  let shakeY = 0
+  if (!reducedMotion && fx && (fx.kind === 'block' || fx.kind === 'hit') && fx.t < 120) {
+    const base = fx.kind === 'hit' ? 4 : 2
+    const amp = base * (1 - fx.t / 120)
+    shakeX = Math.round(Math.sin(fx.t * 0.9) * amp)
+    shakeY = Math.round(Math.cos(fx.t * 1.1) * amp)
+  }
+
+  // 整帧清理，防止位移时画布边缘残留上一帧条纹
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.save()
+  ctx.translate(shakeX, shakeY)
   renderScene(ctx, base, game, drag ? drag.target : null, hiddenKey, {
-    guest: guest ? { ...guest, offsetY, offsetX, blocking } : null,
+    guest: guest
+      ? {
+          ...guest,
+          offsetY,
+          offsetX,
+          blocking,
+          flash: flash === 'guest',
+          hideBadge: !!badgeFlyScene, // 飞行期间只画飞的那枚，落地后才显示头顶徽章
+        }
+      : null,
     skeleton,
     fx,
     guide: guideState,
     torches: TORCHES_BY_ORDER[order],
     dragging: !!drag && mode === 'setup',
     forbidden: game.reserved,
+    stand: currentMap.stand,
+    standBadge: !game.badgeTaken,
+    badgeFly: badgeFlyScene,
+    spark: sparkScene,
+    flash,
     crossbow:
       order === 2
         ? {
@@ -1273,9 +1344,11 @@ function frame(t) {
             y: currentMap.crossbow.y,
             beamLeft: currentMap.beamLeft,
             stopX: currentMap.trapStop.x,
+            stopY: currentMap.trapStop.y,
           }
         : null,
   })
+  ctx.restore()
   requestAnimationFrame(frame)
 }
 

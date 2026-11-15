@@ -206,7 +206,7 @@ export function planRoute(game, order = 1) {
     actions.push({ type: 'effect', kind: 'hit', at: guestAt, ms: 350 })
     actions.push({ type: 'stagger', ms: 420 })
     actions.push({ type: 'log', event: 'hit' })
-    actions.push({ type: 'bubble', text: '哎哟……被砸中了！', wait: 900, arena: true })
+    actions.push({ type: 'bubble', text: '哎哟……被砸中了！', wait: 900, arena: true, tone: 'hurt' })
     actions.push({ type: 'bubble', text: '稳住，反击！', wait: 300, arena: true })
     actions.push({ type: 'effect', kind: 'slash', at: { x: SKELETON.x, y: SKELETON.y }, ms: 300 })
     actions.push({ type: 'skeleton', pose: 'down' })
@@ -215,7 +215,7 @@ export function planRoute(game, order = 1) {
 
   actions.push({ type: 'log', event: 'badge' })
   actions.push({ type: 'badge' })
-  actions.push({ type: 'bubble', text: '勇者徽章到手！', wait: 1600, arena: true })
+  actions.push({ type: 'bubble', text: '勇者徽章到手！', wait: 1600, arena: true, tone: 'gold' })
   actions.push({ type: 'end' })
 
   return { start: WALK.SPAWN, actions }
@@ -333,7 +333,7 @@ function planRouteArmory(game) {
     actions.push({ type: 'effect', kind: 'hit', at: guestAt, ms: 350 })
     actions.push({ type: 'stagger', ms: 420 })
     actions.push({ type: 'log', event: 'hit' })
-    actions.push({ type: 'bubble', text: '哎哟……被砸中了！', wait: 900, arena: true })
+    actions.push({ type: 'bubble', text: '哎哟……被砸中了！', wait: 900, arena: true, tone: 'hurt' })
     actions.push({ type: 'bubble', text: '稳住，反击！', wait: 300, arena: true })
     actions.push({ type: 'effect', kind: 'slash', at: { x: sk.x, y: sk.y }, ms: 300 })
     actions.push({ type: 'skeleton', pose: 'down' })
@@ -342,7 +342,7 @@ function planRouteArmory(game) {
 
   actions.push({ type: 'log', event: 'badge' })
   actions.push({ type: 'badge' })
-  actions.push({ type: 'bubble', text: '勇者徽章到手！', wait: 1600, arena: true })
+  actions.push({ type: 'bubble', text: '勇者徽章到手！', wait: 1600, arena: true, tone: 'gold' })
   actions.push({ type: 'end' })
 
   return { start: MAP2.spawn, actions }

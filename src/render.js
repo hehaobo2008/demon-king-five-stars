@@ -587,75 +587,181 @@ function drawWallLabels(ctx, labels) {
   }
 }
 
-// ===== 像素道具（8x8 图案） =====
-const SPRITES = {
-  chest: {
-    rows: [
-      '........',
-      '.oooooo.',
-      'oLLLLLLo',
-      'oLLLLLLo',
-      'oooooooo',
-      'oBBggBBo',
-      'oBBggBBo',
-      '.oooooo.',
-    ],
-    colors: { o: '#1a1c2c', L: '#b13e53', B: '#ef7d57', g: '#ffcd75' },
-  },
-  // 开过的箱子：盖板立起、内部变暗、金锁消失
-  chestOpen: {
-    rows: [
-      '.o....o.',
-      '.o....o.',
-      'oooooooo',
-      'oKKKKKKo',
-      'oBBBBBBo',
-      'oBBBBBBo',
-      'oBBBBBBo',
-      '.oooooo.',
-    ],
-    colors: { o: '#1a1c2c', K: '#0f1020', B: '#ef7d57' },
-  },
-  shield: {
-    rows: [
-      '.oooooo.',
-      'oSSSSSSo',
-      'oSSggSSo',
-      'oSSggSSo',
-      'oSSSSSSo',
-      '.oSSSSo.',
-      '..oSSo..',
-      '.rrrrrr.',
-    ],
-    colors: { o: '#1a1c2c', S: '#94b0c2', g: '#ffcd75', r: '#ef7d57' },
-  },
-  // 盾被拿走后：只剩架子
-  shieldEmpty: {
-    rows: [
-      '........',
-      '........',
-      '........',
-      '........',
-      '........',
-      '.o....o.',
-      '..o..o..',
-      '.rrrrrr.',
-    ],
-    colors: { o: '#1a1c2c', r: '#ef7d57' },
-  },
-  sign: {
-    rows: [
-      '...oo...',
-      '..oAAo..',
-      '.oAAAAo.',
-      'oAAAAAAo',
-      '...AA...',
-      '...AA...',
-      '...AA...',
-      '...oo...',
-    ],
-    colors: { o: '#1a1c2c', A: '#ffcd75' },
-  },
+// ===== 道具：16×16 像素矩阵（2px/格），商店与地图同一套 =====
+const ITEM_PAL = {
+  o: '#1a1c2c',
+  C: '#c9a24b',
+  c: '#8a6a2b',
+  W: '#6d4a2f',
+  w: '#8a5f38',
+  g: '#ffcd75',
+  k: '#2a1c10',
+  K: '#171310',
+  S: '#94b0c2',
+  s: '#566c86',
+  e: '#3b5dc9',
+  A: '#ffcd75',
+}
+
+const ITEM_MATRICES = {
+  chest: [
+    '................',
+    '....oooooooo....',
+    '...oCCCCCCCCo...',
+    '..oCwwwwwwwwCo..',
+    '..oCwWWWWWWwCo..',
+    '..oCwWWWWWWwCo..',
+    '..oCCCCCCCCCCo..',
+    '..occcccccccco..',
+    '..oWwwwwwwwwWo..',
+    '..oWwwwggwwwwWo.',
+    '..oWwwgkgwwwwWo.',
+    '..oWwwwggwwwwWo.',
+    '..oWwwwwwwwwWWo.',
+    '..oCCCCCCCCCCo..',
+    '...oooooooooo...',
+    '................',
+  ],
+  chestOpen: [
+    '....oooooooo....',
+    '...oCCCCCCCCo...',
+    '...occcccccco...',
+    '....oooooooo....',
+    '..oooooooooooo..',
+    '..oKKKKKKKKKKo..',
+    '..oKggKKKKggKo..',
+    '..oKKKKgKKKKKo..',
+    '..oWwwwwwwwwWo..',
+    '..oWwwwwwwwwWo..',
+    '..oWwwwwwwwwWo..',
+    '..oWwwwwwwwwWo..',
+    '..oWwwwwwwwwWo..',
+    '..oCCCCCCCCCCo..',
+    '...oooooooooo...',
+    '................',
+  ],
+  shield: [
+    '................',
+    '...oooooooooo...',
+    '..oSSSSSSSSSSo..',
+    '..oSwSSSSSSwSo..',
+    '..oSSSSeeSSSSo..',
+    '..oSSSSegeSSSo..',
+    '..oSSSSeeSSSSo..',
+    '..oSSSSSSSSSSo..',
+    '...oSSSSSSSSo...',
+    '..w.oSSSSSSo.w..',
+    '.wW..oSSSSo..Ww.',
+    '.wW...oooo...Ww.',
+    '.wW..........Ww.',
+    '.wWWWWWWWWWWWWw.',
+    '..oooooooooooo..',
+    '................',
+  ],
+  shieldEmpty: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '.wWWWWWWWWWWWWw.',
+    '.wW..........Ww.',
+    '.wW..........Ww.',
+    '.wW..........Ww.',
+    '.wWWWWWWWWWWWWw.',
+    '..oooooooooooo..',
+    '................',
+    '................',
+  ],
+  // 只画“箭头木板”（朝上基准），木桩另绘且始终向下
+  signArrow: [
+    '................',
+    '.....oooooo.....',
+    '....oWWWWWWo....',
+    '...oWWWWWWWWo...',
+    '...oWWWAAWWWo...',
+    '...oWWAAAAWWo...',
+    '...oWWAAAAWWo...',
+    '...oWWWAAWWWo...',
+    '....oWWAAWWo....',
+    '.....oWWWWo.....',
+    '......oooo......',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+}
+
+function drawItemMatrix(ctx, rows, ox, oy) {
+  const px = 2
+  for (let r = 0; r < rows.length; r++) {
+    for (let c = 0; c < 16; c++) {
+      const ch = rows[r][c]
+      if (!ch || ch === '.') continue
+      ctx.fillStyle = ITEM_PAL[ch] || '#ff00ff'
+      ctx.fillRect(ox + c * px, oy + r * px, px, px)
+    }
+  }
+}
+
+function drawSignItem(ctx, ox, oy, dir) {
+  const cx = ox + CELL / 2
+  const cy = oy + CELL / 2
+  // 木桩先画（始终向下）
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(cx - 4, cy - 1, 8, 17)
+  ctx.fillStyle = '#6d4a2f'
+  ctx.fillRect(cx - 3, cy, 6, 16)
+  ctx.fillStyle = '#8a5f38'
+  ctx.fillRect(cx - 3, cy, 2, 16)
+  ctx.fillStyle = '#c9a24b'
+  ctx.fillRect(cx - 4, cy - 3, 8, 2)
+  // 箭头木板固定在桩顶，绕桩顶转方向；朝下时亮色箭尖压在木桩之上
+  ctx.save()
+  ctx.translate(cx, cy)
+  ctx.rotate(((dir || 0) * Math.PI) / 2)
+  ctx.translate(-16, -16)
+  drawItemMatrix(ctx, ITEM_MATRICES.signArrow, 0, 0)
+  ctx.restore()
+}
+
+function drawItemShadow(ctx, ox, oy) {
+  ctx.save()
+  ctx.globalAlpha = 0.32
+  ctx.fillStyle = '#0a0810'
+  ctx.fillRect(ox + 8, oy + 27, 16, 3)
+  ctx.fillRect(ox + 10, oy + 30, 12, 1)
+  ctx.restore()
+}
+
+export function drawItem(ctx, type, ox, oy, dir = 0, opened = false, taken = false) {
+  drawItemShadow(ctx, ox, oy)
+  if (type === 'sign') {
+    drawSignItem(ctx, ox, oy, dir)
+    return
+  }
+  if (type === 'chest') {
+    drawItemMatrix(ctx, opened ? ITEM_MATRICES.chestOpen : ITEM_MATRICES.chest, ox, oy)
+    if (opened) {
+      // 开箱后的余光
+      ctx.save()
+      ctx.globalAlpha = 0.5
+      ctx.fillStyle = '#ffcd75'
+      ctx.fillRect(ox + 10, oy + 6, 2, 2)
+      ctx.fillRect(ox + 20, oy + 8, 2, 2)
+      ctx.restore()
+    }
+    return
+  }
+  if (type === 'shield') {
+    drawItemMatrix(ctx, taken ? ITEM_MATRICES.shieldEmpty : ITEM_MATRICES.shield, ox, oy)
+    return
+  }
 }
 
 function drawPattern(ctx, sprite) {
@@ -1019,20 +1125,90 @@ export function cursorDataURL(kind) {
   return c.toDataURL()
 }
 
-export function drawItem(ctx, type, ox, oy, dir = 0, opened = false, taken = false) {
-  let sprite = SPRITES[type]
-  if (type === 'chest' && opened) sprite = SPRITES.chestOpen
-  if (type === 'shield' && taken) sprite = SPRITES.shieldEmpty
-  if (!sprite) return
-  ctx.save()
-  ctx.translate(ox + CELL / 2, oy + CELL / 2)
-  if (dir) ctx.rotate((dir * Math.PI) / 2) // 顺时针 90° * dir
-  ctx.translate(-12, -12)
-  drawPattern(ctx, sprite)
-  ctx.restore()
+// 受击闪白：用白色调色板重描一遍
+function makeWhitePalette() {
+  return new Proxy({}, { get: () => '#ffffff' })
 }
 
-// 客人：浮点格坐标；方向/步态由行走驱动；盾低持、格挡时抬盾压身
+function drawHeldShield(ctx, cx, feetY, facing, blocking) {
+  if (blocking) {
+    const sx = facing === 'right' ? cx + 6 : cx - 18
+    const top = feetY - 34
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(sx, top, 12, 18)
+    ctx.fillStyle = '#94b0c2'
+    ctx.fillRect(sx + 1, top + 1, 10, 16)
+    ctx.fillStyle = '#3b5dc9'
+    ctx.fillRect(sx + 4, top + 6, 4, 6)
+    ctx.fillStyle = '#ffcd75'
+    ctx.fillRect(sx + 5, top + 4, 2, 2)
+    return
+  }
+  if (facing === 'left' || facing === 'right') {
+    // 侧面只露窄边
+    const sx = facing === 'right' ? cx + 9 : cx - 12
+    const top = feetY - 24
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(sx, top, 3, 14)
+    ctx.fillStyle = '#94b0c2'
+    ctx.fillRect(sx + 1, top + 1, 1, 12)
+    return
+  }
+  if (facing === 'up') {
+    // 朝上：盾在背侧（画在人物之前）
+    const sx = cx - 14
+    const top = feetY - 30
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(sx, top, 10, 14)
+    ctx.fillStyle = '#94b0c2'
+    ctx.fillRect(sx + 1, top + 1, 8, 12)
+    return
+  }
+  // 朝下：盾在手臂旁
+  const sx = cx - 17
+  const top = feetY - 22
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(sx, top, 9, 14)
+  ctx.fillStyle = '#94b0c2'
+  ctx.fillRect(sx + 1, top + 1, 7, 12)
+  ctx.fillStyle = '#ffcd75'
+  ctx.fillRect(sx + 3, top + 5, 3, 3)
+}
+
+// 勇者徽章：切角金纹章 + 下缘垂落的蓝绶带 + 少量星芒
+export function drawHeroBadge(ctx, cx, cy, s = 1, opts = {}) {
+  // 切角金纹章（八角切角轮廓）
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(cx - 4 * s, cy - 6 * s, 8 * s, 12 * s)
+  ctx.fillRect(cx - 5 * s, cy - 4 * s, 10 * s, 8 * s)
+  ctx.fillStyle = '#ffcd75'
+  ctx.fillRect(cx - 3 * s, cy - 5 * s, 6 * s, 10 * s)
+  ctx.fillRect(cx - 4 * s, cy - 3 * s, 8 * s, 6 * s)
+  ctx.fillStyle = '#e8a53c'
+  ctx.fillRect(cx - 3 * s, cy + 3 * s, 6 * s, 2 * s)
+  // 中心星
+  ctx.fillStyle = '#f4f4f4'
+  ctx.fillRect(cx - 1 * s, cy - 1 * s, 2 * s, 2 * s)
+  // 蓝绶带：从纹章下缘往下垂
+  ctx.fillStyle = '#29366f'
+  ctx.fillRect(cx - 3 * s, cy + 5 * s, 2 * s, 6 * s)
+  ctx.fillRect(cx + 1 * s, cy + 5 * s, 2 * s, 6 * s)
+  ctx.fillStyle = '#3b5dc9'
+  ctx.fillRect(cx - 3 * s, cy + 6 * s, 1 * s, 3 * s)
+  ctx.fillRect(cx + 2 * s, cy + 6 * s, 1 * s, 3 * s)
+  // 星芒
+  ctx.fillStyle = '#ffcd75'
+  ctx.fillRect(cx - 7 * s, cy - 3 * s, s, s)
+  if (opts.twinkle) {
+    // 交替亮的小星点
+    if (opts.phase === 0) ctx.fillRect(cx + 6 * s, cy - 5 * s, s, s)
+    else ctx.fillRect(cx + 6 * s, cy + 1 * s, s, s)
+  } else {
+    ctx.fillRect(cx + 6 * s, cy - 2 * s, s, s)
+  }
+}
+
+// 客人：浮点格坐标；方向/步态由行走驱动；影子、分层盾牌与受击闪白
 export function drawGuest(ctx, guest) {
   const variant = guest.variant === 'fan' ? 'fan' : 'knight'
   const sets = variant === 'fan' ? FAN_FRAMES : KNIGHT_FRAMES
@@ -1042,27 +1218,40 @@ export function drawGuest(ctx, guest) {
   const feetY = (guest.y + 1) * CELL - 3 + (guest.offsetY || 0) + crouch
   const facing = guest.facing || 'down'
   const phase = guest.moving ? guest.walkPhase || 0 : 0
-  drawChar(ctx, sets, palette, facing, phase, cx, feetY)
 
-  if (guest.hasBadge) {
-    ctx.fillStyle = '#1a1c2c'
-    ctx.fillRect(cx - 3, feetY - 45, 7, 7)
-    ctx.fillStyle = '#ffcd75'
-    ctx.fillRect(cx - 2, feetY - 44, 5, 5)
-    ctx.fillStyle = '#b13e53'
-    ctx.fillRect(cx - 1, feetY - 43, 3, 3)
+  // 脚下像素影子（走动时宽度微变）
+  ctx.save()
+  ctx.globalAlpha = 0.3
+  ctx.fillStyle = '#0a0810'
+  const wob = guest.moving ? (phase ? 2 : 0) : 1
+  ctx.fillRect(cx - 8, feetY - 1, 16, 3)
+  ctx.fillRect(cx - 6 + wob, feetY + 2, 12 - wob, 1)
+  ctx.restore()
+
+  // 朝上时盾先画（背在身后）
+  if (guest.hasShield && facing === 'up' && !guest.blocking) {
+    drawHeldShield(ctx, cx, feetY, facing, false)
+  }
+  if (guest.flash) {
+    ctx.save()
+    ctx.globalAlpha = 0.75
+    drawChar(ctx, sets, makeWhitePalette(), facing, phase, cx, feetY)
+    ctx.restore()
+  }
+  drawChar(ctx, sets, palette, facing, phase, cx, feetY)
+  if (guest.hasShield && !(facing === 'up' && !guest.blocking)) {
+    drawHeldShield(ctx, cx, feetY, facing, !!guest.blocking)
   }
 
-  if (guest.hasShield) {
-    const sx = facing === 'right' ? cx + 8 : cx - 17
-    // 平时低持；格挡时抬起护住面门
-    const top = feetY - (guest.blocking ? 34 : 22)
-    ctx.fillStyle = '#1a1c2c'
-    ctx.fillRect(sx, top, 9, 15)
-    ctx.fillStyle = '#94b0c2'
-    ctx.fillRect(sx + 1, top + 1, 7, 13)
-    ctx.fillStyle = '#ffcd75'
-    ctx.fillRect(sx + 3, top + 5, 3, 3)
+  if (guest.hasBadge && !guest.hideBadge) {
+    // 头顶徽章：轻轻浮动 + 交替小星点
+    const tnow = performance.now()
+    const bob = Math.round(Math.sin(tnow / 600))
+    const phase = Math.floor(tnow / 320) % 2
+    ctx.save()
+    ctx.globalAlpha = 0.92
+    drawHeroBadge(ctx, cx, feetY - 42 + bob, 0.8, { twinkle: true, phase })
+    ctx.restore()
   }
 }
 
@@ -1091,64 +1280,100 @@ function drawSkeletonHammer(ctx, ox, oy, pose) {
   }
 }
 
-export function drawSkeleton(ctx, sx, sy, pose) {
+// 倒地：散骨 + 落下的锤 + 两点小星
+function drawSkeletonDown(ctx, cx, feetY) {
+  ctx.save()
+  ctx.globalAlpha = 0.9
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(cx - 19, feetY - 7, 16, 1)
+  ctx.fillStyle = '#e8e0cf'
+  ctx.fillRect(cx - 18, feetY - 6, 14, 3)
+  ctx.fillRect(cx - 2, feetY - 4, 16, 3)
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(cx + 2, feetY - 16, 12, 10)
+  ctx.fillStyle = '#e8e0cf'
+  ctx.fillRect(cx + 3, feetY - 15, 10, 8)
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(cx + 5, feetY - 12, 2, 2)
+  ctx.fillRect(cx + 9, feetY - 12, 2, 2)
+  ctx.fillStyle = '#6d4a2f'
+  ctx.fillRect(cx - 28, feetY - 2, 22, 3)
+  ctx.fillStyle = '#94b0c2'
+  ctx.fillRect(cx - 2, feetY - 7, 10, 9)
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(cx - 2, feetY - 7, 2, 9)
+  ctx.fillStyle = '#ffcd75'
+  ctx.fillRect(cx - 4, feetY - 20, 2, 2)
+  ctx.fillRect(cx - 1, feetY - 22, 2, 2)
+  ctx.restore()
+}
+
+export function drawSkeleton(ctx, sx, sy, pose, now = 0, flash = false) {
   const cx = (sx + 0.5) * CELL
   const feetY = (sy + 1) * CELL - 3
-  const ox = cx - 12
-  const oy = feetY - CHAR_H * CHAR_PX
+
+  ctx.save()
+  ctx.globalAlpha = 0.32
+  ctx.fillStyle = '#0a0810'
+  ctx.fillRect(cx - 8, feetY - 1, 16, 3)
+  ctx.restore()
+
   if (pose === 'down') {
-    ctx.save()
-    ctx.globalAlpha = 0.8
-    ctx.translate(cx, oy + (CHAR_H * CHAR_PX) / 2)
-    ctx.rotate(Math.PI / 2)
-    ctx.translate(-12, -(CHAR_H * CHAR_PX) / 2)
-    drawCharRows(ctx, SKELETON_ROWS, SKELETON_PALETTE, 0, 0)
-    ctx.restore()
+    drawSkeletonDown(ctx, cx, feetY)
     return
+  }
+  const bob = pose === 'idle' ? Math.round(Math.sin(now / 700)) : 0
+  const ox = cx - 12
+  const oy = feetY - CHAR_H * CHAR_PX + bob
+  if (flash) {
+    ctx.save()
+    ctx.globalAlpha = 0.75
+    drawCharRows(ctx, SKELETON_ROWS, makeWhitePalette(), ox, oy)
+    ctx.restore()
   }
   drawCharRows(ctx, SKELETON_ROWS, SKELETON_PALETTE, ox, oy)
   drawSkeletonHammer(ctx, ox, oy, pose)
+  // 偶尔红眼（短暂）
+  if (now % 4400 < 700) {
+    ctx.fillStyle = '#d9534f'
+    ctx.fillRect(ox + 9, oy + 6, 3, 3)
+    ctx.fillRect(ox + 15, oy + 6, 3, 3)
+  }
 }
 
-// fx: { kind: 'strike'|'block'|'hit'|'slash', at: {x,y}, t, ms }
+// fx: { kind: 'strike'|'block'|'hit'|'slash', at: {x,y}, t, ms } —— 像素帧与小方颗粒
 function drawFx(ctx, fx) {
   const p = Math.min(1, fx.t / fx.ms)
   const cx = (fx.at.x + 0.5) * CELL
   const cy = (fx.at.y + 0.5) * CELL
   ctx.save()
   ctx.globalAlpha = 1 - p
-  ctx.lineCap = 'round'
   if (fx.kind === 'strike') {
-    ctx.strokeStyle = '#ffcd75'
-    ctx.lineWidth = 5
-    ctx.beginPath()
-    ctx.moveTo(cx + 16, cy - 24)
-    ctx.lineTo(cx - 10, cy + 4)
-    ctx.stroke()
+    ctx.fillStyle = '#ffcd75'
+    for (let i = 0; i < 4; i++) {
+      ctx.fillRect(cx + 12 - i * 6, cy - 22 + i * 7, 6, 3)
+    }
   } else if (fx.kind === 'block') {
-    ctx.strokeStyle = '#73eff7'
-    ctx.lineWidth = 5
-    ctx.beginPath()
-    ctx.arc(cx - 2, cy, 20, Math.PI * 0.5, Math.PI * 1.5)
-    ctx.stroke()
+    ctx.fillStyle = '#73eff7'
+    const pts = [
+      [-14, -10], [12, -12], [-18, 2], [14, 6], [-6, -18], [4, 14],
+    ]
+    for (const [dx, dy] of pts) {
+      ctx.fillRect(cx + dx + Math.sign(dx) * p * 6, cy + dy - p * 4, 3, 3)
+    }
   } else if (fx.kind === 'hit') {
-    ctx.strokeStyle = '#b13e53'
-    ctx.lineWidth = 5
-    ctx.beginPath()
-    ctx.moveTo(cx - 16, cy - 16)
-    ctx.lineTo(cx + 16, cy + 16)
-    ctx.moveTo(cx + 16, cy - 16)
-    ctx.lineTo(cx - 16, cy + 16)
-    ctx.stroke()
+    ctx.fillStyle = '#d9534f'
+    const pts = [
+      [-10, -12], [8, -14], [-16, -2], [14, 0], [-4, 10], [6, 12], [0, -18],
+    ]
+    for (const [dx, dy] of pts) {
+      ctx.fillRect(cx + dx * (1 + p * 0.5), cy + dy * (1 + p * 0.5), 3, 3)
+    }
   } else if (fx.kind === 'slash') {
-    ctx.strokeStyle = '#f4f4f4'
-    ctx.lineWidth = 5
-    ctx.beginPath()
-    ctx.moveTo(cx - 20, cy - 18)
-    ctx.lineTo(cx + 18, cy + 16)
-    ctx.moveTo(cx - 18, cy + 14)
-    ctx.lineTo(cx + 20, cy - 14)
-    ctx.stroke()
+    ctx.fillStyle = '#f4f4f4'
+    for (let i = 0; i < 5; i++) {
+      ctx.fillRect(cx - 18 + i * 8, cy + 14 - i * 7, 4, 4)
+    }
   }
   ctx.restore()
 }
@@ -1186,6 +1411,7 @@ export function makeBaseMap(order = 1) {
   drawCompassSlot(ctx, 11, 11)
   drawCompassSlot(ctx, 10, 5)
   drawGuardPedestal(ctx, 19, 4)
+  drawBadgeStand(ctx, 23, 3)
 
   // 4. 砖砌厚墙（只有下方有地板的墙格画正面砖面）
   for (let y = 0; y < ROWS; y++) {
@@ -1324,6 +1550,7 @@ function makeArmoryBase() {
   drawWelcomeMat(ctx, 2, 16)
   drawCompassSlot(ctx, 6, 13)
   drawGuardPedestal(ctx, 21, 5)
+  drawBadgeStand(ctx, 23, 2)
 
   for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < COLS; x++) {
@@ -1383,22 +1610,40 @@ function drawCrossbow(ctx, cb, now) {
 
   // 射线
   if (cb.mode !== 'spent') {
-    let alpha = 0.1
-    let color = '#b13e53'
+    let alpha = 0.18
+    let color = '#c85a5a'
+    const th = cb.mode === 'warning' ? 3 : 2
     if (cb.mode === 'warning') {
-      alpha = 0.28 + 0.22 * pulse
-      color = '#ef7d57'
+      alpha = 0.5 + 0.3 * pulse
+      color = '#ff6b4a'
     } else if (cb.mode === 'paused') {
-      alpha = 0.1
-      color = '#a7f070'
+      alpha = 0.14
+      color = '#7fbf6f'
     }
     ctx.save()
     ctx.globalAlpha = alpha
     ctx.fillStyle = color
     for (let x = cb.beamLeft * CELL; x < cx - 12; x += 12) {
-      ctx.fillRect(x, cy - 1, 7, 2)
+      ctx.fillRect(x, cy - 1, 7, th)
     }
+    // 两端小亮点
+    ctx.fillRect(cb.beamLeft * CELL - 1, cy - 2, 3, 3)
+    ctx.fillRect(cx - 15, cy - 2, 3, 3)
     ctx.restore()
+
+    // 预警时脚下淡的危险靶标
+    if (cb.mode === 'warning') {
+      const tx = (cb.stopX + 0.5) * CELL
+      const ty = (cb.stopY + 0.5) * CELL
+      ctx.save()
+      ctx.globalAlpha = 0.24 + 0.12 * pulse
+      ctx.strokeStyle = '#ff6b4a'
+      ctx.lineWidth = 2
+      ctx.strokeRect(tx - 12, ty - 12, 24, 24)
+      ctx.globalAlpha *= 0.7
+      ctx.strokeRect(tx - 6, ty - 6, 12, 12)
+      ctx.restore()
+    }
   }
 
   // 壁板与弩臂
@@ -1503,6 +1748,18 @@ function drawGuide(ctx, guide, now) {
 // highlight: { x, y, valid } | null
 // hiddenKey: 拖拽中的道具原格 key，跳过绘制（避免与幽灵重影）
 // scene: { guest, skeleton, fx } | null
+// 勇者徽章展示台（挂在训练房右侧不可摆的墙面上；徽章本体动态）
+function drawBadgeStand(ctx, tx, ty) {
+  const x = tx * 8
+  const y = ty * 8
+  rect(ctx, x + 1, y + 2, 6, 5, '#241f19')
+  rect(ctx, x + 1, y + 2, 6, 1, '#171310')
+  rect(ctx, x + 2, y + 3, 4, 1, '#2c251d')
+  rect(ctx, x, y + 6, 8, 1, '#6b604f')
+  rect(ctx, x + 2, y + 5, 4, 1, '#c9a24b')
+  rect(ctx, x + 3, y + 4, 2, 1, '#8a6a2b')
+}
+
 export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene = null) {
   ctx.drawImage(base, 0, 0)
   const now = performance.now()
@@ -1514,11 +1771,51 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
     if (key === hiddenKey) continue
     drawItem(ctx, item.type, item.x * CELL, item.y * CELL, item.dir, item.opened, item.taken)
   }
+  // 徽章展示台（墙面原位陈列）
+  if (scene && scene.stand && scene.standBadge) {
+    drawHeroBadge(
+      ctx,
+      (scene.stand.x + 0.5) * CELL,
+      scene.stand.y * CELL + 18,
+      1,
+    )
+  }
   if (scene && scene.skeleton) {
-    drawSkeleton(ctx, scene.skeleton.x, scene.skeleton.y, scene.skeleton.pose)
+    drawSkeleton(
+      ctx,
+      scene.skeleton.x,
+      scene.skeleton.y,
+      scene.skeleton.pose,
+      now,
+      scene.flash === 'skeleton',
+    )
   }
   if (scene && scene.guest) drawGuest(ctx, scene.guest)
   if (scene && scene.fx) drawFx(ctx, scene.fx)
+  // 开箱金光
+  if (scene && scene.spark) {
+    const p = Math.min(1, scene.spark.t / scene.spark.ms)
+    const sx = scene.spark.x * CELL + 6 + p * 10
+    const sy = scene.spark.y * CELL - 6 - Math.sin(p * Math.PI) * 14
+    ctx.save()
+    ctx.globalAlpha = 1 - p
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(sx, sy, 6, 6)
+    ctx.fillStyle = '#ffcd75'
+    ctx.fillRect(sx + 1, sy + 1, 4, 4)
+    ctx.restore()
+  }
+  // 徽章从展示台飞到客人头边
+  if (scene && scene.badgeFly && scene.guest) {
+    const p = Math.min(1, scene.badgeFly.p)
+    const fx0 = (scene.stand.x + 0.5) * CELL
+    const fy0 = scene.stand.y * CELL + 18
+    const fx1 = (scene.guest.x + 0.5) * CELL
+    const fy1 = (scene.guest.y + 1) * CELL - 46
+    const bx = fx0 + (fx1 - fx0) * p
+    const by = fy0 + (fy1 - fy0) * p - Math.sin(p * Math.PI) * 20
+    drawHeroBadge(ctx, bx, by, 1)
+  }
   if (scene && scene.crossbow) drawBolt(ctx, scene.crossbow)
   if (highlight) {
     ctx.lineWidth = 3

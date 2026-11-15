@@ -25,7 +25,14 @@ export const EVENT_LABELS = {
 export const tileKey = (x, y) => x + ',' + y
 
 export function createGame(grid, reserved = []) {
-  return { grid, gold: START_GOLD, items: new Map(), log: [], reserved }
+  return {
+    grid,
+    gold: START_GOLD,
+    items: new Map(),
+    log: [],
+    reserved,
+    badgeTaken: false,
+  }
 }
 
 export function addLog(game, kind) {

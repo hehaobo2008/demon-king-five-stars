@@ -263,6 +263,82 @@ h1 {
   border-bottom-color: #3a2a1c;
 }
 
+/* 日常台词轻弹一下 */
+.bubble {
+  animation: bubble-pop 0.16s ease;
+}
+
+@keyframes bubble-pop {
+  from {
+    scale: 0.92;
+  }
+  to {
+    scale: 1;
+  }
+}
+
+/* 受伤台词：暗红 + 微抖 */
+.bubble.tone-hurt {
+  background: #3a1512;
+  color: #ffd9cf;
+  border-color: #b13e53;
+  animation: bubble-pop 0.16s ease, hurt-wobble 0.42s ease 1;
+}
+
+.bubble.tone-hurt::after {
+  border-top-color: #b13e53;
+}
+
+.bubble.tail-up.tone-hurt::after {
+  border-top-color: transparent;
+  border-bottom-color: #b13e53;
+}
+
+@keyframes hurt-wobble {
+  0% {
+    translate: 0 0;
+  }
+  20% {
+    translate: -1.5px 0;
+  }
+  40% {
+    translate: 1.5px 0;
+  }
+  60% {
+    translate: -1px 0;
+  }
+  80% {
+    translate: 1px 0;
+  }
+  100% {
+    translate: 0 0;
+  }
+}
+
+/* 拿徽章：金色气泡 */
+.bubble.tone-gold {
+  background: linear-gradient(#f7e6b0, #eece7f);
+  color: #4a3410;
+  border-color: #c9a24b;
+  box-shadow: 0 0 10px rgba(232, 201, 122, 0.5);
+}
+
+.bubble.tone-gold::after {
+  border-top-color: #c9a24b;
+}
+
+.bubble.tail-up.tone-gold::after {
+  border-top-color: transparent;
+  border-bottom-color: #c9a24b;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble,
+  .alarm {
+    animation: none !important;
+  }
+}
+
 .alarm {
   position: absolute;
   transform: translate(-50%, -100%);
