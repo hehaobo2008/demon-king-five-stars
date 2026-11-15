@@ -1,4 +1,4 @@
-import { COLS, ROWS, TILE, SCALE, buildGrid } from './map.js'
+import { COLS, ROWS, TILE, SCALE, CROSSBOW, TRAP_STOP, buildGrid } from './map.js'
 
 const CELL = TILE * SCALE
 const PX = 3 // 8x8 图案放大到 24x24
@@ -596,12 +596,100 @@ function drawTorchFlames(ctx, now) {
   }
 }
 
+// 通道机械弩：底座 + 横扫通道的射线；cb: { mode, boltT }
+function drawCrossbow(ctx, cb, now) {
+  const cx = (CROSSBOW.x + 0.5) * CELL
+  const cy = (CROSSBOW.y + 0.5) * CELL
+  const pulse = 0.5 + 0.5 * Math.sin(now / 90)
+
+  // 射线（第 9 行，跨通道）
+  if (cb.mode !== 'spent') {
+    let alpha = 0.1
+    let color = '#b13e53'
+    if (cb.mode === 'warning') {
+      alpha = 0.28 + 0.22 * pulse
+      color = '#ef7d57'
+    } else if (cb.mode === 'paused') {
+      alpha = 0.1
+      color = '#a7f070'
+    }
+    ctx.save()
+    ctx.globalAlpha = alpha
+    ctx.fillStyle = color
+    for (let x = 9 * CELL; x < cx - 12; x += 12) {
+      ctx.fillRect(x, cy - 1, 7, 2)
+    }
+    ctx.restore()
+  }
+
+  // 壁板与弩臂
+  ctx.fillStyle = '#3d3730'
+  ctx.fillRect(cx - 12, cy - 9, 22, 18)
+  ctx.fillStyle = '#332d27'
+  ctx.fillRect(cx - 12, cy + 5, 22, 4)
+  ctx.fillStyle = '#94b0c2'
+  ctx.fillRect(cx - 11, cy - 8, 2, 16)
+  ctx.fillRect(cx - 13, cy - 8, 2, 4)
+  ctx.fillRect(cx - 13, cy + 4, 2, 4)
+  // 弦
+  ctx.save()
+  ctx.globalAlpha = 0.6
+  ctx.fillStyle = '#d8c9a3'
+  ctx.fillRect(cx - 9, cy - 6, 1, 12)
+  ctx.restore()
+  // 弩身
+  ctx.fillStyle = '#6d4a2f'
+  ctx.fillRect(cx - 8, cy - 2, 16, 5)
+  ctx.fillStyle = '#4a2f1e'
+  ctx.fillRect(cx - 8, cy + 2, 16, 1)
+  // 待发弩箭
+  if (cb.mode === 'idle' || cb.mode === 'warning') {
+    ctx.fillStyle = '#e8e2d0'
+    ctx.fillRect(cx - 10, cy, 12, 1)
+  }
+  // 指示灯
+  let lamp = '#566c86'
+  if (cb.mode === 'warning') lamp = pulse > 0.5 ? '#ef7d57' : '#ffcd75'
+  else if (cb.mode === 'paused') lamp = '#a7f070'
+  else if (cb.mode === 'spent' || cb.mode === 'firing') lamp = '#33302b'
+  ctx.fillStyle = lamp
+  ctx.fillRect(cx + 6, cy - 9, 4, 4)
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(cx + 6, cy - 9, 4, 1)
+}
+
+function drawBolt(ctx, cb) {
+  if (cb.mode !== 'firing') return
+  // 中箭者已步入亮线格：箭沿亮线（第 9 行）水平飞过去
+  const p = Math.min(1, cb.boltT / 260)
+  const x0 = (CROSSBOW.x + 0.5) * CELL - 12
+  const y = (CROSSBOW.y + 0.5) * CELL
+  const x1 = (TRAP_STOP.x + 0.5) * CELL
+  const x = x0 + (x1 - x0) * p
+  ctx.save()
+  ctx.translate(x, y)
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(-9, -2, 16, 5)
+  ctx.fillStyle = '#e8e2d0'
+  ctx.fillRect(-8, -1, 13, 3)
+  ctx.fillStyle = '#94b0c2'
+  ctx.beginPath()
+  ctx.moveTo(-12, 0)
+  ctx.lineTo(-5, -3)
+  ctx.lineTo(-5, 3)
+  ctx.closePath()
+  ctx.fill()
+  ctx.restore()
+}
+
 // highlight: { x, y, valid } | null
 // hiddenKey: 拖拽中的道具原格 key，跳过绘制（避免与幽灵重影）
 // scene: { guest, skeleton, fx } | null
 export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene = null) {
   ctx.drawImage(base, 0, 0)
-  drawTorchFlames(ctx, performance.now())
+  const now = performance.now()
+  drawTorchFlames(ctx, now)
+  if (scene && scene.crossbow) drawCrossbow(ctx, scene.crossbow, now)
   for (const [key, item] of game.items) {
     if (key === hiddenKey) continue
     drawItem(ctx, item.type, item.x * CELL, item.y * CELL, item.dir, item.opened, item.taken)
@@ -611,6 +699,7 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   }
   if (scene && scene.guest) drawGuest(ctx, scene.guest)
   if (scene && scene.fx) drawFx(ctx, scene.fx)
+  if (scene && scene.crossbow) drawBolt(ctx, scene.crossbow)
   if (highlight) {
     ctx.lineWidth = 3
     ctx.strokeStyle = highlight.valid ? '#a7f070' : '#b13e53'

@@ -61,6 +61,10 @@ export const JUNCTIONS = [
 // 挑战房固定骷髅守卫：占据 (19,4)，该格不可摆道具；客人停在 (18,4) 与它对峙
 export const SKELETON = { x: 19, y: 4 }
 
+// 通道机械弩：装在东墙 (12,9)，射线横扫通道第 9 行；客人停在射线前 (10,10)
+export const CROSSBOW = { x: 12, y: 9 }
+export const TRAP_STOP = { x: 10, y: 10 }
+
 // 侧室标签单独给锚点
 export const SIDE_LABELS = [
   { x: 4.5, y: 5.5 },

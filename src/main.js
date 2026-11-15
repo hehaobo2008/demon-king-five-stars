@@ -1,5 +1,5 @@
 import './style.css'
-import { COLS, ROWS, ZONES, SKELETON, buildGrid } from './map.js'
+import { COLS, ROWS, ZONES, SKELETON, TRAP_STOP, buildGrid } from './map.js'
 import {
   ITEMS,
   DIR_NAMES,
@@ -26,8 +26,16 @@ const statusEl = document.getElementById('status')
 const bubbleEl = document.getElementById('bubble')
 const btnOpen = document.getElementById('btn-open')
 const btnReset = document.getElementById('btn-reset')
+const btnTrap = document.getElementById('btn-trap')
+const btnNext = document.getElementById('btn-next')
+const orderTabs = document.getElementById('order-tabs')
+const tab1 = document.getElementById('tab-order1')
+const tab2 = document.getElementById('tab-order2')
+const guestTitleEl = document.getElementById('guest-title')
+const guestQuoteEl = document.getElementById('guest-quote')
 const logListEl = document.getElementById('log-list')
 const reviewCard = document.getElementById('review-card')
+const reviewTitle = document.getElementById('review-title')
 const reviewStars = document.getElementById('review-stars')
 const reviewEvents = document.getElementById('review-events')
 const reviewComment = document.getElementById('review-comment')
@@ -44,6 +52,11 @@ window.__game = game
 window.__review = buildReview
 window.__ui = () => ({
   mode,
+  order,
+  secondUnlocked,
+  trapMode: crossbow.mode,
+  trapUsed: crossbow.used,
+  trapWindow: crossbow.windowOpen,
   guest: guest
     ? {
         x: +guest.x.toFixed(2),
@@ -60,6 +73,19 @@ window.__ui = () => ({
 
 // mode: 'setup' 可摆放 | 'business' 营业中（锁摆放，重新布置后解锁）
 let mode = 'setup'
+let order = 1 // 1 首单剑士 | 2 二单机关迷
+let secondUnlocked = false
+const crossbow = { mode: 'idle', used: false, pressed: false, boltStart: 0, windowOpen: false }
+const ORDER_INFO = {
+  1: {
+    title: '今日预约 · 新手剑士',
+    quote: '「我是新手剑士，想拿到勇者徽章。看见宝箱的话，我一定会去看看。」',
+  },
+  2: {
+    title: '今日预约 · 机关迷',
+    quote: '「我是机关迷，想拿勇者徽章，也想平平安安过了那道弩。」',
+  },
+}
 let guest = null
 let walker = null
 let pending = null
@@ -157,7 +183,8 @@ function updateLogUI() {
 // ---------- 评价单 ----------
 
 function showReview() {
-  const r = buildReview(game.log)
+  const r = buildReview(game.log, order)
+  reviewTitle.textContent = order === 2 ? '机关迷的评价单' : '新手剑士的评价单'
   reviewStars.textContent = ''
   if (r.status === 'incomplete') {
     const s = document.createElement('span')
@@ -191,6 +218,9 @@ function showReview() {
   }
   reviewMissing.hidden = r.missing.length === 0
 
+  // 首单四星/五星才出现「接下一单」
+  btnNext.hidden = !(order === 1 && r.status === 'rated' && r.stars >= 4)
+
   reviewCard.hidden = false
 }
 
@@ -199,6 +229,15 @@ function hideReview() {
 }
 
 btnAgain.addEventListener('click', resetBusiness)
+
+btnNext.addEventListener('click', () => {
+  if (order !== 1) return
+  hideReview()
+  resetBusiness()
+  secondUnlocked = true
+  setOrder(2)
+  status('接下了第二单：机关迷。弩机已上膛，布置好再开门营业。')
+})
 
 function updateHUD() {
   goldEl.textContent = game.gold
@@ -209,13 +248,55 @@ function updateHUD() {
     )
   }
   btnOpen.disabled = mode !== 'setup'
+  updateTrapButton()
 }
+
+function updateTrapButton() {
+  btnTrap.hidden = !(secondUnlocked && order === 2)
+  if (btnTrap.hidden) return
+  const armed =
+    mode === 'business' && crossbow.windowOpen && crossbow.mode === 'warning' && !crossbow.used
+  btnTrap.disabled = !armed
+  btnTrap.classList.toggle('armed', armed)
+}
+
+function setOrder(n) {
+  if (mode !== 'setup') return
+  order = n
+  const info = ORDER_INFO[order]
+  guestTitleEl.textContent = info.title
+  guestQuoteEl.textContent = info.quote
+  orderTabs.hidden = !secondUnlocked
+  tab1.classList.toggle('active', order === 1)
+  tab2.classList.toggle('active', order === 2)
+  updateTrapButton()
+}
+
+function trySwitchOrder(n) {
+  if (mode !== 'setup') {
+    status('营业中不能换单')
+    return
+  }
+  setOrder(n)
+}
+
+tab1.addEventListener('click', () => trySwitchOrder(1))
+tab2.addEventListener('click', () => trySwitchOrder(2))
+
+// 暂停机械弩：仅在预警四秒窗口内可用，一趟一次
+btnTrap.addEventListener('click', () => {
+  if (mode !== 'business' || order !== 2) return
+  if (!crossbow.windowOpen || crossbow.mode !== 'warning' || crossbow.used) return
+  crossbow.used = true
+  crossbow.pressed = true
+  updateTrapButton()
+})
 
 // ---------- 营业 / 重新布置 ----------
 
 function startBusiness() {
   if (mode !== 'setup') return
-  const plan = planRoute(game)
+  const plan = planRoute(game, order)
   if (!plan) {
     status('客人找不到去挑战房的路')
     return
@@ -230,6 +311,11 @@ function startBusiness() {
   skeleton.pose = 'idle'
   fx = null
   stagger = null
+  crossbow.mode = 'idle'
+  crossbow.used = false
+  crossbow.pressed = false
+  crossbow.boltStart = 0
+  crossbow.windowOpen = false
   hideBubble()
   status('营业中：客人正在探索……')
   updateHUD()
@@ -244,6 +330,11 @@ function resetBusiness() {
   skeleton.pose = 'idle'
   fx = null
   stagger = null
+  crossbow.mode = 'idle'
+  crossbow.used = false
+  crossbow.pressed = false
+  crossbow.boltStart = 0
+  crossbow.windowOpen = false
   restoreItems(game)
   game.log.length = 0
   updateLogUI()
@@ -259,6 +350,32 @@ btnReset.addEventListener('click', resetBusiness)
 function advanceWalker(t) {
   walker.i++
   walker.actionStart = t
+}
+
+// 机关走过/越过亮线后，把下一段移动路径的起点对齐到客人当前格
+function patchNextMove() {
+  if (!walker || !guest) return
+  const next = walker.actions[walker.i + 1]
+  if (!next || next.type !== 'move') return
+  const gx = Math.round(guest.x)
+  const gy = Math.round(guest.y)
+  while (next.path.length > 1 && (next.path[0].x !== gx || next.path[0].y !== gy)) {
+    next.path.shift()
+  }
+  if (next.path[0].x !== gx || next.path[0].y !== gy) next.path.unshift({ x: gx, y: gy })
+}
+
+// 踩到未拿走的盾牌架就拿起（与常规步行同一规则）
+function tryPickupAt(t) {
+  if (!guest || guest.hasShield) return false
+  const item = game.items.get(tileKey(t.x, t.y))
+  if (!item || item.type !== 'shield' || item.taken) return false
+  item.taken = true
+  guest.hasShield = true
+  addLog(game, 'shield')
+  updateLogUI()
+  showBubble('正好用得上！')
+  return true
 }
 
 function stepWalker(t) {
@@ -307,15 +424,29 @@ function stepWalker(t) {
       continue
     }
     if (a.type === 'pickupShield') {
-      const item = game.items.get(tileKey(a.x, a.y))
-      if (item && item.type === 'shield' && !item.taken) {
-        item.taken = true
-        guest.hasShield = true
-        addLog(game, 'shield')
-        updateLogUI()
+      // 原子拾盾：真拾到才停一拍并说台词；已被机关阶段拿走的则静默跳过
+      if (!a.started) {
+        a.started = true
+        a.t0 = t
+        const item = game.items.get(tileKey(a.x, a.y))
+        a.picked = !!(item && item.type === 'shield' && !item.taken)
+        if (a.picked) {
+          item.taken = true
+          guest.hasShield = true
+          addLog(game, 'shield')
+          updateLogUI()
+          showBubble(a.say || '正好用得上！')
+        }
       }
-      advanceWalker(t)
-      continue
+      if (!a.picked) {
+        advanceWalker(t)
+        continue
+      }
+      if (t - a.t0 >= (a.hold || 1000)) {
+        advanceWalker(t)
+        continue
+      }
+      return
     }
     if (a.type === 'skeleton') {
       skeleton.pose = a.pose
@@ -357,6 +488,136 @@ function stepWalker(t) {
         continue
       }
       return
+    }
+    if (a.type === 'trap') {
+      // 机械弩：预警四秒 → 暂停后先跨过亮线再记平安；错过则先步入亮线格、沿亮线中箭
+      const beamTile = { x: TRAP_STOP.x, y: TRAP_STOP.y - 1 }
+      const farTile = { x: TRAP_STOP.x, y: TRAP_STOP.y - 2 }
+      if (!a.started) {
+        a.started = true
+        a.phase = 'warn'
+        a.phaseStart = t
+        crossbow.mode = 'warning'
+        crossbow.pressed = false
+        crossbow.windowOpen = true
+        updateTrapButton()
+        showBubble('前面有机械弩……')
+        status('弩机预警！4 秒内点「暂停机械弩」')
+      }
+      if (a.phase === 'warn') {
+        if (crossbow.pressed) {
+          crossbow.mode = 'paused'
+          crossbow.windowOpen = false
+          a.phase = 'pausedSay'
+          a.phaseStart = t
+          showBubble('暂停了！')
+          status('机械弩已暂停')
+          updateTrapButton()
+        } else if (t - a.phaseStart >= 4000) {
+          // 四秒到点立即熄灭按钮：此后点击无效
+          crossbow.windowOpen = false
+          a.phase = 'stepIn'
+          a.phaseStart = t
+          a.stepFrom = { x: guest.x, y: guest.y }
+          updateTrapButton()
+        }
+        return
+      }
+      if (a.phase === 'pausedSay') {
+        if (t - a.phaseStart >= 400) {
+          a.phase = 'cross'
+          a.phaseStart = t
+          a.crossFrom = { x: guest.x, y: guest.y }
+          a.crossIdx = 0
+          a.crossPicked = false
+        }
+        return
+      }
+      if (a.phase === 'cross') {
+        // 从亮线这侧走到另一侧（两格），逐格检查是否踩到盾牌架
+        const step = Math.min(2, Math.floor((t - a.phaseStart) / 170))
+        while (a.crossIdx < step) {
+          a.crossIdx++
+          const enter = { x: farTile.x, y: a.crossFrom.y - a.crossIdx }
+          if (tryPickupAt(enter)) a.crossPicked = true
+        }
+        const el = Math.min(340, t - a.phaseStart)
+        guest.x = a.crossFrom.x
+        guest.y = a.crossFrom.y - Math.min(2, el / 170)
+        if (t - a.phaseStart >= 340) {
+          guest.x = farTile.x
+          guest.y = farTile.y
+          // 先走到另一侧，才记「平安过弩」
+          addLog(game, 'safe')
+          updateLogUI()
+          status('客人平安通过了机械弩')
+          if (a.crossPicked) {
+            a.phase = 'crossHold'
+            a.phaseStart = t
+          } else {
+            showBubble('我看准了空档。')
+            a.phase = 'safeHold'
+            a.phaseStart = t
+          }
+        }
+        return
+      }
+      if (a.phase === 'crossHold') {
+        if (t - a.phaseStart >= 900) {
+          showBubble('我看准了空档。')
+          a.phase = 'safeHold'
+          a.phaseStart = t
+        }
+        return
+      }
+      if (a.phase === 'safeHold') {
+        if (t - a.phaseStart >= 1100) {
+          crossbow.mode = 'spent'
+          patchNextMove()
+          advanceWalker(t)
+        }
+        return
+      }
+      if (a.phase === 'stepIn') {
+        // 错过暂停：先走进亮线那一格
+        const el = Math.min(170, t - a.phaseStart)
+        guest.x = a.stepFrom.x
+        guest.y = a.stepFrom.y + (beamTile.y - a.stepFrom.y) * (el / 170)
+        if (t - a.phaseStart >= 170) {
+          guest.x = beamTile.x
+          guest.y = beamTile.y
+          tryPickupAt(beamTile)
+          crossbow.mode = 'firing'
+          crossbow.boltStart = t
+          a.phase = 'fire'
+          a.phaseStart = t
+        }
+        return
+      }
+      if (a.phase === 'fire') {
+        // 箭沿亮线飞到他身上
+        if (t - a.phaseStart >= 260) {
+          crossbow.mode = 'spent'
+          fx = { kind: 'hit', at: beamTile, start: t, ms: 380 }
+          stagger = { start: t, ms: 460 }
+          showBubble('中箭了！')
+          status('没来得及暂停，客人中箭了')
+          addLog(game, 'shot')
+          updateLogUI()
+          a.phase = 'hit'
+          a.phaseStart = t
+        }
+        return
+      }
+      if (a.phase === 'hit') {
+        if (t - a.phaseStart >= 1600) {
+          patchNextMove()
+          advanceWalker(t)
+        }
+        return
+      }
+      advanceWalker(t)
+      continue
     }
     if (a.type === 'wait') {
       if (t - walker.actionStart >= a.ms) {
@@ -612,6 +873,13 @@ function frame(t) {
     guest: guest ? { ...guest, offsetY } : null,
     skeleton,
     fx,
+    crossbow:
+      order === 2
+        ? {
+            mode: crossbow.mode,
+            boltT: crossbow.mode === 'firing' ? t - crossbow.boltStart : 0,
+          }
+        : null,
   })
   requestAnimationFrame(frame)
 }

@@ -20,12 +20,15 @@
 
           <div id="review-card" class="review" hidden>
             <div class="review-panel">
-              <div class="review-title">新手剑士的评价单</div>
+              <div class="review-title" id="review-title">新手剑士的评价单</div>
               <div id="review-stars" class="review-stars"></div>
               <ul id="review-events" class="review-events"></ul>
               <p id="review-comment" class="review-comment"></p>
               <ul id="review-missing" class="review-missing"></ul>
-              <button id="btn-again" class="btn primary">再布置一趟</button>
+              <div class="btn-row">
+                <button id="btn-next" class="btn primary" hidden>接下一单</button>
+                <button id="btn-again" class="btn primary">再布置一趟</button>
+              </div>
             </div>
           </div>
         </div>
@@ -33,13 +36,19 @@
         <aside id="sidebar">
           <div class="gold">金币 <span id="gold">100</span></div>
 
+          <div id="order-tabs" class="order-tabs" hidden>
+            <button id="tab-order1" class="tab active">首单 · 剑士</button>
+            <button id="tab-order2" class="tab">第二单 · 机关迷</button>
+          </div>
+
           <section class="guest-reserve">
-            <div class="guest-title">今日预约 · 新手剑士</div>
-            <p class="guest-quote">「我是新手剑士，想拿到勇者徽章。看见宝箱的话，我一定会去看看。」</p>
+            <div class="guest-title" id="guest-title">今日预约 · 新手剑士</div>
+            <p class="guest-quote" id="guest-quote">「我是新手剑士，想拿到勇者徽章。看见宝箱的话，我一定会去看看。」</p>
             <div class="btn-row">
               <button id="btn-open" class="btn primary">开门营业</button>
               <button id="btn-reset" class="btn">重新布置</button>
             </div>
+            <button id="btn-trap" class="btn trap" hidden>暂停机械弩</button>
           </section>
 
           <div class="card" data-type="chest" title="按住拖到地图空地砖">

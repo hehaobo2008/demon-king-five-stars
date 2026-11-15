@@ -19,6 +19,8 @@ export const EVENT_LABELS = {
   block: '格挡成功',
   hit: '挨了一下',
   badge: '拿到勇者徽章',
+  safe: '平安过了弩机',
+  shot: '被弩箭射中',
 }
 
 export const tileKey = (x, y) => x + ',' + y

@@ -1,7 +1,7 @@
 // 客人行走计划：BFS 寻路 + 基于岔口/拾取/战斗规则生成动作脚本。
 // 动作：move | bubble | open | pickupShield | skeleton | effect | stagger | log | badge | wait | end
 
-import { JUNCTIONS, ROOMS, SKELETON, buildGrid } from './map.js'
+import { CROSSBOW, JUNCTIONS, ROOMS, SKELETON, TRAP_STOP, buildGrid } from './map.js'
 import { tileKey, isFloor } from './game.js'
 
 export const WALK = {
@@ -73,22 +73,35 @@ function signPointsToSide(game, junction) {
   return !!(it && it.type === 'sign' && it.dir === junction.dir)
 }
 
-export function planRoute(game) {
+export function planRoute(game, order = 1) {
   const grid = buildGrid()
   const actions = []
   let cur = { ...WALK.SPAWN }
   let hasShield = false
 
   // 沿任意路径拆段：踩到未被拿走的盾牌架时停机 → 拿盾 + 台词（同一帧生效）
-  const walkPath = (path) => {
+  // ignoreKeys：机关负责的格子（运行时拾取），计划期不拆段
+  const walkPath = (path, ignoreKeys = null) => {
     let segStart = 0
     for (let i = 1; i < path.length; i++) {
       const t = path[i]
-      const item = game.items.get(tileKey(t.x, t.y))
-      if (!hasShield && item && item.type === 'shield' && !item.taken) {
+      const k = tileKey(t.x, t.y)
+      const item = game.items.get(k)
+      if (
+        !hasShield &&
+        !(ignoreKeys && ignoreKeys.has(k)) &&
+        item &&
+        item.type === 'shield' &&
+        !item.taken
+      ) {
         actions.push({ type: 'move', path: path.slice(segStart, i + 1) })
-        actions.push({ type: 'pickupShield', x: t.x, y: t.y })
-        actions.push({ type: 'bubble', text: '正好用得上！', wait: 1000 })
+        actions.push({
+          type: 'pickupShield',
+          x: t.x,
+          y: t.y,
+          say: '正好用得上！',
+          hold: 1000,
+        })
         hasShield = true
         segStart = i
       }
@@ -99,10 +112,14 @@ export function planRoute(game) {
     cur = { x: path[path.length - 1].x, y: path[path.length - 1].y }
   }
 
+  // 二单：亮线格由机关运行时拾取（安全跨线/步入中箭都会经过），计划期不拆段
+  const trapIgnore =
+    order === 2 ? new Set([tileKey(TRAP_STOP.x, TRAP_STOP.y - 1)]) : null
+
   const addMove = (to) => {
     const path = bfsPath(grid, cur, to)
     if (!path) return false
-    walkPath(path)
+    walkPath(path, trapIgnore)
     return true
   }
 
@@ -115,12 +132,18 @@ export function planRoute(game) {
   // 出生格上的盾牌架也能拿（他开局就站在那格，不经过任何移动路径）
   const spawnItem = game.items.get(tileKey(WALK.SPAWN.x, WALK.SPAWN.y))
   if (spawnItem && spawnItem.type === 'shield' && !spawnItem.taken) {
-    actions.push({ type: 'pickupShield', x: WALK.SPAWN.x, y: WALK.SPAWN.y })
-    actions.push({ type: 'bubble', text: '正好用得上！', wait: 1000 })
+    actions.push({
+      type: 'pickupShield',
+      x: WALK.SPAWN.x,
+      y: WALK.SPAWN.y,
+      say: '正好用得上！',
+      hold: 1000,
+    })
     hasShield = true
   }
 
-  for (const j of JUNCTIONS) {
+  for (let ji = 0; ji < JUNCTIONS.length; ji++) {
+    const j = JUNCTIONS[ji]
     if (!addMove({ x: j.x, y: j.y })) continue
     const chest = findUnopenedChest(game, ROOMS[j.room])
 
@@ -133,7 +156,7 @@ export function planRoute(game) {
       const path = pathToChest(grid, cur, chest)
       if (path) {
         // 靠站路径同样走拾盾拆段（架子可能就摆在他要停下的那格）
-        walkPath(path)
+        walkPath(path, trapIgnore)
         // 开盖与台词同一拍
         actions.push({ type: 'open', x: chest.x, y: chest.y })
         actions.push({ type: 'bubble', text: '开了！战利品收下。', wait: 1150 })
@@ -151,6 +174,15 @@ export function planRoute(game) {
       addMove({ x: j.x, y: j.y })
     } else {
       actions.push({ type: 'bubble', text: '这个岔口没宝箱，直接走。', wait: 650 })
+    }
+
+    // 二单：经过第一处岔口后走向射线前，触发机械弩管理（四秒窗口）
+    if (order === 2 && ji === 0) {
+      addMove(TRAP_STOP)
+      // 亮线格上的盾牌架必会被机关阶段拾取（安全跨线或步入中箭都会经过），计入持盾判断
+      const beamRack = game.items.get(tileKey(TRAP_STOP.x, TRAP_STOP.y - 1))
+      if (beamRack && beamRack.type === 'shield' && !beamRack.taken) hasShield = true
+      actions.push({ type: 'trap', guestAt: { x: TRAP_STOP.x, y: TRAP_STOP.y } })
     }
   }
 

@@ -6,6 +6,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -180,6 +184,7 @@ h1 {
 
 .review-panel .btn {
   margin-top: 4px;
+  flex: 1;
 }
 
 #sidebar {
@@ -246,6 +251,51 @@ h1 {
   opacity: 0.45;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+.order-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.tab {
+  flex: 1;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 5px 6px;
+  background: #1a1c2c;
+  color: #94b0c2;
+  border: 2px solid #566c86;
+  cursor: pointer;
+}
+
+.tab.active {
+  color: #ffcd75;
+  border-color: #ffcd75;
+  background: #29366f;
+}
+
+.btn.trap {
+  width: 100%;
+  background: #333c57;
+  color: #94b0c2;
+}
+
+.btn.trap.armed {
+  background: #ef7d57;
+  color: #1a1c2c;
+  border-color: #ffcd75;
+  box-shadow: 0 0 0 2px #ffcd75, 3px 3px 0 #1a1c2c;
+  animation: trap-pulse 0.45s infinite alternate;
+}
+
+@keyframes trap-pulse {
+  from {
+    filter: brightness(0.9);
+  }
+  to {
+    filter: brightness(1.25);
+  }
 }
 
 .card {
