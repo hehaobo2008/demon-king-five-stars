@@ -1610,38 +1610,67 @@ function drawCrossbow(ctx, cb, now) {
 
   // 射线
   if (cb.mode !== 'spent') {
-    let alpha = 0.18
-    let color = '#c85a5a'
-    const th = cb.mode === 'warning' ? 3 : 2
-    if (cb.mode === 'warning') {
-      alpha = 0.5 + 0.3 * pulse
-      color = '#ff6b4a'
-    } else if (cb.mode === 'paused') {
-      alpha = 0.14
-      color = '#7fbf6f'
-    }
+    const beamStart = cb.beamLeft * CELL
+    const beamEnd = cx - 12
+    const beamW = beamEnd - beamStart
     ctx.save()
-    ctx.globalAlpha = alpha
-    ctx.fillStyle = color
-    for (let x = cb.beamLeft * CELL; x < cx - 12; x += 12) {
-      ctx.fillRect(x, cy - 1, 7, th)
+    if (cb.mode === 'warning') {
+      // 预警：红橙实线 + 一层淡光 + 端点亮点
+      ctx.fillStyle = '#ff5a36'
+      ctx.globalAlpha = 0.1 + 0.08 * pulse
+      ctx.fillRect(beamStart - 2, cy - 4, beamW + 4, 8)
+      ctx.globalAlpha = 0.2 + 0.08 * pulse
+      ctx.fillRect(beamStart - 1, cy - 2, beamW + 2, 5)
+      ctx.fillStyle = '#ff8a4a'
+      ctx.globalAlpha = 0.95
+      ctx.fillRect(beamStart, cy - 1, beamW, 3)
+      ctx.fillStyle = '#ffd9a0'
+      ctx.fillRect(beamStart, cy, beamW, 1)
+      ctx.globalAlpha = 0.75 + 0.25 * pulse
+      ctx.fillStyle = '#ffcd75'
+      ctx.fillRect(beamStart - 2, cy - 3, 4, 6)
+      ctx.fillRect(beamEnd - 1, cy - 3, 4, 6)
+    } else {
+      // 平时：暗红虚线 + 两端微光点；暂停时换成暗绿
+      const paused = cb.mode === 'paused'
+      ctx.globalAlpha = paused ? 0.24 : 0.55
+      ctx.fillStyle = paused ? '#7fbf6f' : '#8f3a42'
+      for (let x = beamStart; x < beamEnd; x += 10) {
+        ctx.fillRect(x, cy - 1, Math.min(6, beamEnd - x), 2)
+      }
+      ctx.globalAlpha = paused ? 0.4 : 0.8
+      ctx.fillStyle = paused ? '#a7f070' : '#b3545c'
+      ctx.fillRect(beamStart - 1, cy - 2, 3, 4)
+      ctx.fillRect(beamEnd - 1, cy - 2, 3, 4)
     }
-    // 两端小亮点
-    ctx.fillRect(cb.beamLeft * CELL - 1, cy - 2, 3, 3)
-    ctx.fillRect(cx - 15, cy - 2, 3, 3)
     ctx.restore()
 
-    // 预警时脚下淡的危险靶标
+    // 危险小靶标：标在弩线真正经过的亮线格上，而不是旁边的等待格
     if (cb.mode === 'warning') {
-      const tx = (cb.stopX + 0.5) * CELL
-      const ty = (cb.stopY + 0.5) * CELL
+      const tx = (cb.beamLeft + 0.5) * CELL
+      const ty = cy
+      const r = 9
+      const L = 5
       ctx.save()
-      ctx.globalAlpha = 0.24 + 0.12 * pulse
-      ctx.strokeStyle = '#ff6b4a'
-      ctx.lineWidth = 2
-      ctx.strokeRect(tx - 12, ty - 12, 24, 24)
-      ctx.globalAlpha *= 0.7
-      ctx.strokeRect(tx - 6, ty - 6, 12, 12)
+      ctx.globalAlpha = 0.55 + 0.35 * pulse
+      ctx.fillStyle = '#ffb066'
+      // 四角准心
+      ctx.fillRect(tx - r, ty - r, L, 2)
+      ctx.fillRect(tx - r, ty - r, 2, L)
+      ctx.fillRect(tx + r - L, ty - r, L, 2)
+      ctx.fillRect(tx + r - 2, ty - r, 2, L)
+      ctx.fillRect(tx - r, ty + r - 2, L, 2)
+      ctx.fillRect(tx - r, ty + r - L, 2, L)
+      ctx.fillRect(tx + r - L, ty + r - 2, L, 2)
+      ctx.fillRect(tx + r - 2, ty + r - L, 2, L)
+      // 中央准点与四角小点
+      ctx.globalAlpha = 0.9
+      ctx.fillStyle = '#ffe0b0'
+      ctx.fillRect(tx - 1, ty - 1, 2, 2)
+      ctx.fillRect(tx - 5, ty - 5, 2, 2)
+      ctx.fillRect(tx + 3, ty - 5, 2, 2)
+      ctx.fillRect(tx - 5, ty + 3, 2, 2)
+      ctx.fillRect(tx + 3, ty + 3, 2, 2)
       ctx.restore()
     }
   }
@@ -1760,6 +1789,118 @@ function drawBadgeStand(ctx, tx, ty) {
   rect(ctx, x + 3, y + 4, 2, 1, '#8a6a2b')
 }
 
+// 本地闪亮旋转金币（16×16，四帧）
+export function drawCoinFrame(ctx, f) {
+  ctx.clearRect(0, 0, 16, 16)
+  const widths = [10, 6, 2, 6]
+  const w = widths[f % 4]
+  const x = 8 - w / 2
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(x - 1, 3, w + 2, 11)
+  ctx.fillStyle = '#e8a53c'
+  ctx.fillRect(x, 4, w, 9)
+  ctx.fillStyle = '#ffcd75'
+  ctx.fillRect(x, 4, w, 3)
+  if (f % 4 === 0) {
+    ctx.fillStyle = '#fff3c0'
+    ctx.fillRect(6, 6, 2, 2)
+    ctx.fillStyle = '#c9a24b'
+    ctx.fillRect(6, 10, 3, 1)
+  } else if (f % 4 === 2) {
+    ctx.fillStyle = '#b4832f'
+    ctx.fillRect(7, 4, 2, 9)
+  }
+}
+
+// 简洁像素沙漏（8×10）
+export function hourglassDataURL() {
+  const rows = [
+    'oooooooo',
+    'oSSSSSSo',
+    'oSo..oSo',
+    '.oSSoSo.',
+    '..oSo...',
+    '..oSo...',
+    '.oSSoSo.',
+    'oSo..oSo',
+    'oSSSSSSo',
+    'oooooooo',
+  ]
+  const pal = { o: '#1a1c2c', S: '#c9a24b' }
+  const c = document.createElement('canvas')
+  c.width = 8
+  c.height = 10
+  const ctx = c.getContext('2d')
+  for (let r = 0; r < rows.length; r++) {
+    for (let i = 0; i < 8; i++) {
+      const ch = rows[r][i]
+      if (ch === '.') continue
+      ctx.fillStyle = pal[ch] || '#ffcd75'
+      ctx.fillRect(i, r, 1, 1)
+    }
+  }
+  return c.toDataURL()
+}
+
+// 布置期路线脚印（很淡，流动点缓慢前进）
+function drawFootprints(ctx, data, now) {
+  const tiles = data.tiles
+  if (!tiles || tiles.length < 2) return
+  ctx.save()
+  const baseAlpha = data.preview ? 0.22 : 0.13
+  ctx.fillStyle = data.preview ? '#e6c98a' : '#cfd3da'
+  for (let i = 1; i < tiles.length; i++) {
+    const a = tiles[i - 1]
+    const b = tiles[i]
+    const dx = Math.sign(b.x - a.x)
+    const dy = Math.sign(b.y - a.y)
+    const px = (b.x + 0.5) * CELL
+    const py = (b.y + 0.72) * CELL
+    const ox = dy !== 0 ? (i % 2 ? -3 : 3) : 0
+    const oy = dx !== 0 ? (i % 2 ? -3 : 3) : 0
+    ctx.globalAlpha = baseAlpha
+    ctx.fillRect(px + ox - 1, py + oy - 2, 2, 3)
+  }
+  const n = tiles.length - 1
+  const p = (now / 3800) % 1
+  const pos = p * n
+  const i0 = Math.min(n - 1, Math.floor(pos))
+  const fr = pos - i0
+  const A = tiles[i0]
+  const B = tiles[i0 + 1]
+  const lx = (A.x + (B.x - A.x) * fr + 0.5) * CELL
+  const ly = (A.y + (B.y - A.y) * fr + 0.5) * CELL
+  ctx.globalAlpha = 0.32
+  ctx.fillStyle = data.preview ? '#f2d99e' : '#f2e2b8'
+  ctx.fillRect(lx - 1, ly - 1, 3, 3)
+  ctx.restore()
+}
+
+// 呼吸四角标：绿=可放 / 红=不可放
+function drawCornerBrackets(ctx, x, y, valid, now) {
+  const px = x * CELL
+  const py = y * CELL
+  const pulse = 0.5 + 0.5 * Math.sin(now / 200)
+  const L = 9
+  const T = 2
+  ctx.save()
+  ctx.globalAlpha = 0.55 + 0.35 * pulse
+  ctx.fillStyle = valid ? '#a7f070' : '#d95757'
+  // 左上
+  ctx.fillRect(px + 2, py + 2, L, T)
+  ctx.fillRect(px + 2, py + 2, T, L)
+  // 右上
+  ctx.fillRect(px + CELL - 2 - L, py + 2, L, T)
+  ctx.fillRect(px + CELL - 2 - T, py + 2, T, L)
+  // 左下
+  ctx.fillRect(px + 2, py + CELL - 2 - T, L, T)
+  ctx.fillRect(px + 2, py + CELL - 2 - L, T, L)
+  // 右下
+  ctx.fillRect(px + CELL - 2 - L, py + CELL - 2 - T, L, T)
+  ctx.fillRect(px + CELL - 2 - T, py + CELL - 2 - L, T, L)
+  ctx.restore()
+}
+
 export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene = null) {
   ctx.drawImage(base, 0, 0)
   const now = performance.now()
@@ -1767,9 +1908,36 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   if (scene && scene.crossbow) drawCrossbow(ctx, scene.crossbow, now)
   if (scene && scene.guide) drawGuide(ctx, scene.guide, now)
   if (scene && scene.dragging && scene.forbidden) drawForbidden(ctx, scene.forbidden)
+  if (scene && scene.footprints) drawFootprints(ctx, scene.footprints, now)
   for (const [key, item] of game.items) {
     if (key === hiddenKey) continue
+    if (scene && scene.pop && scene.pop.key === key) continue
     drawItem(ctx, item.type, item.x * CELL, item.y * CELL, item.dir, item.opened, item.taken)
+  }
+  // 落位回弹 + 四粒像素灰
+  if (scene && scene.pop) {
+    const p = Math.min(1, scene.pop.t / scene.pop.ms)
+    const lift = Math.sin(p * Math.PI) * 4
+    drawItem(
+      ctx,
+      scene.pop.type,
+      scene.pop.x * CELL,
+      scene.pop.y * CELL - lift,
+      scene.pop.dir || 0,
+      false,
+      false,
+    )
+    ctx.save()
+    ctx.globalAlpha = 0.5 * (1 - p)
+    ctx.fillStyle = '#9aa0aa'
+    const bx = scene.pop.x * CELL + 16
+    const by = scene.pop.y * CELL + 27
+    const spread = 4 + p * 10
+    ctx.fillRect(bx - spread, by - 2, 2, 2)
+    ctx.fillRect(bx + spread, by - 2, 2, 2)
+    ctx.fillRect(bx - 8 - spread, by + 3, 2, 2)
+    ctx.fillRect(bx + 8 + spread, by + 3, 2, 2)
+    ctx.restore()
   }
   // 徽章展示台（墙面原位陈列）
   if (scene && scene.stand && scene.standBadge) {
@@ -1818,13 +1986,21 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   }
   if (scene && scene.crossbow) drawBolt(ctx, scene.crossbow)
   if (highlight) {
-    ctx.lineWidth = 3
-    ctx.strokeStyle = highlight.valid ? '#a7f070' : '#b13e53'
-    ctx.strokeRect(
-      highlight.x * CELL + 2,
-      highlight.y * CELL + 2,
-      CELL - 4,
-      CELL - 4,
-    )
+    if (highlight.type && highlight.valid) {
+      // 合法落点：格里先显示半透明道具
+      ctx.save()
+      ctx.globalAlpha = 0.45
+      drawItem(
+        ctx,
+        highlight.type,
+        highlight.x * CELL,
+        highlight.y * CELL,
+        highlight.dir || 0,
+        false,
+        false,
+      )
+      ctx.restore()
+    }
+    drawCornerBrackets(ctx, highlight.x, highlight.y, highlight.valid, now)
   }
 }

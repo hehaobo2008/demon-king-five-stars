@@ -21,7 +21,10 @@
             <img id="coach-avatar" class="coach-avatar" alt="小管家" />
             <span id="coach-text"></span>
           </div>
-          <div id="alarm" class="alarm" hidden></div>
+          <div id="alarm" class="alarm" hidden>
+            <img id="alarm-icon" class="alarm-icon" alt="" />
+            <span id="alarm-text"></span>
+          </div>
 
           <div id="review-card" class="review" hidden>
             <div class="review-panel">
@@ -40,7 +43,14 @@
 
         <aside id="sidebar" class="frame ledger">
           <div class="ledger-top">
-            <div class="gold">金币 <span id="gold">100</span></div>
+            <div class="gold-line">
+              <canvas id="coin-spin" class="coin-spin" width="16" height="16" aria-hidden="true"></canvas>
+              <div class="gold">金币 <span id="gold">100</span><span id="gold-delta" class="gold-delta" hidden></span></div>
+              <div class="speed" role="group" aria-label="营业速度">
+                <button id="spd-1" class="spd active">1×</button>
+                <button id="spd-2" class="spd">2×</button>
+              </div>
+            </div>
             <div id="order-tabs" class="order-tabs" hidden>
               <button id="tab-order1" class="tab active">首单 · 剑士</button>
               <button id="tab-order2" class="tab">第二单 · 机关迷</button>
@@ -60,7 +70,10 @@
                 <button id="btn-open" class="btn primary">开门营业</button>
                 <button id="btn-reset" class="btn">重新布置</button>
               </div>
-              <button id="btn-trap" class="btn trap" hidden>暂停机械弩</button>
+              <button id="btn-trap" class="btn trap" hidden>
+                <span id="trap-label" class="trap-label">弩机待命 · 客人靠近可拉闸</span>
+                <span id="trap-timer-fill" class="trap-timer-fill" aria-hidden="true"></span>
+              </button>
             </section>
 
             <section class="shop">
@@ -92,8 +105,8 @@
               </div>
 
               <div class="shop-tags">
-                <span>拖拽</span>
-                <span>点击路牌</span>
+                <span>拖拽 摆放／退回</span>
+                <span>点路牌 转向</span>
               </div>
             </section>
           </div>
@@ -104,8 +117,6 @@
             <div class="run-log-title">本次营业记录</div>
             <ul id="log-list" class="log-list"></ul>
           </section>
-
-          <p class="hints">拖进地图摆放扣钱，拖回侧栏全额收回；点一下已摆的路牌可转向。</p>
 
           <div id="drop-hint" class="drop-hint" hidden>松手收回 · 全额退金币</div>
         </aside>

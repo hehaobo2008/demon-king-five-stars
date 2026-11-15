@@ -23,6 +23,8 @@ import {
   charAvatarDataURL,
   stewardAvatarDataURL,
   cursorDataURL,
+  drawCoinFrame,
+  hourglassDataURL,
   TORCHES_BY_ORDER,
 } from './render.js'
 
@@ -30,18 +32,28 @@ const canvas = document.getElementById('game')
 const ctx = canvas.getContext('2d')
 const sidebar = document.getElementById('sidebar')
 const goldEl = document.getElementById('gold')
+const goldBoxEl = goldEl.parentElement
+const goldDeltaEl = document.getElementById('gold-delta')
+const coinCanvas = document.getElementById('coin-spin')
+const coinCtx = coinCanvas.getContext('2d')
+const spd1El = document.getElementById('spd-1')
+const spd2El = document.getElementById('spd-2')
 const statusEl = document.getElementById('status')
 const bubbleEl = document.getElementById('bubble')
 const coachEl = document.getElementById('coach')
 const coachTextEl = document.getElementById('coach-text')
 const coachAvatarEl = document.getElementById('coach-avatar')
 const alarmEl = document.getElementById('alarm')
+const alarmIconEl = document.getElementById('alarm-icon')
+const alarmTextEl = document.getElementById('alarm-text')
 const chestCardEl = document.querySelector('.card[data-type="chest"]')
 const avatarFrameEl = document.getElementById('avatar-frame')
 const dropHintEl = document.getElementById('drop-hint')
 const btnOpen = document.getElementById('btn-open')
 const btnReset = document.getElementById('btn-reset')
 const btnTrap = document.getElementById('btn-trap')
+const trapLabelEl = document.getElementById('trap-label')
+const trapTimerFillEl = document.getElementById('trap-timer-fill')
 const btnNext = document.getElementById('btn-next')
 const orderTabs = document.getElementById('order-tabs')
 const tab1 = document.getElementById('tab-order1')
@@ -77,6 +89,8 @@ const MAP_DEFS = {
     trapStop: MAP2.trapStop,
     arena: { x: 20, y: 9.2 },
     stand: { x: 23, y: 2 },
+    // 地图警报挂到弩机下方的邻边墙面，避开弩、亮线、客人和火把
+    alarm: { x: 22.1, y: 10.2 },
   },
 }
 const games = {
@@ -87,6 +101,9 @@ let game = games[1]
 const bases = { 1: makeBaseMap(1), 2: makeBaseMap(2) }
 let base = bases[1]
 let currentMap = MAP_DEFS[1]
+// 余额动效以「上一帧真正显示的数字」为基准：移动/取消不跳钱，换单只换数
+const shownGold = { 1: games[1].gold, 2: games[2].gold }
+let goldFxTimer = 0
 
 // 调试/测试缝：浏览器控制台与自动化实测可读状态
 window.__game = game
@@ -95,6 +112,8 @@ window.__ui = () => ({
   mode,
   order,
   secondUnlocked,
+  speed,
+  simT: Math.round(simT),
   trapMode: crossbow.mode,
   trapUsed: crossbow.used,
   trapWindow: crossbow.windowOpen,
@@ -120,6 +139,15 @@ window.__ui = () => ({
 let mode = 'setup'
 let order = 1 // 1 首单剑士 | 2 二单机关迷
 let secondUnlocked = false
+// 营业时钟：simT 按倍速推进（走路/台词/演出），弩机预警仍用真实毫秒
+let speed = 1
+let simT = 0
+let lastRealT = null
+let pop = null // 落位回弹：{ type, x, y, dir, key, start, ms }
+let footprintsBase = []
+let footprintPreview = null
+let footprintPreviewKey = ''
+let trapUiSig = ''
 const crossbow = {
   mode: 'idle',
   used: false,
@@ -195,6 +223,10 @@ for (const el of cardEls) {
 // 预约头像（随订单切换）
 guestAvatarEl.src = charAvatarDataURL('knight')
 coachAvatarEl.src = stewardAvatarDataURL()
+
+// 本地像素金币与警报沙漏
+drawCoinFrame(coinCtx, 0)
+alarmIconEl.src = hourglassDataURL()
 
 // 原创小铁手光标：默认与拖拽两态
 const CURSOR_HAND = cursorDataURL('hand')
@@ -420,7 +452,100 @@ btnNext.addEventListener('click', () => {
   status('接下了第二单：机关迷。弩机已上膛，布置好再开门营业。')
 })
 
+// 按真实 planRoute 取客人会踩到的格子（含弩机跨越的三格）
+function routeTiles(g) {
+  const plan = planRoute(g, order)
+  const tiles = []
+  const push = (p) => {
+    // 只去掉相邻重复格，保留折返与绕行顺序，流动脚印才和真实走法一致
+    const last = tiles[tiles.length - 1]
+    if (last && last.x === p.x && last.y === p.y) return
+    tiles.push({ x: p.x, y: p.y })
+  }
+  if (plan) {
+    for (const a of plan.actions) {
+      if (a.type === 'move') {
+        for (const p of a.path) push(p)
+      } else if (a.type === 'trap') {
+        if (a.stop) push(a.stop)
+        if (a.beam) push(a.beam)
+        if (a.far) push(a.far)
+      }
+    }
+  }
+  return tiles
+}
+
+function clearFootprintPreview() {
+  footprintPreview = null
+  footprintPreviewKey = ''
+}
+
+// 拖到合法候选格：只把「拟放后的场布」克隆一份临时算路线，不碰真实道具与金币
+function previewRouteForDrag(d) {
+  const key =
+    d.type +
+    '|' +
+    (d.source === 'shop' ? 'shop' : d.source.x + ',' + d.source.y) +
+    '|' +
+    d.target.x +
+    ',' +
+    d.target.y +
+    '|' +
+    (d.dir || 0)
+  if (key === footprintPreviewKey) return
+  footprintPreviewKey = key
+  const sim = { ...game, items: new Map(game.items) }
+  if (d.source === 'shop') {
+    sim.items.set(tileKey(d.target.x, d.target.y), {
+      type: d.type,
+      x: d.target.x,
+      y: d.target.y,
+      dir: d.dir || 0,
+      opened: false,
+    })
+  } else {
+    const fk = tileKey(d.source.x, d.source.y)
+    const item = sim.items.get(fk)
+    if (!item) {
+      footprintPreview = null
+      return
+    }
+    sim.items.delete(fk)
+    sim.items.set(tileKey(d.target.x, d.target.y), { ...item, x: d.target.x, y: d.target.y })
+  }
+  footprintPreview = routeTiles(sim)
+}
+
+function triggerGoldFx(delta) {
+  if (!delta) return
+  const kind = delta < 0 ? 'spend' : 'refund'
+  goldBoxEl.classList.remove('spend', 'refund')
+  goldDeltaEl.classList.remove('spend', 'refund')
+  void goldBoxEl.offsetWidth
+  goldBoxEl.classList.add(kind)
+  goldDeltaEl.hidden = false
+  goldDeltaEl.textContent = (delta > 0 ? '+' : '-') + Math.abs(delta)
+  goldDeltaEl.classList.add(kind)
+  goldDeltaEl.style.animation = 'none'
+  void goldDeltaEl.offsetWidth
+  goldDeltaEl.style.animation = ''
+  clearTimeout(goldFxTimer)
+  goldFxTimer = setTimeout(clearGoldFx, 760)
+}
+
+function clearGoldFx() {
+  clearTimeout(goldFxTimer)
+  goldBoxEl.classList.remove('spend', 'refund')
+  goldDeltaEl.hidden = true
+  goldDeltaEl.classList.remove('spend', 'refund')
+}
+
 function updateHUD() {
+  // 只给真实收支做动效：移动/取消/拖错余额不变，换单只换数字
+  const prev = shownGold[order]
+  if (typeof prev === 'number' && prev !== game.gold) triggerGoldFx(game.gold - prev)
+  shownGold[order] = game.gold
   goldEl.textContent = game.gold
   for (const el of cardEls) {
     el.classList.toggle(
@@ -431,16 +556,39 @@ function updateHUD() {
   btnOpen.disabled = mode !== 'setup'
   updateTrapButton()
   updateOnboarding()
+  // 布置期的真实路线脚印；营业后收起
+  footprintsBase = mode === 'setup' ? routeTiles(game) : []
+  if (mode !== 'setup') clearFootprintPreview()
+}
+
+function setSpeed(n) {
+  speed = n
+  spd1El.classList.toggle('active', n === 1)
+  spd2El.classList.toggle('active', n === 2)
 }
 
 function updateTrapButton() {
-  btnTrap.hidden =
-    !(secondUnlocked && order === 2) || (mode === 'business' && !runHasTrap)
-  if (btnTrap.hidden) return
+  const show = secondUnlocked && order === 2 && (mode !== 'business' || runHasTrap)
+  btnTrap.hidden = !show
+  if (!show) {
+    btnTrap.classList.remove('armed', 'timing')
+    trapTimerFillEl.style.transform = 'scaleX(0)'
+    return
+  }
   const armed =
     mode === 'business' && crossbow.windowOpen && crossbow.mode === 'warning' && !crossbow.used
   btnTrap.disabled = !armed
   btnTrap.classList.toggle('armed', armed)
+  btnTrap.classList.toggle('timing', armed)
+  if (!armed) trapTimerFillEl.style.transform = 'scaleX(0)'
+  let label = '弩机待命 · 客人靠近可拉闸'
+  if (mode === 'business') {
+    if (crossbow.windowOpen) label = armed ? '拉闸暂停机械弩' : '弩机已暂停'
+    else if (crossbow.mode === 'spent' || crossbow.mode === 'firing') label = '弩机已了结'
+    else if (crossbow.used || crossbow.mode === 'paused') label = '弩机已暂停'
+    else if (crossbow.mode === 'warning') label = '预警已过'
+  }
+  trapLabelEl.textContent = label
 }
 
 function setOrder(n) {
@@ -450,6 +598,10 @@ function setOrder(n) {
   base = bases[n]
   currentMap = MAP_DEFS[n]
   window.__game = game
+  setSpeed(1)
+  clearGoldFx()
+  clearFootprintPreview()
+  pop = null
   skeleton.x = currentMap.skeleton.x
   skeleton.y = currentMap.skeleton.y
   const info = ORDER_INFO[order]
@@ -603,10 +755,20 @@ function trySwitchOrder(n) {
 tab1.addEventListener('click', () => trySwitchOrder(1))
 tab2.addEventListener('click', () => trySwitchOrder(2))
 
+// 营业倍速：随时可切，走动中的时钟不重置也不跳步
+spd1El.addEventListener('click', () => setSpeed(1))
+spd2El.addEventListener('click', () => setSpeed(2))
+
 // 暂停机械弩：仅在预警四秒窗口内可用，一趟一次
 btnTrap.addEventListener('click', () => {
   if (mode !== 'business' || order !== 2) return
   if (!crossbow.windowOpen || crossbow.mode !== 'warning' || crossbow.used) return
+  // 四秒以真实时间计：到点的那一下点击也立即作废（不等下一帧）
+  if (performance.now() - crossbow.warnStart >= 4000) {
+    crossbow.windowOpen = false
+    updateTrapButton()
+    return
+  }
   crossbow.used = true
   crossbow.pressed = true
   updateTrapButton()
@@ -624,6 +786,8 @@ function startBusiness() {
   runHasTrap = plan.actions.some((a) => a.type === 'trap')
   pending = null
   drag = null
+  pop = null
+  clearFootprintPreview()
   hideGhost()
   sidebar.classList.remove('drop-refund')
   dropHintEl.hidden = true
@@ -639,7 +803,7 @@ function startBusiness() {
     walkPhase: 0,
     moving: false,
   }
-  walker = { actions: plan.actions, i: 0, actionStart: performance.now() }
+  walker = { actions: plan.actions, i: 0, actionStart: simT }
   skeleton.pose = 'idle'
   fx = null
   stagger = null
@@ -652,6 +816,8 @@ function startBusiness() {
   crossbow.windowOpen = false
   crossbow.warnStart = 0
   alarmEl.hidden = true
+  btnTrap.classList.remove('timing')
+  trapTimerFillEl.style.transform = 'scaleX(0)'
   hideBubble()
   status('营业中：客人正在探索……')
   updateHUD()
@@ -663,6 +829,10 @@ function resetBusiness() {
   hideBubble()
   hideReview()
   mode = 'setup'
+  setSpeed(1)
+  clearGoldFx()
+  pop = null
+  clearFootprintPreview()
   skeleton.pose = 'idle'
   fx = null
   stagger = null
@@ -675,6 +845,8 @@ function resetBusiness() {
   crossbow.windowOpen = false
   crossbow.warnStart = 0
   alarmEl.hidden = true
+  btnTrap.classList.remove('timing')
+  trapTimerFillEl.style.transform = 'scaleX(0)'
   runHasTrap = true
   game.badgeTaken = false
   restoreItems(game)
@@ -720,7 +892,7 @@ function tryPickupAt(t) {
   return true
 }
 
-function stepWalker(t) {
+function stepWalker(t, realT) {
   if (!walker) return
   for (;;) {
     const a = walker.actions[walker.i]
@@ -865,11 +1037,11 @@ function stepWalker(t) {
         crossbow.mode = 'warning'
         crossbow.pressed = false
         crossbow.windowOpen = true
-        crossbow.warnStart = t
+        crossbow.warnStart = realT // 真实毫秒：倍速不影响四秒窗口
         updateTrapButton()
         // 警报期间收起白色台词气泡，让客人、亮线和弩机露出来
         hideBubble()
-        status('弩机预警！4 秒内点「暂停机械弩」')
+        status('弩机预警！4 秒内点「拉闸暂停机械弩」')
       }
       if (a.phase === 'warn') {
         if (crossbow.pressed) {
@@ -880,7 +1052,7 @@ function stepWalker(t) {
           showBubble('暂停了！')
           status('机械弩已暂停')
           updateTrapButton()
-        } else if (t - a.phaseStart >= 4000) {
+        } else if (realT - crossbow.warnStart >= 4000) {
           // 四秒到点立即熄灭按钮：此后点击无效
           crossbow.windowOpen = false
           a.phase = 'stepIn'
@@ -1035,6 +1207,8 @@ function stepWalker(t) {
 function startDrag(source, type, dir, e) {
   pending = null
   bounce = null
+  pop = null
+  clearFootprintPreview()
   const b = canvasBox()
   drag = {
     source,
@@ -1063,6 +1237,12 @@ function startBounce(to) {
     dur: BOUNCE_MS,
     size,
   }
+}
+
+// 落位回弹：实际放下/挪位/转路牌时，道具轻轻弹一下并带四粒像素灰
+const POP_MS = 220
+function setPop(type, x, y, dir = 0) {
+  pop = { type, x, y, dir, key: tileKey(x, y), start: performance.now(), ms: POP_MS }
 }
 
 function lockHint() {
@@ -1124,15 +1304,20 @@ window.addEventListener('pointermove', (e) => {
   dropHintEl.hidden = !refunding
   if (drag.overShop) {
     drag.target = null
+    clearFootprintPreview()
     return
   }
   const t = tileAt(drag.px, drag.py)
   if (!t) {
     drag.target = null
+    clearFootprintPreview()
     return
   }
   const ignore = drag.source === 'shop' ? null : tileKey(drag.source.x, drag.source.y)
   drag.target = { x: t.x, y: t.y, valid: placeReason(game, t.x, t.y, ignore) === 'ok' }
+  // 合法候选格：先看拟放后的真实路线；不合法则退回当前场布的路线
+  if (drag.target.valid) previewRouteForDrag(drag)
+  else clearFootprintPreview()
 })
 
 window.addEventListener('pointerup', () => {
@@ -1144,6 +1329,7 @@ window.addEventListener('pointerup', () => {
     const item = game.items.get(tileKey(p.source.x, p.source.y))
     if (item && item.type === 'sign') {
       const dir = rotateItem(game, item.x, item.y)
+      setPop('sign', item.x, item.y, dir)
       status(`路牌顺时针转了 90°，现在朝${DIR_NAMES[dir]}`)
       updateHUD()
     }
@@ -1153,6 +1339,7 @@ window.addEventListener('pointerup', () => {
 
   const d = drag
   drag = null
+  clearFootprintPreview()
   document.body.classList.remove('dragging')
   sidebar.classList.remove('drop-refund')
   dropHintEl.hidden = true
@@ -1176,10 +1363,12 @@ window.addEventListener('pointerup', () => {
   } else if (d.target && d.target.valid) {
     if (d.source === 'shop') {
       placeFromShop(game, d.type, d.target.x, d.target.y)
+      setPop(d.type, d.target.x, d.target.y, 0)
       status(`放下${def.name}，-${def.price} 金`)
     } else {
       const same = d.target.x === d.source.x && d.target.y === d.source.y
       moveItem(game, d.source, d.target)
+      if (!same) setPop(d.type, d.target.x, d.target.y, d.dir)
       status(same ? `${def.name}留在原格` : `挪动${def.name}，不花金币`)
     }
     hideGhost()
@@ -1221,6 +1410,7 @@ window.addEventListener('keydown', (e) => {
   sidebar.classList.remove('drop-refund')
   dropHintEl.hidden = true
   applyCursor(false)
+  clearFootprintPreview()
   startBounce(anchor)
   status('取消拖拽')
 })
@@ -1232,13 +1422,22 @@ window.addEventListener('blur', () => {
     sidebar.classList.remove('drop-refund')
     dropHintEl.hidden = true
     applyCursor(false)
+    clearFootprintPreview()
     hideGhost()
   }
 })
 
-function frame(t) {
+function frame(realT) {
+  // 营业模拟时钟：按 1×/2× 推进；切换时 dt 连续累加，不跳步不断拍
+  if (lastRealT == null) lastRealT = realT
+  const dt = Math.min(200, Math.max(0, realT - lastRealT))
+  lastRealT = realT
+  simT += dt * speed
+  const t = simT
+  if (!reducedMotion) drawCoinFrame(coinCtx, Math.floor(realT / 140) % 4)
+
   if (bounce) {
-    const k = Math.min(1, (t - bounce.t0) / bounce.dur)
+    const k = Math.min(1, (realT - bounce.t0) / bounce.dur)
     const ease = 1 - Math.pow(1 - k, 3)
     const cx = bounce.x0 + (bounce.x1 - bounce.x0) * ease
     const cy = bounce.y0 + (bounce.y1 - bounce.y0) * ease
@@ -1248,7 +1447,7 @@ function frame(t) {
       hideGhost()
     }
   }
-  stepWalker(t)
+  stepWalker(t, realT)
   if (!bubbleEl.hidden) positionBubble()
   if (fx) {
     fx.t = t - fx.start
@@ -1267,16 +1466,31 @@ function frame(t) {
   }
   const blocking = !!(guest && guest.blockStart && t - guest.blockStart < guest.blockMs)
 
-  // 二单警报：独立于普通台词的红色警示，显示剩余秒数
-  if (order === 2 && crossbow.mode === 'warning' && crossbow.windowOpen) {
-    const remain = Math.max(0, 4000 - (t - crossbow.warnStart))
+  // 二单警报：挂在邻边墙面，像素沙漏 + 真实剩余秒数（倍速不影响四秒）
+  const trapRemain =
+    order === 2 && crossbow.windowOpen ? Math.max(0, 4000 - (realT - crossbow.warnStart)) : null
+  if (trapRemain != null && crossbow.mode === 'warning') {
     alarmEl.hidden = false
-    alarmEl.textContent = `⚠ 弩机预警 ${Math.max(1, Math.ceil(remain / 1000))}s`
-    const cb = currentMap.crossbow
-    alarmEl.style.left = ((cb.x + 0.5) / COLS) * 100 + '%'
-    alarmEl.style.top = ((cb.y - 0.9) / ROWS) * 100 + '%'
+    alarmTextEl.textContent = `弩机预警 ${(trapRemain / 1000).toFixed(1)}s`
+    const anchor =
+      currentMap.alarm || { x: currentMap.crossbow.x + 2.5, y: currentMap.crossbow.y + 1.8 }
+    alarmEl.style.left = (anchor.x / COLS) * 100 + '%'
+    alarmEl.style.top = (anchor.y / ROWS) * 100 + '%'
   } else if (!alarmEl.hidden) {
     alarmEl.hidden = true
+  }
+  // 进度条嵌在拉闸按钮下沿：满到空；收起时只动透明度与 transform，按钮高度不变
+  trapTimerFillEl.style.transform = `scaleX(${trapRemain != null ? trapRemain / 4000 : 0})`
+  // 弩机按钮随状态换文案（待命 / 拉闸 / 已暂停 / 已了结）
+  const trapSig = `${mode}|${order}|${secondUnlocked}|${runHasTrap}|${crossbow.mode}|${crossbow.windowOpen}|${crossbow.used}`
+  if (trapSig !== trapUiSig) {
+    trapUiSig = trapSig
+    updateTrapButton()
+  }
+  // 预警时把剩余时间并进按钮文案；到点或拉闸后由状态字立即接管
+  if (trapRemain != null && crossbow.mode === 'warning' && !crossbow.used) {
+    const label = `拉闸暂停机械弩 · ${(trapRemain / 1000).toFixed(1)}s`
+    if (trapLabelEl.textContent !== label) trapLabelEl.textContent = label
   }
   const hiddenKey =
     drag && drag.source !== 'shop' ? tileKey(drag.source.x, drag.source.y) : null
@@ -1293,6 +1507,22 @@ function frame(t) {
     const el = t - spark.start
     if (el >= spark.ms) spark = null
     else sparkScene = { x: spark.x, y: spark.y, t: el, ms: spark.ms }
+  }
+  // 落位回弹（布置期，按真实毫秒）
+  let popScene = null
+  if (pop) {
+    const el = realT - pop.start
+    if (el >= pop.ms) pop = null
+    else
+      popScene = {
+        key: pop.key,
+        type: pop.type,
+        x: pop.x,
+        y: pop.y,
+        dir: pop.dir,
+        t: el,
+        ms: pop.ms,
+      }
   }
   // 受击闪白：只在真的命中帧（约 80ms）
   let flash = null
@@ -1313,7 +1543,13 @@ function frame(t) {
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   ctx.save()
   ctx.translate(shakeX, shakeY)
-  renderScene(ctx, base, game, drag ? drag.target : null, hiddenKey, {
+  renderScene(
+    ctx,
+    base,
+    game,
+    drag && drag.target ? { ...drag.target, type: drag.type, dir: drag.dir || 0 } : null,
+    hiddenKey,
+    {
     guest: guest
       ? {
           ...guest,
@@ -1330,6 +1566,11 @@ function frame(t) {
     torches: TORCHES_BY_ORDER[order],
     dragging: !!drag && mode === 'setup',
     forbidden: game.reserved,
+    footprints:
+      mode === 'setup' && (footprintPreview || footprintsBase.length)
+        ? { tiles: footprintPreview || footprintsBase, preview: !!footprintPreview }
+        : null,
+    pop: popScene,
     stand: currentMap.stand,
     standBadge: !game.badgeTaken,
     badgeFly: badgeFlyScene,
