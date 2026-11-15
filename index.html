@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>魔王也要五星好评</title>
+  </head>
+  <body>
+    <main class="stage">
+      <header>
+        <h1>魔王也要五星好评</h1>
+        <p class="subtitle">2D 俯视角像素游戏 · 评价单 v0.6</p>
+      </header>
+
+      <div class="play-area">
+        <div class="canvas-wrap">
+          <canvas id="game" width="768" height="576" aria-label="占位地图"></canvas>
+          <div id="bubble" class="bubble" hidden></div>
+
+          <div id="review-card" class="review" hidden>
+            <div class="review-panel">
+              <div class="review-title">新手剑士的评价单</div>
+              <div id="review-stars" class="review-stars"></div>
+              <ul id="review-events" class="review-events"></ul>
+              <p id="review-comment" class="review-comment"></p>
+              <ul id="review-missing" class="review-missing"></ul>
+              <button id="btn-again" class="btn primary">再布置一趟</button>
+            </div>
+          </div>
+        </div>
+
+        <aside id="sidebar">
+          <div class="gold">金币 <span id="gold">100</span></div>
+
+          <section class="guest-reserve">
+            <div class="guest-title">今日预约 · 新手剑士</div>
+            <p class="guest-quote">「我是新手剑士，想拿到勇者徽章。看见宝箱的话，我一定会去看看。」</p>
+            <div class="btn-row">
+              <button id="btn-open" class="btn primary">开门营业</button>
+              <button id="btn-reset" class="btn">重新布置</button>
+            </div>
+          </section>
+
+          <div class="card" data-type="chest" title="按住拖到地图空地砖">
+            <img alt="宝箱" draggable="false" />
+            <div class="card-name">宝箱</div>
+            <div class="card-price"><span class="price"></span> 金</div>
+          </div>
+
+          <div class="card" data-type="shield" title="按住拖到地图空地砖">
+            <img alt="盾牌架" draggable="false" />
+            <div class="card-name">盾牌架</div>
+            <div class="card-price"><span class="price"></span> 金</div>
+          </div>
+
+          <div class="card" data-type="sign" title="按住拖到地图空地砖；摆好后点击可转向">
+            <img alt="路牌" draggable="false" />
+            <div class="card-name">路牌</div>
+            <div class="card-price"><span class="price"></span> 金</div>
+          </div>
+
+          <p id="status" class="status">把道具拖到空地砖上摆放</p>
+
+          <section class="run-log">
+            <div class="run-log-title">本次营业记录</div>
+            <ul id="log-list" class="log-list"></ul>
+          </section>
+
+          <ul class="tips">
+            <li>拖到空地砖放下：扣钱</li>
+            <li>墙 / 占用 / 地图外：弹回不扣钱</li>
+            <li>拖动已摆的道具：挪位</li>
+            <li>拖回本栏：收回全额退款</li>
+            <li>点击路牌：顺时针转 90°</li>
+            <li>Esc：取消拖拽</li>
+          </ul>
+        </aside>
+      </div>
+
+      <ul class="legend" id="legend"></ul>
+
+      <footer>占位地图：美术与玩法将在后续轮次接入</footer>
+    </main>
+
+    <div id="ghost"><img alt="" draggable="false" /></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

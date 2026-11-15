@@ -1,0 +1,15 @@
+{
+  "name": "demon-king-five-stars",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "《魔王也要五星好评》2D 俯视角像素小游戏",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^7.1.0"
+  }
+}

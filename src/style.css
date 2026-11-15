@@ -1,0 +1,378 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f1020;
+  color: #f4f4f4;
+  font-family: 'Courier New', ui-monospace, monospace;
+}
+
+body.dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 24px;
+}
+
+header {
+  text-align: center;
+}
+
+h1 {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: 4px;
+  color: #ffcd75;
+  text-shadow: 3px 3px 0 #b13e53;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #94b0c2;
+}
+
+.play-area {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+#game {
+  image-rendering: pixelated;
+  border: 4px solid #333c57;
+  background: #1a1c2c;
+  max-width: 100%;
+  height: auto;
+  touch-action: none;
+  display: block;
+}
+
+.canvas-wrap {
+  position: relative;
+  line-height: 0;
+  max-width: 100%;
+}
+
+.bubble {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 8px));
+  max-width: 230px;
+  background: #f4f4f4;
+  color: #1a1c2c;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 4px 8px;
+  border: 2px solid #1a1c2c;
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 5;
+  white-space: normal;
+  text-align: center;
+}
+
+.bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #1a1c2c;
+}
+
+.review {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 16, 32, 0.72);
+  z-index: 6;
+  line-height: 1.5; /* 抵消 .canvas-wrap 的 line-height:0，否则文字会叠行 */
+}
+
+/* display:flex 会盖过 hidden 属性的默认样式，必须显式让 hidden 生效 */
+.review[hidden] {
+  display: none;
+}
+
+.review-panel {
+  width: min(340px, 86%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  background: #29366f;
+  border: 4px solid #ffcd75;
+  box-shadow: 5px 5px 0 #1a1c2c;
+}
+
+.review-title {
+  font-size: 15px;
+  color: #ffcd75;
+  text-align: center;
+}
+
+.review-stars {
+  font-size: 26px;
+  letter-spacing: 4px;
+  text-align: center;
+  color: #566c86;
+}
+
+.review-stars .on {
+  color: #ffcd75;
+}
+
+.review-stars .incomplete {
+  font-size: 17px;
+  letter-spacing: 2px;
+  color: #b13e53;
+}
+
+.review-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: #a7f070;
+}
+
+.review-comment {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #f4f4f4;
+}
+
+.review-missing {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: #73eff7;
+}
+
+.review-panel .btn {
+  margin-top: 4px;
+}
+
+#sidebar {
+  width: 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 4px solid #333c57;
+  background: #1a1c2c;
+}
+
+#sidebar.drop-refund {
+  border-color: #a7f070;
+}
+
+.gold {
+  font-size: 18px;
+  color: #ffcd75;
+}
+
+.guest-reserve {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 3px solid #566c86;
+  background: #29366f;
+}
+
+.guest-title {
+  font-size: 13px;
+  color: #ffcd75;
+}
+
+.guest-quote {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #f4f4f4;
+}
+
+.btn-row {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 10px;
+  background: #566c86;
+  color: #f4f4f4;
+  border: 2px solid #1a1c2c;
+  box-shadow: 2px 2px 0 #1a1c2c;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: #b13e53;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 3px solid #566c86;
+  background: #29366f;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.card img {
+  width: 38px;
+  height: 38px;
+  image-rendering: pixelated;
+  flex: none;
+}
+
+.card-name {
+  font-size: 14px;
+  flex: 1;
+  text-align: left;
+}
+
+.card-price {
+  font-size: 12px;
+  color: #ffcd75;
+  white-space: nowrap;
+}
+
+.card.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.status {
+  margin: 0;
+  min-height: 2.4em;
+  font-size: 13px;
+  color: #73eff7;
+}
+
+.run-log {
+  padding: 6px 8px;
+  border: 3px solid #566c86;
+  background: #1a1c2c;
+}
+
+.run-log-title {
+  font-size: 12px;
+  color: #ffcd75;
+  margin-bottom: 4px;
+}
+
+.log-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: #a7f070;
+}
+
+.log-list li::before {
+  content: '· ';
+  color: #94b0c2;
+}
+
+.log-list .empty {
+  color: #566c86;
+}
+
+.log-list .empty::before {
+  content: '';
+}
+
+.tips {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #94b0c2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#ghost {
+  position: fixed;
+  display: none;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#ghost img {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.legend {
+  display: flex;
+  gap: 20px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #1a1c2c;
+  outline: 1px solid #566c86;
+}
+
+footer {
+  font-size: 12px;
+  color: #566c86;
+}
