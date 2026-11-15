@@ -1,5 +1,5 @@
 import './style.css'
-import { COLS, ROWS, ZONES, SKELETON, TRAP_STOP, buildGrid } from './map.js'
+import { COLS, ROWS, SKELETON, TRAP_STOP, buildGrid } from './map.js'
 import {
   ITEMS,
   DIR_NAMES,
@@ -106,19 +106,35 @@ for (const el of cardEls) {
   el.querySelector('.price').textContent = ITEMS[type].price
 }
 
-function tileAt(cx, cy) {
+// 画布内容区（去掉 CSS 边框）在视口中的位置与尺寸：命中判定只认画出来的地砖区
+function canvasBox() {
   const r = canvas.getBoundingClientRect()
-  if (cx < r.left || cx >= r.right || cy < r.top || cy >= r.bottom) return null
-  const x = Math.floor(((cx - r.left) / r.width) * COLS)
-  const y = Math.floor(((cy - r.top) / r.height) * ROWS)
+  const cs = getComputedStyle(canvas)
+  const bl = parseFloat(cs.borderLeftWidth) || 0
+  const bt = parseFloat(cs.borderTopWidth) || 0
+  const br = parseFloat(cs.borderRightWidth) || 0
+  const bb = parseFloat(cs.borderBottomWidth) || 0
+  return {
+    left: r.left + bl,
+    top: r.top + bt,
+    width: r.width - bl - br,
+    height: r.height - bt - bb,
+  }
+}
+
+function tileAt(cx, cy) {
+  const b = canvasBox()
+  if (cx < b.left || cx >= b.left + b.width || cy < b.top || cy >= b.top + b.height) return null
+  const x = Math.floor(((cx - b.left) / b.width) * COLS)
+  const y = Math.floor(((cy - b.top) / b.height) * ROWS)
   return { x, y }
 }
 
 function tileCenterClient(x, y) {
-  const r = canvas.getBoundingClientRect()
+  const b = canvasBox()
   return {
-    x: r.left + ((x + 0.5) / COLS) * r.width,
-    y: r.top + ((y + 0.5) / ROWS) * r.height,
+    x: b.left + ((x + 0.5) / COLS) * b.width,
+    y: b.top + ((y + 0.5) / ROWS) * b.height,
   }
 }
 
@@ -641,14 +657,14 @@ function stepWalker(t) {
 function startDrag(source, type, dir, e) {
   pending = null
   bounce = null
-  const r = canvas.getBoundingClientRect()
+  const b = canvasBox()
   drag = {
     source,
     type,
     dir,
     px: e.clientX,
     py: e.clientY,
-    cellScreen: r.width / COLS,
+    cellScreen: b.width / COLS,
     target: null,
     overShop: false,
   }
@@ -831,18 +847,6 @@ window.addEventListener('blur', () => {
   }
 })
 
-function buildLegend() {
-  const ul = document.getElementById('legend')
-  for (const key of ['entrance', 'corridor', 'side', 'challenge']) {
-    const li = document.createElement('li')
-    const chip = document.createElement('span')
-    chip.className = 'chip'
-    chip.style.background = ZONES[key].colors[1]
-    li.append(chip, ZONES[key].name)
-    ul.appendChild(li)
-  }
-}
-
 function frame(t) {
   if (bounce) {
     const k = Math.min(1, (t - bounce.t0) / bounce.dur)
@@ -885,6 +889,5 @@ function frame(t) {
 }
 
 updateHUD()
-buildLegend()
 updateLogUI()
 requestAnimationFrame(frame)
