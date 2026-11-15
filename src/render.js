@@ -8,23 +8,26 @@ const U = 4
 
 const FLOORS = {
   entrance: { base: '#7a5533', light: '#866040', dark: '#6b4a2b' }, // 暖木入口
-  corridor: { base: '#857c71', light: '#90877b', dark: '#786f64' },
-  side: { base: '#8b8175', light: '#968c7f', dark: '#7d7468' },
-  sideA: { base: '#63707a', light: '#6e7b85', dark: '#57646d' }, // 青灰地砖
+  corridor: { base: '#555264', light: '#5f5c70', dark: '#484557' }, // 冷石（蓝紫灰）
+  side: { base: '#5a5d6e', light: '#646779', dark: '#4d5060' },
+  sideA: { base: '#565d70', light: '#606779', dark: '#4a5063' }, // 青灰偏蓝紫
   sideB: { base: '#55371f', light: '#5f3f25', dark: '#4a2f1a' }, // 深木
-  challenge: { base: '#7f7367', light: '#8a7e71', dark: '#71665b' },
+  challenge: { base: '#4f4b5c', light: '#595567', dark: '#444052' }, // 冷石
   supply: { base: '#6b4a30', light: '#78563a', dark: '#5d3f27' },
 }
 
 const WOOD_ZONES = new Set(['supply', 'entrance', 'sideB'])
 
 const WALL = {
-  base: '#5d5449',
-  light: '#655c50',
-  dark: '#564e44',
-  mortar: '#453e36',
-  highlight: '#7a6f61',
-  capShadow: '#332d26',
+  top: '#2b2835',
+  topInner: '#1f1c28',
+  topEdge: '#3d394b',
+  brickA: '#4d4959',
+  brickB: '#565264',
+  brickC: '#454151',
+  mortar: '#2a2735',
+  highlight: '#6a6478',
+  capShadow: '#1a1721',
 }
 
 export const TORCHES_BY_ORDER = {
@@ -46,13 +49,6 @@ export const TORCHES_BY_ORDER = {
   ],
 }
 
-const THRESHOLDS = [
-  { x: 7, y: 14 }, // 入口门
-  { x: 8, y: 5 }, // 侧室 A 门
-  { x: 12, y: 11 }, // 侧室 B 门
-  { x: 12, y: 4 }, // 挑战房门
-]
-
 function rect(ctx, x, y, w, h, color) {
   ctx.fillStyle = color
   ctx.fillRect(x * U, y * U, w * U, h * U)
@@ -72,87 +68,135 @@ function drawFloorTile(ctx, grid, x, y, zone) {
   const s = (x * 7 + y * 11) % 17
 
   if (WOOD_ZONES.has(zone)) {
-    // 木质地面：横向板缝 + 错缝
+    // 木板：横缝减淡 + 细木纹 + 少量结疤
     rect(ctx, ux, uy, 8, 8, hash === 0 ? f.light : hash === 7 ? f.dark : f.base)
-    alphaRect(ctx, ux, uy, 8, 1, '#3a2a1a', 0.55)
+    alphaRect(ctx, ux, uy, 8, 1, '#3a2a1a', 0.28)
     const off = (x + y) % 2 === 0 ? 0 : 4
-    alphaRect(ctx, ux + off, uy, 1, 8, '#3a2a1a', 0.35)
-    if (s === 3) rect(ctx, ux + 2, uy + 5, 1, 1, f.dark)
-    if (s === 11) rect(ctx, ux + 5, uy + 2, 1, 1, f.light)
+    alphaRect(ctx, ux + off, uy, 1, 8, '#3a2a1a', 0.16)
+    const g = (x * 5 + y * 7) % 5
+    alphaRect(ctx, ux + 2, uy + 2 + g, 4, 1, '#4a3420', 0.24)
+    alphaRect(ctx, ux + 1, uy + 5 - g, 5, 1, '#5a4028', 0.16)
+    if ((x * 3 + y * 11) % 9 === 0) rect(ctx, ux + 3, uy + 3, 1, 1, f.dark)
   } else {
-    rect(ctx, ux, uy, 8, 8, hash === 0 ? f.light : hash === 7 ? f.dark : f.base)
-    // 地砖纹理：克制的一点斑点与石缝
+    // 2×2 大石砖：只在 2×2 边界画缝，打破格纸感
+    const bx = Math.floor(x / 2)
+    const by = Math.floor(y / 2)
+    const blockHash = (bx * 17 + by * 29) % 9
+    const tone = blockHash === 0 ? f.light : blockHash === 4 ? f.dark : f.base
+    rect(ctx, ux, uy, 8, 8, tone)
     if (s === 3) rect(ctx, ux + 2, uy + 5, 1, 1, f.dark)
     else if (s === 11) rect(ctx, ux + 5, uy + 2, 1, 1, f.light)
-    alphaRect(ctx, ux, uy, 8, 1, '#2e2822', 0.13)
-    alphaRect(ctx, ux, uy, 1, 8, '#2e2822', 0.09)
-    // 偶发裂纹
-    if ((x * 13 + y * 29) % 31 === 0) {
-      rect(ctx, ux + 3, uy + 2, 1, 2, f.dark)
-      rect(ctx, ux + 4, uy + 4, 1, 2, f.dark)
+    if (x % 2 === 0) alphaRect(ctx, ux, uy, 1, 8, '#201d2a', 0.5)
+    if (y % 2 === 0) alphaRect(ctx, ux, uy, 8, 1, '#201d2a', 0.5)
+    if ((bx * 13 + by * 31) % 7 === 0 && x % 2 === 1 && y % 2 === 1) {
+      alphaRect(ctx, ux + 3, uy + 2, 1, 2, '#3f3c4b', 0.7)
+      alphaRect(ctx, ux + 4, uy + 4, 1, 2, '#3f3c4b', 0.7)
+    }
+
+    // 靠墙苔点 / 碎石（固定装饰）
+    const isWall = (xx, yy) =>
+      yy < 0 || yy >= ROWS || xx < 0 || xx >= COLS || grid[yy][xx] === 'wall'
+    const sides = []
+    if (isWall(x, y - 1)) sides.push('n')
+    if (isWall(x, y + 1)) sides.push('s')
+    if (isWall(x - 1, y)) sides.push('w')
+    if (isWall(x + 1, y)) sides.push('e')
+    if (sides.length && (x * 3 + y * 5) % 7 < 3) {
+      for (const side of sides) {
+        const m1 = (x * 7 + y * 3) % 5
+        const col = m1 % 2 === 0 ? '#5d6b52' : '#6f7d5f'
+        if (side === 'n') alphaRect(ctx, ux + 1 + m1, uy + 1, 2, 1, col, 0.55)
+        if (side === 's') alphaRect(ctx, ux + 5 - m1, uy + 6, 2, 1, col, 0.5)
+        if (side === 'w') alphaRect(ctx, ux + 1, uy + 1 + m1, 1, 2, col, 0.55)
+        if (side === 'e') alphaRect(ctx, ux + 6, uy + 5 - m1, 1, 2, col, 0.5)
+      }
+    }
+    if ((x * 11 + y * 7) % 23 === 0) {
+      rect(ctx, ux + 2, uy + 4, 1, 1, '#3f3c4b')
+      rect(ctx, ux + 3, uy + 5, 2, 1, '#4a4657')
     }
   }
 
-  // 靠墙环境阴影：给厚墙压出体积
+  // 靠墙环境阴影（冷色）
   const isWall = (xx, yy) =>
     yy < 0 || yy >= ROWS || xx < 0 || xx >= COLS || grid[yy][xx] === 'wall'
   if (isWall(x, y - 1)) {
-    alphaRect(ctx, ux, uy, 8, 1, '#17120e', 0.34)
-    alphaRect(ctx, ux, uy + 1, 8, 1, '#17120e', 0.14)
+    alphaRect(ctx, ux, uy, 8, 1, '#12101a', 0.36)
+    alphaRect(ctx, ux, uy + 1, 8, 1, '#12101a', 0.15)
   }
-  if (isWall(x, y + 1)) alphaRect(ctx, ux, uy + 7, 8, 1, '#17120e', 0.28)
-  if (isWall(x - 1, y)) alphaRect(ctx, ux, uy, 1, 8, '#17120e', 0.25)
-  if (isWall(x + 1, y)) alphaRect(ctx, ux + 7, uy, 1, 8, '#17120e', 0.25)
-}
-
-// 只有紧贴走道/房间的一圈墙画砖；远处沉为暗石，只留零星旧痕
-function isNearFloor(grid, x, y) {
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      const nx = x + dx
-      const ny = y + dy
-      if (ny < 0 || ny >= ROWS || nx < 0 || nx >= COLS) continue
-      if (grid[ny][nx] !== 'wall') return true
-    }
-  }
-  return false
+  if (isWall(x, y + 1)) alphaRect(ctx, ux, uy + 7, 8, 1, '#12101a', 0.3)
+  if (isWall(x - 1, y)) alphaRect(ctx, ux, uy, 1, 8, '#12101a', 0.26)
+  if (isWall(x + 1, y)) alphaRect(ctx, ux + 7, uy, 1, 8, '#12101a', 0.26)
 }
 
 function drawWallTile(ctx, grid, x, y) {
   const ux = x * 8
   const uy = y * 8
-  if (!isNearFloor(grid, x, y)) {
-    // 远景暗石：无砖纹，少量旧痕
-    rect(ctx, ux, uy, 8, 8, '#241f19')
-    const s = (x * 7 + y * 13) % 17
-    if (s === 3) alphaRect(ctx, ux + 2, uy + 5, 2, 1, '#2e2822', 0.9)
-    if (s === 9) alphaRect(ctx, ux + 5, uy + 2, 1, 1, '#1c1814', 0.9)
+  const isFloor = (xx, yy) =>
+    yy >= 0 && yy < ROWS && xx >= 0 && xx < COLS && grid[yy][xx] !== 'wall'
+  const floorBelow = isFloor(x, y + 1)
+  const nearFloor =
+    isFloor(x - 1, y) ||
+    isFloor(x + 1, y) ||
+    isFloor(x, y - 1) ||
+    floorBelow ||
+    isFloor(x - 1, y - 1) ||
+    isFloor(x + 1, y - 1) ||
+    isFloor(x - 1, y + 1) ||
+    isFloor(x + 1, y + 1)
+
+  if (!nearFloor) {
+    // 远景墙：大块暗石底，仅少量低对比旧痕（无逐格高光/内边）
+    const tone = ((x >> 1) * 7 + (y >> 1) * 13) % 5
+    const base = tone === 0 ? '#211e29' : tone === 3 ? '#252230' : '#232030'
+    rect(ctx, ux, uy, 8, 8, base)
+    const s = (x * 7 + y * 13) % 23
+    if (s === 3) alphaRect(ctx, ux + 3, uy + 3, 3, 1, '#1b1823', 0.7)
+    if (s === 9) alphaRect(ctx, ux + 1, uy + 6, 2, 1, '#2a2735', 0.45)
+    if (s === 15) alphaRect(ctx, ux + 5, uy + 2, 1, 2, '#1b1823', 0.6)
     return
   }
-  rect(ctx, ux, uy, 8, 8, WALL.base)
 
-  // 大块错缝砖：每格两排、每排 4 单位（16px），错缝、低对比
-  for (let r = 0; r < 2; r++) {
-    const vy = r * 4
+  // 贴房间/走道的一圈：深顶 + 断续石边
+  rect(ctx, ux, uy, 8, 8, floorBelow ? WALL.top : '#282532')
+  const dash = (gx, gy, horiz) =>
+    alphaRect(ctx, gx, gy, horiz ? 2 : 1, horiz ? 1 : 2, WALL.topEdge, 0.5)
+  if (isFloor(x, y - 1)) {
+    dash(ux + 1, uy, true)
+    dash(ux + 5, uy, true)
+  }
+  if (isFloor(x, y + 1) && !floorBelow) {
+    dash(ux + 2, uy + 7, true)
+    dash(ux + 6, uy + 7, true)
+  }
+  if (isFloor(x - 1, y)) {
+    dash(ux, uy + 1, false)
+    dash(ux, uy + 5, false)
+  }
+  if (isFloor(x + 1, y)) {
+    dash(ux + 7, uy + 2, false)
+    dash(ux + 7, uy + 6, false)
+  }
+
+  if (!floorBelow) return
+
+  // 下方有地板：冷砖立面
+  rect(ctx, ux, uy, 8, 2, WALL.top)
+  alphaRect(ctx, ux, uy, 8, 1, WALL.topInner, 0.9)
+  rect(ctx, ux, uy + 2, 8, 6, WALL.brickB)
+  for (let r = 0; r < 3; r++) {
+    const vy = 2 + r * 2
     const tone = (x * 3 + r) % 3
-    const brick = tone === 0 ? WALL.light : tone === 1 ? WALL.base : WALL.dark
-    rect(ctx, ux, uy + vy + 1, 8, 3, brick)
-    rect(ctx, ux, uy + vy + 1, 8, 1, WALL.highlight)
-    alphaRect(ctx, ux, uy + vy + 3, 8, 1, '#2f2a24', 0.25)
+    const brick = tone === 0 ? WALL.brickA : tone === 1 ? WALL.brickB : WALL.brickC
+    rect(ctx, ux, uy + vy, 8, 2, brick)
+    alphaRect(ctx, ux, uy + vy, 8, 1, WALL.highlight, 0.24)
     rect(ctx, ux, uy + vy, 8, 1, WALL.mortar)
     const off = (r + x) % 2 === 0 ? 0 : 4
-    rect(ctx, ux + off, uy + vy, 1, 4, WALL.mortar)
+    rect(ctx, ux + off, uy + vy, 1, 2, WALL.mortar)
   }
-
-  // 斑驳旧痕
-  if ((x * 5 + y * 3) % 11 === 0) alphaRect(ctx, ux + 5, uy + 2, 2, 1, '#3c362f', 0.5)
-  if ((x * 11 + y * 7) % 23 === 0) alphaRect(ctx, ux + 1, uy + 5, 2, 1, '#6d6357', 0.4)
-
-  // 下方是地板：墙面高光 + 接触阴影，读作“厚墙”
-  if (y + 1 < ROWS && grid[y + 1][x] !== 'wall') {
-    rect(ctx, ux, uy + 6, 8, 1, WALL.highlight)
-    rect(ctx, ux, uy + 7, 8, 1, WALL.capShadow)
-  }
+  rect(ctx, ux, uy + 7, 8, 1, WALL.capShadow)
+  if ((x * 5 + y * 3) % 11 === 0) alphaRect(ctx, ux + 5, uy + 3, 2, 1, '#3c3645', 0.5)
+  if ((x * 11 + y * 7) % 23 === 0) alphaRect(ctx, ux + 1, uy + 5, 2, 1, '#6a6478', 0.35)
 }
 
 function drawCarpet(ctx) {
@@ -179,26 +223,208 @@ function drawCarpet(ctx) {
   }
 }
 
-function drawThreshold(ctx, tx, ty) {
-  // 铜门槛对准实际可走门洞：居中一条竖带
+function drawDoorPost(ctx, ux, uy) {
+  // 门柱：细石柱（2×4 单位）
+  rect(ctx, ux, uy, 2, 4, '#3a3646')
+  rect(ctx, ux, uy, 2, 1, '#565264')
+  rect(ctx, ux, uy + 3, 2, 1, '#1d1a26')
+}
+
+// 门洞：门槛贯穿整段实际开口，两端各一根石门柱；align 控制贴哪侧门沿
+function drawDoorway(ctx, span) {
+  const ux = span.x * 8
+  const y1 = span.y1 * 8
+  const y2 = span.y2 * 8 + 8
+  const h = y2 - y1
+  const align = span.align || 'center'
+  const sx = align === 'right' ? ux + 6 : align === 'left' ? ux : ux + 3
+  rect(ctx, sx, y1 + 1, 2, h - 2, '#7d5f35')
+  rect(ctx, sx, y1 + 1, 2, 1, '#a98a52')
+  alphaRect(ctx, sx + 2, y1 + 1, 1, h - 2, '#1f1a16', 0.22)
+  if (span.topPost !== false) drawDoorPost(ctx, sx, y1 - 3)
+  if (span.bottomPost !== false) drawDoorPost(ctx, sx, y2 - 1)
+}
+
+// 铁箍木门（入口，单格）
+function drawIronDoor(ctx, tx, ty) {
   const ux = tx * 8
   const uy = ty * 8
-  rect(ctx, ux + 3, uy + 1, 2, 6, '#7d5f35')
-  rect(ctx, ux + 3, uy + 1, 2, 1, '#a98a52')
-  alphaRect(ctx, ux + 5, uy + 1, 1, 6, '#1f1a16', 0.22)
+  rect(ctx, ux + 1, uy + 1, 6, 7, '#4a3020')
+  for (let i = 2; i < 7; i += 2) rect(ctx, ux + i, uy + 1, 1, 7, '#3a2718')
+  rect(ctx, ux + 4, uy + 1, 1, 7, '#2f2115')
+  rect(ctx, ux + 1, uy + 3, 6, 1, '#3d3a45')
+  rect(ctx, ux + 1, uy + 6, 6, 1, '#3d3a45')
+  rect(ctx, ux + 2, uy + 3, 1, 1, '#6a6478')
+  rect(ctx, ux + 5, uy + 6, 1, 1, '#6a6478')
+  rect(ctx, ux + 4, uy + 4, 1, 1, '#c9a24b')
+}
+
+// 石阶（军械库入口，单格）
+function drawStairs(ctx, tx, ty) {
+  const ux = tx * 8
+  const uy = ty * 8
+  rect(ctx, ux + 1, uy + 1, 6, 7, '#333041')
+  rect(ctx, ux + 1, uy + 2, 6, 1, '#565264')
+  rect(ctx, ux + 1, uy + 4, 6, 1, '#454151')
+  rect(ctx, ux + 1, uy + 6, 6, 1, '#1d1a26')
+  rect(ctx, ux + 2, uy + 7, 4, 1, '#12101a')
+}
+
+// 欢迎垫（单格，正对出生列；带两枚脚印）
+function drawWelcomeMat(ctx, tx, ty) {
+  const ux = tx * 8
+  const uy = ty * 8
+  rect(ctx, ux + 1, uy + 2, 6, 4, '#5c2a28')
+  rect(ctx, ux + 1, uy + 2, 6, 1, '#7a3a34')
+  for (let i = 2; i < 7; i += 2) rect(ctx, ux + i, uy + 6, 1, 1, '#7a3a34')
+  rect(ctx, ux + 2, uy + 3, 1, 1, '#3a1c1a')
+  rect(ctx, ux + 4, uy + 4, 1, 1, '#3a1c1a')
+}
+
+// 岔口罗盘插槽（铜边，教程收起后仍在）
+function drawCompassSlot(ctx, tx, ty) {
+  const x = tx * 8
+  const y = ty * 8
+  rect(ctx, x + 1, y + 1, 6, 6, '#2a2117')
+  rect(ctx, x + 1, y + 1, 6, 1, '#8a6a2b')
+  rect(ctx, x + 1, y + 6, 6, 1, '#8a6a2b')
+  rect(ctx, x + 1, y + 1, 1, 6, '#8a6a2b')
+  rect(ctx, x + 6, y + 1, 1, 6, '#8a6a2b')
+  rect(ctx, x + 3, y + 2, 2, 1, '#c9a24b')
+  rect(ctx, x + 3, y + 5, 2, 1, '#c9a24b')
+  rect(ctx, x + 2, y + 3, 1, 2, '#c9a24b')
+  rect(ctx, x + 5, y + 3, 1, 2, '#c9a24b')
+  rect(ctx, x + 3, y + 3, 2, 2, '#1b1510')
+}
+
+// 守卫脚下的暗石座
+function drawGuardPedestal(ctx, tx, ty) {
+  const x = tx * 8
+  const y = ty * 8
+  rect(ctx, x + 1, y + 6, 6, 2, '#1e1b26')
+  rect(ctx, x + 2, y + 5, 4, 1, '#2a2634')
+  rect(ctx, x + 2, y + 7, 4, 1, '#14121b')
+  rect(ctx, x + 1, y + 6, 6, 1, '#14121b')
+}
+
+// 五星好评锦旗（首单中段墙）
+function drawPennant(ctx, tx, ty) {
+  const x = tx * 8
+  const y = ty * 8
+  rect(ctx, x + 1, y + 1, 6, 1, '#3d3730')
+  rect(ctx, x + 2, y, 1, 2, '#3d3730')
+  rect(ctx, x + 1, y + 2, 6, 5, '#7a2e2e')
+  rect(ctx, x + 1, y + 2, 6, 1, '#8c3b35')
+  rect(ctx, x + 1, y + 2, 1, 5, '#c9a24b')
+  for (let i = 0; i < 6; i++) {
+    if (i % 2 === 0) rect(ctx, x + 1 + i, y + 7, 1, 1, '#7a2e2e')
+  }
+  ctx.save()
+  ctx.font = '8px "Fusion Pixel 12px", "Courier New", monospace'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#e8c97a'
+  ctx.fillText('五星', (x + 4) * U, (y + 3.9) * U)
+  ctx.fillText('好评', (x + 4) * U, (y + 5.3) * U)
+  ctx.restore()
+}
+
+// 军械库中庭：暗铁栏里的一组低亮度齿轮（可见轮齿与轮心）
+function drawGear(ctx, cx, cy, r, color) {
+  // 轮体
+  rect(ctx, cx - r + 1, cy - r + 1, 2 * r - 2, 2 * r - 2, color)
+  // 八向轮齿
+  rect(ctx, cx - 1, cy - r - 1, 3, 2, color)
+  rect(ctx, cx - 1, cy + r - 1, 3, 2, color)
+  rect(ctx, cx - r - 1, cy - 1, 2, 3, color)
+  rect(ctx, cx + r - 1, cy - 1, 2, 3, color)
+  rect(ctx, cx - r + 1, cy - r, 2, 2, color)
+  rect(ctx, cx + r - 1, cy - r, 2, 2, color)
+  rect(ctx, cx - r + 1, cy + r - 2, 2, 2, color)
+  rect(ctx, cx + r - 1, cy + r - 2, 2, 2, color)
+  // 轮心：暗孔 + 上沿微光 + 轴心
+  const hole = Math.max(1, Math.round(r / 2))
+  rect(ctx, cx - hole, cy - hole, hole * 2, hole * 2, '#191722')
+  alphaRect(ctx, cx - hole, cy - hole, hole * 2, 1, '#3f3a49', 0.85)
+  rect(ctx, cx - 1, cy - 1, 2, 2, '#5a4a2c')
+}
+
+function drawGearCage(ctx) {
+  const x = 9 * 8
+  const y = 8 * 8
+  const w = 6 * 8
+  const h = 3 * 8
+  rect(ctx, x, y, w, h, '#221f2b')
+  alphaRect(ctx, x, y, w, 1, '#15131c', 0.9)
+  drawGear(ctx, 80, 74, 5, '#4b4353')
+  drawGear(ctx, 92, 71, 3, '#3f3a49')
+  drawGear(ctx, 100, 80, 4, '#5a4a2c')
+  drawGear(ctx, 82, 83, 2, '#5a4a2c')
+  // 铁栏
+  for (let i = 2; i < w; i += 5) {
+    rect(ctx, x + i, y, 1, h, '#15131c')
+    alphaRect(ctx, x + i + 1, y, 1, h, '#2a2634', 0.6)
+  }
+  rect(ctx, x, y + 1, w, 1, '#15131c')
+  rect(ctx, x, y + h - 2, w, 1, '#15131c')
+}
+
+// 地图暗角：中心通透、边缘约 0.55
+function drawVignette(ctx) {
+  const w = COLS * CELL
+  const h = ROWS * CELL
+  const g = ctx.createRadialGradient(
+    w / 2,
+    h / 2,
+    Math.min(w, h) * 0.3,
+    w / 2,
+    h / 2,
+    Math.hypot(w, h) * 0.58,
+  )
+  g.addColorStop(0, 'rgba(8,6,12,0)')
+  g.addColorStop(0.6, 'rgba(8,6,12,0.2)')
+  g.addColorStop(1, 'rgba(8,6,12,0.55)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, w, h)
+}
+
+// 拖拽时给固有禁放格打淡红斜纹
+function drawForbidden(ctx, tiles) {
+  if (!tiles) return
+  for (const t of tiles) {
+    const px = t.x * CELL
+    const py = t.y * CELL
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(px + 2, py + 2, CELL - 4, CELL - 4)
+    ctx.clip()
+    ctx.strokeStyle = 'rgba(214, 96, 86, 0.3)'
+    ctx.lineWidth = 2
+    for (let d = -CELL; d < CELL * 2; d += 7) {
+      ctx.beginPath()
+      ctx.moveTo(px + d, py)
+      ctx.lineTo(px + d - CELL, py + CELL)
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
 }
 
 function drawNiche(ctx, tx, ty, wTiles, inTop, inBottom) {
-  // 墙格凹龛：陈设全部收进墙里，地面留给摆放
+  // 墙格凹龛：阶梯小拱 + 下沿阴影
   const x = tx * 8
   const y = ty * 8
   const w = wTiles * 8
   rect(ctx, x, y + inTop, w, inBottom - inTop, '#241f19')
-  rect(ctx, x, y + inTop, w, 1, '#171310')
-  alphaRect(ctx, x, y + inBottom - 1, w, 1, '#171310', 0.45)
+  // 阶梯小拱：两级内收
+  rect(ctx, x + 1, y + inTop, w - 2, 1, '#171310')
+  rect(ctx, x + 2, y + inTop + 1, w - 4, 1, '#2c251d')
+  rect(ctx, x + 3, y + inTop + 2, w - 6, 1, '#171310')
+  alphaRect(ctx, x, y + inBottom - 1, w, 1, '#171310', 0.5)
+  alphaRect(ctx, x + 1, y + inBottom - 2, w - 2, 1, '#171310', 0.28)
   rect(ctx, x, y + inTop + 1, 1, inBottom - inTop - 2, '#4a423a')
   rect(ctx, x + w - 1, y + inTop + 1, 1, inBottom - inTop - 2, '#4a423a')
-  rect(ctx, x, y + inBottom, w, 1, '#7a6f61')
+  rect(ctx, x, y + inBottom, w, 1, '#6b604f')
 }
 
 function drawCounterNiche(ctx) {
@@ -303,15 +529,7 @@ function drawBarrelNiche(ctx, tx, ty) {
 }
 
 function drawTorch(ctx, tx, ty) {
-  const cx = (tx * 8 + 4) * U
-  const cy = (ty * 8 + 4) * U
-  // 烘焙进底图的暖光
-  const g = ctx.createRadialGradient(cx, cy, 3, cx, cy, 30)
-  g.addColorStop(0, 'rgba(255, 178, 90, 0.16)')
-  g.addColorStop(1, 'rgba(255, 178, 90, 0)')
-  ctx.fillStyle = g
-  ctx.fillRect(cx - 30, cy - 30, 60, 60)
-  // 铁架火把座（火苗在动态层）
+  // 铁架火把座（火焰、光晕与火星在动态层）
   rect(ctx, tx * 8 + 3, ty * 8 + 3, 2, 4, '#33302b')
   rect(ctx, tx * 8 + 3, ty * 8 + 3, 2, 1, '#566c86')
   rect(ctx, tx * 8 + 2, ty * 8 + 6, 4, 1, '#24211c')
@@ -331,9 +549,9 @@ function drawFlag(ctx, tx, ty) {
 }
 
 function drawLabels(ctx) {
-  // 房间名移到墙上/门边，不再压在地面中央
+  // 房间名上墙：两钉木牌
   drawWallLabels(ctx, [
-    { text: '入口', x: 3.5, y: 17.5 },
+    { text: '入口', x: 4.6, y: 17.5 },
     { text: '通道', x: 12.5, y: 6.5 },
     { text: '侧室', x: 6.5, y: 2.5 },
     { text: '侧室', x: 19.5, y: 8.5 },
@@ -342,17 +560,30 @@ function drawLabels(ctx) {
 }
 
 function drawWallLabels(ctx, labels) {
-  ctx.font = 'bold 11px "Courier New", monospace'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
   for (const l of labels) {
-    const px = l.x * 8 * U
-    const py = l.y * 8 * U
-    ctx.lineWidth = 3
-    ctx.strokeStyle = 'rgba(20, 16, 12, 0.8)'
-    ctx.strokeText(l.text, px, py)
-    ctx.fillStyle = 'rgba(216, 201, 166, 0.92)'
-    ctx.fillText(l.text, px, py)
+    ctx.font = '12px "Fusion Pixel 12px", "Courier New", monospace'
+    const tw = Math.ceil(ctx.measureText(l.text).width)
+    const bw = Math.min(84, tw + 12)
+    const bh = 15
+    const cx = l.x * 8 * U
+    const cy = l.y * 8 * U
+    const left = Math.round(cx - bw / 2)
+    const top = Math.round(cy - bh / 2)
+    ctx.fillStyle = '#2f2115'
+    ctx.fillRect(left - 1, top - 1, bw + 2, bh + 2)
+    ctx.fillStyle = '#4e3826'
+    ctx.fillRect(left, top, bw, bh)
+    ctx.fillStyle = '#5f452e'
+    ctx.fillRect(left + 1, top + 1, bw - 2, 1)
+    ctx.fillStyle = '#3a2718'
+    ctx.fillRect(left + 1, top + bh - 2, bw - 2, 1)
+    ctx.fillStyle = '#c9a24b'
+    ctx.fillRect(left + 3, Math.round(cy) - 1, 2, 2)
+    ctx.fillRect(left + bw - 5, Math.round(cy) - 1, 2, 2)
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = '#e8dcc0'
+    ctx.fillText(l.text, cx, cy + 0.5)
   }
 }
 
@@ -950,17 +1181,34 @@ export function makeBaseMap(order = 1) {
   // 2. 挑战房旧地毯
   drawCarpet(ctx)
 
-  // 3. 砖砌厚墙
+  // 3. 地面装饰：入口欢迎垫 / 岔口罗盘槽 / 守卫石座（纯装饰，不改格子）
+  drawWelcomeMat(ctx, 3, 16)
+  drawCompassSlot(ctx, 11, 11)
+  drawCompassSlot(ctx, 10, 5)
+  drawGuardPedestal(ctx, 19, 4)
+
+  // 4. 砖砌厚墙（只有下方有地板的墙格画正面砖面）
   for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < COLS; x++) {
       if (grid[y][x] === 'wall') drawWallTile(ctx, grid, x, y)
     }
   }
 
-  // 4. 门边铜门槛
-  for (const t of THRESHOLDS) drawThreshold(ctx, t.x, t.y)
+  // 5. 中段墙的「五星好评」锦旗
+  drawPennant(ctx, 9, 10)
 
-  // 5. 靠墙陈设（全部收进墙格壁龛，地面保持可摆放）
+  // 6. 门洞（门槛横跨实际开口 + 两端石门柱）与入口铁箍木门
+  for (const s of [
+    { x: 7, y1: 14, y2: 14 },
+    { x: 8, y1: 5, y2: 5 },
+    { x: 12, y1: 11, y2: 11 },
+    { x: 12, y1: 4, y2: 4 },
+  ]) {
+    drawDoorway(ctx, s)
+  }
+  drawIronDoor(ctx, 3, 17)
+
+  // 7. 靠墙陈设（全部收进墙格壁龛，地面保持可摆放）
   drawCounterNiche(ctx) // 入口北墙：柜台龛 + 黄铜小铃
   drawShelfNiche(ctx) // 侧室 A 北墙：书架龛
   drawCrateNiche(ctx) // 侧室 A 南墙：木箱龛
@@ -970,14 +1218,17 @@ export function makeBaseMap(order = 1) {
   drawBarrelNiche(ctx, 20, 14)
   drawBarrelNiche(ctx, 22, 7)
 
-  // 6. 火把（火苗动态层）、灯与旧旗
+  // 8. 火把支架（火焰在动态层）、灯与旧旗
   for (const t of TORCHES_BY_ORDER[1]) drawTorch(ctx, t.x, t.y)
   drawLamp(ctx, 4, 11) // 入口暖灯（柜台旁）
   drawLamp(ctx, 14, 8) // 右侧室烛灯
   drawFlag(ctx, 5, 11)
   drawFlag(ctx, 23, 4)
 
-  // 7. 房间名上墙
+  // 9. 地图暗角（中心通透到边缘 0.55）
+  drawVignette(ctx)
+
+  // 10. 房间名木牌（暗角之后再画，保证读得清）
   drawLabels(ctx)
 
   return c
@@ -986,14 +1237,41 @@ export function makeBaseMap(order = 1) {
 function drawTorchFlames(ctx, now, torches) {
   for (let i = 0; i < torches.length; i++) {
     const t = torches[i]
-    const phase = Math.floor(now / 170 + i * 0.7) % 2
     const cx = (t.x + 0.5) * CELL
     const cy = (t.y + 0.42) * CELL
+    const phase = Math.floor(now / 170 + i * 0.7) % 2
+    const breathe = 0.5 + 0.5 * Math.sin(now / 520 + i * 1.9)
+
+    // 呼吸光晕（像素颗粒感的暖光）
+    ctx.save()
+    ctx.globalAlpha = 0.12 + 0.08 * breathe
+    const g = ctx.createRadialGradient(cx, cy - 4, 3, cx, cy - 4, 26)
+    g.addColorStop(0, 'rgba(255, 186, 96, 0.9)')
+    g.addColorStop(1, 'rgba(255, 186, 96, 0)')
+    ctx.fillStyle = g
+    ctx.fillRect(cx - 26, cy - 30, 52, 52)
+    ctx.restore()
+
+    // 外焰（像素块，双帧交替）
     ctx.fillStyle = '#ef7d57'
-    if (phase === 0) ctx.fillRect(cx - 5, cy - 10, 10, 8)
-    else ctx.fillRect(cx - 4, cy - 11, 9, 9)
+    if (phase === 0) ctx.fillRect(cx - 5, cy - 11, 10, 9)
+    else ctx.fillRect(cx - 4, cy - 12, 9, 10)
+    ctx.fillStyle = '#c9a24b'
+    ctx.fillRect(cx - 6, cy - 7, 2, 4)
+    ctx.fillRect(cx + 4, cy - 8, 2, 5)
+
+    // 内焰
     ctx.fillStyle = '#ffcd75'
-    ctx.fillRect(cx - 2, cy - 7, 4, 4)
+    ctx.fillRect(cx - 2, cy - 8 + (phase ? 1 : 0), 4, 4)
+
+    // 偶发火星（固定相位，不是随机数）
+    const sparkT = (now / 700 + i * 3.1) % 6
+    if (sparkT < 0.9) {
+      const rise = Math.floor(sparkT * 10)
+      ctx.fillStyle = breathe > 0.5 ? '#ffcd75' : '#ef7d57'
+      ctx.fillRect(cx + 3, cy - 16 - rise, 1, 1)
+      if (sparkT < 0.45) ctx.fillRect(cx - 4, cy - 14 - rise, 1, 1)
+    }
   }
 }
 
@@ -1042,16 +1320,27 @@ function makeArmoryBase() {
 
   drawArmoryCarpet(ctx)
 
+  // 地面装饰：欢迎垫 / 岔口罗盘槽 / 守卫石座
+  drawWelcomeMat(ctx, 2, 16)
+  drawCompassSlot(ctx, 6, 13)
+  drawGuardPedestal(ctx, 21, 5)
+
   for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < COLS; x++) {
       if (grid[y][x] === 'wall') drawWallTile(ctx, grid, x, y)
     }
   }
 
-  // 三个门洞的铜门槛：入口、补给门、近路门
-  drawThreshold(ctx, 5, 14)
-  drawThreshold(ctx, 19, 4)
-  drawThreshold(ctx, 19, 7)
+  // 中庭：暗铁栏围住低亮度齿轮组
+  drawGearCage(ctx)
+
+  // 门洞：入口（两格宽）与训练房西侧两个独立门口（门槛贴门沿，不穿地毯）
+  drawDoorway(ctx, { x: 5, y1: 13, y2: 14 })
+  drawDoorway(ctx, { x: 18, y1: 4, y2: 5, align: 'right' })
+  drawDoorway(ctx, { x: 18, y1: 6, y2: 7, align: 'right', topPost: false })
+
+  // 入口石阶
+  drawStairs(ctx, 2, 17)
 
   // 中庭军械库：南面与西面兵器架
   drawArmoryRack(ctx, 9, 12)
@@ -1068,12 +1357,15 @@ function makeArmoryBase() {
   drawCrateNiche(ctx, 6, 3)
   drawCrateNiche(ctx, 15, 3)
 
-  // 火把与旧旗
+  // 火把支架与旧旗
   for (const t of TORCHES_BY_ORDER[2]) drawTorch(ctx, t.x, t.y)
   drawFlag(ctx, 23, 4)
 
+  // 暗角
+  drawVignette(ctx)
+
   drawWallLabels(ctx, [
-    { text: '入口', x: 2.5, y: 17.5 },
+    { text: '入口', x: 4.6, y: 17.5 },
     { text: '↑ 补给廊', x: 11.5, y: 2.5 },
     { text: '弩廊 →', x: 14.5, y: 15.5 },
     { text: '军械库', x: 11.5, y: 12.5 },
@@ -1217,6 +1509,7 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   drawTorchFlames(ctx, now, (scene && scene.torches) || TORCHES_BY_ORDER[1])
   if (scene && scene.crossbow) drawCrossbow(ctx, scene.crossbow, now)
   if (scene && scene.guide) drawGuide(ctx, scene.guide, now)
+  if (scene && scene.dragging && scene.forbidden) drawForbidden(ctx, scene.forbidden)
   for (const [key, item] of game.items) {
     if (key === hiddenKey) continue
     drawItem(ctx, item.type, item.x * CELL, item.y * CELL, item.dir, item.opened, item.taken)

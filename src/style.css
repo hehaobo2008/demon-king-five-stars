@@ -1,7 +1,7 @@
 /* 本地简体像素字体（Fusion Pixel 12px，许可见 /fonts/OFL.txt） */
 @font-face {
   font-family: 'Fusion Pixel 12px';
-  src: url('../fonts/fusion-pixel-12px-proportional-zh_hans.otf.woff2') format('woff2');
+  src: url('/fonts/fusion-pixel-12px-proportional-zh_hans.otf.woff2') format('woff2');
   font-display: swap;
 }
 

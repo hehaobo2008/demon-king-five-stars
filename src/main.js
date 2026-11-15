@@ -212,6 +212,32 @@ if (portraitMedia.addEventListener) portraitMedia.addEventListener('change', syn
 else portraitMedia.addListener(syncFrameHeights)
 requestAnimationFrame(syncFrameHeights)
 
+// 字体就绪后重画两张底图（木牌字用 Fusion Pixel 12px）；字体打不开也照常开局
+async function refreshMapArt() {
+  try {
+    if (document.fonts && document.fonts.load) {
+      await Promise.race([
+        document.fonts.load('12px "Fusion Pixel 12px"', '五星好评入口通道侧室挑战房补给廊弩廊训练房军械库'),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('font-timeout')), 1500)),
+      ])
+    }
+  } catch (e) {
+    /* 字体不可用：继续用后备字体，不阻塞游戏 */
+  }
+  try {
+    bases[1] = makeBaseMap(1)
+    bases[2] = makeBaseMap(2)
+    base = bases[order]
+  } catch (e) {
+    /* 重绘失败保留原底图 */
+  }
+}
+
+refreshMapArt()
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => refreshMapArt()).catch(() => {})
+}
+
 // 画布内容区（去掉 CSS 边框）在视口中的位置与尺寸：命中判定只认画出来的地砖区
 function canvasBox() {
   const r = canvas.getBoundingClientRect()
@@ -1236,6 +1262,8 @@ function frame(t) {
     fx,
     guide: guideState,
     torches: TORCHES_BY_ORDER[order],
+    dragging: !!drag && mode === 'setup',
+    forbidden: game.reserved,
     crossbow:
       order === 2
         ? {
