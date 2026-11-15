@@ -8,16 +8,19 @@
   </head>
   <body>
     <main class="stage">
-      <header>
+      <header class="plaque">
         <h1>魔王也要五星好评</h1>
         <p class="subtitle">先摆好道具，再开门迎客。</p>
       </header>
 
       <div class="play-area">
-        <div class="canvas-wrap">
+        <div class="canvas-wrap frame">
           <canvas id="game" width="768" height="576" aria-label="魔王的地牢地图"></canvas>
           <div id="bubble" class="bubble" hidden></div>
-          <div id="coach" class="coach" hidden></div>
+          <div id="coach" class="coach" hidden>
+            <img id="coach-avatar" class="coach-avatar" alt="小管家" />
+            <span id="coach-text"></span>
+          </div>
           <div id="alarm" class="alarm" hidden></div>
 
           <div id="review-card" class="review" hidden>
@@ -35,46 +38,67 @@
           </div>
         </div>
 
-        <aside id="sidebar">
-          <div class="gold">金币 <span id="gold">100</span></div>
-
-          <div id="order-tabs" class="order-tabs" hidden>
-            <button id="tab-order1" class="tab active">首单 · 剑士</button>
-            <button id="tab-order2" class="tab">第二单 · 机关迷</button>
-          </div>
-
-          <section class="guest-reserve">
-            <div class="guest-head">
-              <img id="guest-avatar" class="guest-avatar" alt="预约客人头像" />
-              <div class="guest-title" id="guest-title">今日预约 · 新手剑士</div>
+        <aside id="sidebar" class="frame ledger">
+          <div class="ledger-top">
+            <div class="gold">金币 <span id="gold">100</span></div>
+            <div id="order-tabs" class="order-tabs" hidden>
+              <button id="tab-order1" class="tab active">首单 · 剑士</button>
+              <button id="tab-order2" class="tab">第二单 · 机关迷</button>
             </div>
-            <p class="guest-quote" id="guest-quote">「我是新手剑士，想拿到勇者徽章。侧室的宝箱我要开，守卫那一锤我也想挡。」</p>
-            <div class="btn-row">
-              <button id="btn-open" class="btn primary">开门营业</button>
-              <button id="btn-reset" class="btn">重新布置</button>
-            </div>
-            <button id="btn-trap" class="btn trap" hidden>暂停机械弩</button>
-          </section>
-
-          <div class="card" data-type="chest" title="按住拖到地图空地砖">
-            <img alt="宝箱" draggable="false" />
-            <div class="card-name">宝箱</div>
-            <div class="card-price"><span class="price"></span> 金</div>
           </div>
 
-          <div class="card" data-type="shield" title="按住拖到地图空地砖">
-            <img alt="盾牌架" draggable="false" />
-            <div class="card-name">盾牌架</div>
-            <div class="card-price"><span class="price"></span> 金</div>
+          <div class="ledger-main">
+            <section class="guest-reserve">
+              <span class="avatar-frame knight" id="avatar-frame">
+                <img id="guest-avatar" class="guest-avatar" alt="预约客人头像" />
+              </span>
+              <div class="guest-info">
+                <div class="guest-title" id="guest-title">今日预约 · 新手剑士</div>
+                <p class="guest-quote" id="guest-quote">「我是新手剑士，想拿到<em class="kw">勇者徽章</em>。侧室的<em class="kw">宝箱</em>我要开，守卫那一锤我也想<em class="kw">挡</em>。」</p>
+              </div>
+              <div class="btn-row">
+                <button id="btn-open" class="btn primary">开门营业</button>
+                <button id="btn-reset" class="btn">重新布置</button>
+              </div>
+              <button id="btn-trap" class="btn trap" hidden>暂停机械弩</button>
+            </section>
+
+            <section class="shop">
+              <div class="card" data-type="chest" title="按住拖到地图空地砖">
+                <img alt="宝箱" draggable="false" />
+                <div class="card-info">
+                  <div class="card-name">宝箱</div>
+                  <div class="card-use">放进侧室，客人会去开</div>
+                </div>
+                <div class="card-price"><span class="coin"></span><span class="price"></span></div>
+              </div>
+
+              <div class="card" data-type="shield" title="按住拖到地图空地砖">
+                <img alt="盾牌架" draggable="false" />
+                <div class="card-info">
+                  <div class="card-name">盾牌架</div>
+                  <div class="card-use">摆在必经之路，捡起挡锤</div>
+                </div>
+                <div class="card-price"><span class="coin"></span><span class="price"></span></div>
+              </div>
+
+              <div class="card" data-type="sign" title="按住拖到地图空地砖；摆好后点击可转向">
+                <img alt="路牌" draggable="false" />
+                <div class="card-info">
+                  <div class="card-name">路牌</div>
+                  <div class="card-use">摆上点击，给客人指路</div>
+                </div>
+                <div class="card-price"><span class="coin"></span><span class="price"></span></div>
+              </div>
+
+              <div class="shop-tags">
+                <span>拖拽</span>
+                <span>点击路牌</span>
+              </div>
+            </section>
           </div>
 
-          <div class="card" data-type="sign" title="按住拖到地图空地砖；摆好后点击可转向">
-            <img alt="路牌" draggable="false" />
-            <div class="card-name">路牌</div>
-            <div class="card-price"><span class="price"></span> 金</div>
-          </div>
-
-          <p id="status" class="status">把道具拖到空地砖上摆放</p>
+          <p id="status" class="status place">把道具拖到空地砖上摆放</p>
 
           <section class="run-log">
             <div class="run-log-title">本次营业记录</div>
@@ -82,6 +106,8 @@
           </section>
 
           <p class="hints">拖进地图摆放扣钱，拖回侧栏全额收回；点一下已摆的路牌可转向。</p>
+
+          <div id="drop-hint" class="drop-hint" hidden>松手收回 · 全额退金币</div>
         </aside>
       </div>
     </main>

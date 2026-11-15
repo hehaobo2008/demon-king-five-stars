@@ -16,7 +16,15 @@ import {
 } from './game.js'
 import { planRoute, WALK } from './walk.js'
 import { buildReview } from './review.js'
-import { makeBaseMap, renderScene, itemDataURL, charAvatarDataURL, TORCHES_BY_ORDER } from './render.js'
+import {
+  makeBaseMap,
+  renderScene,
+  itemDataURL,
+  charAvatarDataURL,
+  stewardAvatarDataURL,
+  cursorDataURL,
+  TORCHES_BY_ORDER,
+} from './render.js'
 
 const canvas = document.getElementById('game')
 const ctx = canvas.getContext('2d')
@@ -25,8 +33,12 @@ const goldEl = document.getElementById('gold')
 const statusEl = document.getElementById('status')
 const bubbleEl = document.getElementById('bubble')
 const coachEl = document.getElementById('coach')
+const coachTextEl = document.getElementById('coach-text')
+const coachAvatarEl = document.getElementById('coach-avatar')
 const alarmEl = document.getElementById('alarm')
 const chestCardEl = document.querySelector('.card[data-type="chest"]')
+const avatarFrameEl = document.getElementById('avatar-frame')
+const dropHintEl = document.getElementById('drop-hint')
 const btnOpen = document.getElementById('btn-open')
 const btnReset = document.getElementById('btn-reset')
 const btnTrap = document.getElementById('btn-trap')
@@ -117,11 +129,13 @@ const crossbow = {
 const ORDER_INFO = {
   1: {
     title: '今日预约 · 新手剑士',
-    quote: '「我是新手剑士，想拿到勇者徽章。侧室的宝箱我要开，守卫那一锤我也想挡。」',
+    quote:
+      '「我是新手剑士，想拿到<em class="kw">勇者徽章</em>。侧室的<em class="kw">宝箱</em>我要开，守卫那一锤我也想<em class="kw">挡</em>。」',
   },
   2: {
     title: '今日预约 · 机关迷',
-    quote: '「我是机关迷，想拿勇者徽章。路牌朝上我就绕补给廊；不然就走近路，赌一把弩机。」',
+    quote:
+      '「我是机关迷，想拿<em class="kw">勇者徽章</em>。<em class="kw">路牌</em>朝上我就绕<em class="kw">补给廊</em>；不然就走近路，赌一把<em class="kw">弩机</em>。」',
   },
 }
 let guest = null
@@ -169,6 +183,34 @@ for (const el of cardEls) {
 
 // 预约头像（随订单切换）
 guestAvatarEl.src = charAvatarDataURL('knight')
+coachAvatarEl.src = stewardAvatarDataURL()
+
+// 原创小铁手光标：默认与拖拽两态
+const CURSOR_HAND = cursorDataURL('hand')
+const CURSOR_GRAB = cursorDataURL('grab')
+
+function applyCursor(grab) {
+  document.documentElement.style.cursor = grab
+    ? `url(${CURSOR_GRAB}) 7 5, auto`
+    : `url(${CURSOR_HAND}) 3 0, auto`
+}
+
+applyCursor(false)
+
+// 横排桌面：账房外框与画布外框等高对齐；竖排交给 CSS
+const portraitMedia = window.matchMedia('(max-width: 1120px), (max-aspect-ratio: 1/1)')
+function syncFrameHeights() {
+  if (portraitMedia.matches) {
+    sidebar.style.height = ''
+    return
+  }
+  const r = canvas.getBoundingClientRect()
+  sidebar.style.height = Math.round(r.height + 6) + 'px'
+}
+window.addEventListener('resize', syncFrameHeights)
+if (portraitMedia.addEventListener) portraitMedia.addEventListener('change', syncFrameHeights)
+else portraitMedia.addListener(syncFrameHeights)
+requestAnimationFrame(syncFrameHeights)
 
 // 画布内容区（去掉 CSS 边框）在视口中的位置与尺寸：命中判定只认画出来的地砖区
 function canvasBox() {
@@ -224,7 +266,9 @@ function hideGhost() {
   ghost.style.display = 'none'
 }
 
-function status(msg) {
+function status(msg, kind) {
+  const cls = kind || (mode === 'business' ? 'business' : 'place')
+  statusEl.className = 'status ' + cls
   statusEl.textContent = msg
 }
 
@@ -369,8 +413,9 @@ function setOrder(n) {
   skeleton.y = currentMap.skeleton.y
   const info = ORDER_INFO[order]
   guestTitleEl.textContent = info.title
-  guestQuoteEl.textContent = info.quote
+  guestQuoteEl.innerHTML = info.quote
   guestAvatarEl.src = charAvatarDataURL(order === 2 ? 'fan' : 'knight')
+  avatarFrameEl.className = 'avatar-frame ' + (order === 2 ? 'fan' : 'knight')
   orderTabs.hidden = !secondUnlocked
   tab1.classList.toggle('active', order === 1)
   tab2.classList.toggle('active', order === 2)
@@ -406,7 +451,7 @@ function walkedTilesOrder1() {
 }
 
 function setCoach(text, leftPct, topPct, arrowRight = false) {
-  coachEl.textContent = text
+  coachTextEl.textContent = text
   coachEl.style.left = leftPct + '%'
   coachEl.style.top = topPct + '%'
   coachEl.classList.toggle('arrow-right', arrowRight)
@@ -532,7 +577,7 @@ function startBusiness() {
   if (mode !== 'setup') return
   const plan = planRoute(game, order)
   if (!plan) {
-    status('客人找不到去挑战房的路')
+    status('客人找不到去挑战房的路', 'fail')
     return
   }
   runHasTrap = plan.actions.some((a) => a.type === 'trap')
@@ -540,6 +585,8 @@ function startBusiness() {
   drag = null
   hideGhost()
   sidebar.classList.remove('drop-refund')
+  dropHintEl.hidden = true
+  applyCursor(false)
   mode = 'business'
   guest = {
     x: plan.start.x,
@@ -952,6 +999,7 @@ function startDrag(source, type, dir, e) {
   ghostImg.src = itemDataURL(type, dir)
   setGhost(e.clientX, e.clientY, drag.cellScreen)
   document.body.classList.add('dragging')
+  applyCursor(true)
 }
 
 function startBounce(to) {
@@ -984,7 +1032,7 @@ window.addEventListener('pointerdown', (e) => {
   if (cardEl) {
     const type = cardEl.dataset.type
     if (game.gold < ITEMS[type].price) {
-      status('金币不够，先收回几个道具吧')
+      status('金币不够，先收回几个道具吧', 'fail')
       return
     }
     e.preventDefault()
@@ -1021,7 +1069,9 @@ window.addEventListener('pointermove', (e) => {
   drag.py = e.clientY
   setGhost(drag.px, drag.py, drag.cellScreen)
   drag.overShop = inSidebar(drag.px, drag.py)
-  sidebar.classList.toggle('drop-refund', drag.overShop && drag.source !== 'shop')
+  const refunding = drag.overShop && drag.source !== 'shop'
+  sidebar.classList.toggle('drop-refund', refunding)
+  dropHintEl.hidden = !refunding
   if (drag.overShop) {
     drag.target = null
     return
@@ -1055,6 +1105,8 @@ window.addEventListener('pointerup', () => {
   drag = null
   document.body.classList.remove('dragging')
   sidebar.classList.remove('drop-refund')
+  dropHintEl.hidden = true
+  applyCursor(false)
   const def = ITEMS[d.type]
 
   const sourceAnchor =
@@ -1099,6 +1151,7 @@ window.addEventListener('pointerup', () => {
           : reason === 'reserved'
             ? '弹回：那是骷髅守卫的站位'
             : '弹回：没落在地图上',
+      'fail',
     )
   }
   updateHUD()
@@ -1116,6 +1169,8 @@ window.addEventListener('keydown', (e) => {
   drag = null
   document.body.classList.remove('dragging')
   sidebar.classList.remove('drop-refund')
+  dropHintEl.hidden = true
+  applyCursor(false)
   startBounce(anchor)
   status('取消拖拽')
 })
@@ -1125,6 +1180,8 @@ window.addEventListener('blur', () => {
     drag = null
     document.body.classList.remove('dragging')
     sidebar.classList.remove('drop-refund')
+    dropHintEl.hidden = true
+    applyCursor(false)
     hideGhost()
   }
 })

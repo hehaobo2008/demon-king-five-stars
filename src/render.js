@@ -702,6 +702,92 @@ export function charAvatarDataURL(variant) {
   return c.toDataURL()
 }
 
+// 小管家头像（教学框）
+const STEWARD_ROWS = [
+  '..oooo..',
+  '.oHHHHo.',
+  '.oFFFFo.',
+  '.oFEgFo.',
+  '.oFFFFo.',
+  '.oBBBBo.',
+  '.oBgBBo.',
+  '.oBBBBo.',
+  '.oooooo.',
+]
+const STEWARD_PALETTE = {
+  o: '#1a1c2c',
+  H: '#3a2a1c',
+  F: '#e8c19a',
+  E: '#1a1c2c',
+  g: '#c9a24b',
+  B: '#2a2f3d',
+}
+
+export function stewardAvatarDataURL() {
+  const c = document.createElement('canvas')
+  c.width = CHAR_W * CHAR_PX
+  c.height = STEWARD_ROWS.length * CHAR_PX
+  drawCharRows(c.getContext('2d'), STEWARD_ROWS, STEWARD_PALETTE, 0, 0)
+  return c.toDataURL()
+}
+
+// 原创小铁手像素光标（16×16，1px 步进；hotspot：手 3,0 / 抓 7,5）
+const CURSOR_HAND = [
+  '..oo............',
+  '..oSSo..........',
+  '..oSSo..........',
+  '..oSSo..........',
+  '..oSSo..oo......',
+  '..oSSo.oSSo.....',
+  '..oSSo.oSSo.....',
+  '..oSSooSSo......',
+  '..oSSSSSSo......',
+  '..oSsSSSSo......',
+  '.oSSSSSSSSo.....',
+  '.oSSSssSSSSo....',
+  '..oSSSSSSSSo....',
+  '...oSSSSSSo.....',
+  '....oooooo......',
+  '................',
+]
+
+const CURSOR_GRAB = [
+  '................',
+  '....oooo........',
+  '...oSSSSoo......',
+  '...oSSSSSSo.....',
+  '..oSSsSSSSSo....',
+  '..oSSSSSSSSo....',
+  '..oSSSSSSSSo....',
+  '...oSSSSSSo.....',
+  '...osSSSSo......',
+  '....oooooo......',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+]
+
+export function cursorDataURL(kind) {
+  const rows = kind === 'grab' ? CURSOR_GRAB : CURSOR_HAND
+  const colors = { o: '#141019', S: '#94b0c2', s: '#566c86' }
+  const c = document.createElement('canvas')
+  c.width = 16
+  c.height = 16
+  const ctx = c.getContext('2d')
+  for (let r = 0; r < rows.length; r++) {
+    for (let i = 0; i < 16; i++) {
+      const ch = rows[r][i]
+      if (!ch || ch === '.') continue
+      ctx.fillStyle = colors[ch]
+      ctx.fillRect(i, r, 1, 1)
+    }
+  }
+  return c.toDataURL()
+}
+
 export function drawItem(ctx, type, ox, oy, dir = 0, opened = false, taken = false) {
   let sprite = SPRITES[type]
   if (type === 'chest' && opened) sprite = SPRITES.chestOpen
