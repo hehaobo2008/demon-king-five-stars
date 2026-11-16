@@ -7,6 +7,7 @@ import {
   MAP2,
   MOSS,
   PENDULUM,
+  mossThreatZone,
   ROOMS,
   SKELETON,
   TIDE,
@@ -2271,7 +2272,10 @@ function stepWalker(t, realT) {
         }
         updateSwingButton()
         hideBubble()
-        status('钟摆预警！2.4 秒内点「止摆」')
+        status(
+          swingUsed ? '钟摆预警：止摆已用，只能硬挨' : '钟摆预警！2.4 秒内点「止摆」',
+          swingUsed ? 'fail' : undefined,
+        )
         sfx.warn()
       }
       if (a.phase === 'warn') {
@@ -2903,7 +2907,9 @@ function frame(realT) {
   if (showTrapAlarm || showSwingAlarm) {
     alarmEl.hidden = false
     if (showSwingAlarm) {
-      alarmTextEl.textContent = `钟摆预警 ${(swingRemain / 1000).toFixed(1)}s`
+      alarmTextEl.textContent = swingUsed
+        ? `钟摆预警 · 止摆已用 ${(swingRemain / 1000).toFixed(1)}s`
+        : `钟摆预警 ${(swingRemain / 1000).toFixed(1)}s`
       const anchor = swingWarn.at
       alarmEl.style.left = (anchor.x / COLS) * 100 + '%'
       alarmEl.style.top = (anchor.y / ROWS) * 100 + '%'
@@ -3027,7 +3033,7 @@ function frame(realT) {
       pos: reducedMotion
         ? { x: loop[0].x, y: loop[0].y }
         : { x: A.x + (B.x - A.x) * f, y: A.y + (B.y - A.y) * f },
-      zone: mode === 'setup' ? MOSS.threat[side] : null,
+      zone: mode === 'setup' ? mossThreatZone(side) : null,
     }
   }
   // 整帧清理，防止位移时画布边缘残留上一帧条纹

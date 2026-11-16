@@ -29,7 +29,7 @@ export function planRoutePendulum(game) {
       seg.push(t)
       const item = game.items.get(tileKey(t.x, t.y))
       if (!hasShield && item && item.type === 'shield' && !item.taken) {
-        actions.push({ type: 'move', path: seg })
+        if (seg.length > 1) actions.push({ type: 'move', path: seg })
         actions.push({
           type: 'pickupShield',
           x: t.x,
@@ -40,9 +40,22 @@ export function planRoutePendulum(game) {
         hasShield = true
         seg = [{ x: t.x, y: t.y }]
       }
+      // 长路牌/长段也按实际经过的每一格检查零件
+      const part = PENDULUM.parts.find(
+        (p) =>
+          !takenParts.has(p.id) &&
+          Math.abs(p.x - t.x) + Math.abs(p.y - t.y) <= 1,
+      )
+      if (part) {
+        if (seg.length > 1) actions.push({ type: 'move', path: seg })
+        takenParts.add(part.id)
+        actions.push({ type: 'part', site: part.id, name: part.name, x: part.x, y: part.y })
+        actions.push({ type: 'bubble', text: `${part.name}，收进工具袋。`, wait: 800 })
+        seg = [{ x: t.x, y: t.y }]
+      }
       const pend = pendulumByKey.get(tileKey(t.x, t.y))
       if (pend) {
-        actions.push({ type: 'move', path: seg })
+        if (seg.length > 1) actions.push({ type: 'move', path: seg })
         actions.push({
           type: 'pendulum',
           id: pend.id,

@@ -1,7 +1,7 @@
 // 正篇第五图：苔火巡廊路线。
 // 巡卫按铃位决定守北/守南；只有路线真的进到对应巡逻区才记遭遇。
 // 样本不自动追踪，只有路牌把人带到旁边才取。
-import { MOSS, buildGrid7 } from './map.js'
+import { MOSS, buildGrid7, mossThreatZone } from './map.js'
 import { tileKey, isFloor } from './game.js'
 import { SIGN_DIRS, bfsWalkable, straightRun, faceToward } from './route-utils.js'
 
@@ -17,7 +17,7 @@ export function planRouteMoss(game) {
   const west = !!(bellWest && bellWest.type === 'bell')
   const east = !!(bellEast && bellEast.type === 'bell')
   const patrolSide = west && !east ? 'north' : east && !west ? 'south' : 'center'
-  const threat = MOSS.threat[patrolSide]
+  const threat = mossThreatZone(patrolSide)
   const inner = new Set()
   for (let y = 6; y <= 11; y++) {
     for (let x = 8; x <= 15; x++) inner.add(x + ',' + y)
@@ -33,41 +33,17 @@ export function planRouteMoss(game) {
   let patrolLogged = false
   let bellNote = false
 
-  const checkPatrol = (path) => {
-    if (!path || path.length < 2) return
-    let firstThreat = null
-    let touchedInner = false
-    for (const t of path) {
-      const k = tileKey(t.x, t.y)
-      if (threat.has(k) && !firstThreat) firstThreat = t
-      if (inner.has(k)) touchedInner = true
-    }
-    if (firstThreat && !patrolLogged) {
-      patrolLogged = true
-      actions.push({
-        type: 'patrol',
-        at: { x: firstThreat.x, y: firstThreat.y },
-        side: patrolSide,
-      })
-    } else if (
-      !firstThreat &&
-      touchedInner &&
-      !bellNote &&
-      (west || east)
-    ) {
-      bellNote = true
-      actions.push({ type: 'bubble', text: '铃声把巡卫引到另一边了。', wait: 850 })
-    }
-  }
-
   const walkPath = (path) => {
     let seg = [path[0]]
+    let touchedInner = false
     for (let i = 1; i < path.length; i++) {
       const t = path[i]
       seg.push(t)
-      const item = game.items.get(tileKey(t.x, t.y))
+      const k = tileKey(t.x, t.y)
+      if (inner.has(k)) touchedInner = true
+      const item = game.items.get(k)
       if (!hasShield && item && item.type === 'shield' && !item.taken) {
-        actions.push({ type: 'move', path: seg })
+        if (seg.length > 1) actions.push({ type: 'move', path: seg })
         actions.push({
           type: 'pickupShield',
           x: t.x,
@@ -78,9 +54,33 @@ export function planRouteMoss(game) {
         hasShield = true
         seg = [{ x: t.x, y: t.y }]
       }
+      const sampleNear =
+        !mossTaken &&
+        Math.abs(MOSS.sample.x - t.x) + Math.abs(MOSS.sample.y - t.y) <= 1
+      // 踏入第一块危险格才触发巡卫；长路牌也按格拆开
+      if (threat.has(k) && !patrolLogged) {
+        if (seg.length > 1) actions.push({ type: 'move', path: seg })
+        actions.push({ type: 'patrol', at: { x: t.x, y: t.y }, side: patrolSide })
+        patrolLogged = true
+        seg = [{ x: t.x, y: t.y }]
+        if (sampleNear) {
+          mossTaken = true
+          actions.push({ type: 'moss', x: MOSS.sample.x, y: MOSS.sample.y, name: MOSS.sample.name })
+          actions.push({ type: 'bubble', text: '苔火样本到手了。', wait: 850 })
+        }
+      } else if (sampleNear) {
+        if (seg.length > 1) actions.push({ type: 'move', path: seg })
+        mossTaken = true
+        actions.push({ type: 'moss', x: MOSS.sample.x, y: MOSS.sample.y, name: MOSS.sample.name })
+        actions.push({ type: 'bubble', text: '苔火样本到手了。', wait: 850 })
+        seg = [{ x: t.x, y: t.y }]
+      }
     }
     if (seg.length > 1) actions.push({ type: 'move', path: seg })
-    checkPatrol(path)
+    if (!patrolLogged && touchedInner && !bellNote && (west || east)) {
+      bellNote = true
+      actions.push({ type: 'bubble', text: '铃声把巡卫引到另一边了。', wait: 850 })
+    }
     cur = { x: path[path.length - 1].x, y: path[path.length - 1].y }
   }
 

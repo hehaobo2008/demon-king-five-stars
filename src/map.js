@@ -483,3 +483,23 @@ export function buildGrid7() {
   }
   return grid
 }
+
+// 巡卫实际巡逻小圈周边：古铃换边时，危险区跟着同一组小圈移动
+const MOSS_THREAT_CACHE = new Map()
+export function mossThreatZone(side) {
+  if (MOSS_THREAT_CACHE.has(side)) return MOSS_THREAT_CACHE.get(side)
+  const loop = MOSS.loops[side]
+  const grid = buildGrid7()
+  const minX = Math.min(...loop.map((p) => p.x)) - 1
+  const maxX = Math.max(...loop.map((p) => p.x)) + 1
+  const minY = Math.min(...loop.map((p) => p.y)) - 1
+  const maxY = Math.max(...loop.map((p) => p.y)) + 1
+  const out = new Set()
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      if (grid[y] && grid[y][x] && grid[y][x] !== 'wall') out.add(x + ',' + y)
+    }
+  }
+  MOSS_THREAT_CACHE.set(side, out)
+  return out
+}
