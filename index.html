@@ -65,7 +65,12 @@
               </div>
             </div>
             <div id="ledger-divider" class="ledger-divider" aria-hidden="true"></div>
-            <div id="gallery-title" class="gallery-title" hidden>图册</div>
+            <button id="gallery-toggle" class="gallery-toggle" type="button" hidden aria-expanded="false" aria-controls="order-tabs">
+              <span class="gallery-kicker">图册</span>
+              <span id="gallery-current" class="gallery-current">首单 · 剑士</span>
+              <span id="gallery-current-best" class="gallery-current-best">尚无星级</span>
+              <span class="gallery-caret" aria-hidden="true">▾</span>
+            </button>
             <div id="order-tabs" class="order-tabs" hidden>
               <button id="tab-order1" class="tab active">首单 · 剑士</button>
               <button id="tab-order2" class="tab">二单 · 机关迷</button>

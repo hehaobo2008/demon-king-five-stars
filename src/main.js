@@ -40,7 +40,6 @@ import { planRoute, WALK } from './walk.js'
 import {
   planNightFull,
   planNightPreview,
-  planNightGuest,
   nightBlockedGuests,
   nightGuestName,
 } from './night-route.js'
@@ -109,6 +108,9 @@ const swingLabelEl = document.getElementById('swing-label')
 const swingTimerFillEl = document.getElementById('swing-timer-fill')
 const btnNext = document.getElementById('btn-next')
 const orderTabs = document.getElementById('order-tabs')
+const galleryToggleEl = document.getElementById('gallery-toggle')
+const galleryCurrentEl = document.getElementById('gallery-current')
+const galleryCurrentBestEl = document.getElementById('gallery-current-best')
 const tab1 = document.getElementById('tab-order1')
 const tab2 = document.getElementById('tab-order2')
 const tab3 = document.getElementById('tab-order3')
@@ -121,7 +123,6 @@ const nightPreviewEl = document.getElementById('night-preview')
 const nightWestBtn = document.getElementById('night-west')
 const nightEastBtn = document.getElementById('night-east')
 const nightPreviewNoteEl = document.getElementById('night-preview-note')
-const galleryTitleEl = document.getElementById('gallery-title')
 const certEl = document.getElementById('five-star-cert')
 const guestTitleEl = document.getElementById('guest-title')
 const guestQuoteEl = document.getElementById('guest-quote')
@@ -316,6 +317,7 @@ let swingWarn = null
 let swingStopped = new Set() // { id, at, startReal, ms, pressed }
 let logShownOrder = 0
 let logShownCount = 0
+let galleryOpen = false
 let reviewStampPlayed = false
 let reviewTimers = []
 
@@ -1084,17 +1086,55 @@ function scheduleReview(fn, ms) {
   reviewTimers.push(id)
 }
 
+// 图册收起时只占一行：当前关名 + 历史最高星；点开才展开原来的关卡按钮
+const TAB_NAMES = {
+  1: '首单 · 剑士',
+  2: '二单 · 机关迷',
+  3: '回声集市',
+  4: '潮汐蓄水厅',
+  5: '双锁档案库',
+  6: '钟摆工坊',
+  7: '苔火巡廊',
+  8: '夜场总店',
+}
+
+function updateGalleryCurrent() {
+  const name = TAB_NAMES[order] || TAB_NAMES[1]
+  const best = bestStars[order] || 0
+  galleryCurrentEl.textContent = name
+  galleryCurrentBestEl.textContent = best > 0 ? `★${best}` : '尚无星级'
+  galleryCurrentBestEl.classList.toggle('has', best > 0)
+  galleryToggleEl.setAttribute(
+    'aria-label',
+    `图册，当前 ${name}，历史最高${best > 0 ? ` ${best} 星` : '暂无星级'}；点击${galleryOpen ? '收起' : '展开'}关卡列表`,
+  )
+}
+
+function syncGallery() {
+  galleryToggleEl.hidden = !secondUnlocked
+  if (!secondUnlocked) galleryOpen = false
+  orderTabs.hidden = !secondUnlocked || !galleryOpen
+  galleryToggleEl.setAttribute('aria-expanded', galleryOpen ? 'true' : 'false')
+  galleryToggleEl.classList.toggle('open', galleryOpen)
+  updateGalleryCurrent()
+}
+
+function setGalleryOpen(open) {
+  galleryOpen = !!open && secondUnlocked
+  syncGallery()
+}
+
 // 页签显示各单历史最高星；两单都五星时点亮认证
 function updateBestUI() {
   const tabs = [
-    [tab1, '首单 · 剑士', bestStars[1]],
-    [tab2, '二单 · 机关迷', bestStars[2]],
-    [tab3, '回声集市', bestStars[3]],
-    [tab4, '潮汐蓄水厅', bestStars[4]],
-    [tab5, '双锁档案库', bestStars[5]],
-    [tab6, '钟摆工坊', bestStars[6]],
-    [tab7, '苔火巡廊', bestStars[7]],
-    [tab8, '夜场总店', bestStars[8]],
+    [tab1, TAB_NAMES[1], bestStars[1]],
+    [tab2, TAB_NAMES[2], bestStars[2]],
+    [tab3, TAB_NAMES[3], bestStars[3]],
+    [tab4, TAB_NAMES[4], bestStars[4]],
+    [tab5, TAB_NAMES[5], bestStars[5]],
+    [tab6, TAB_NAMES[6], bestStars[6]],
+    [tab7, TAB_NAMES[7], bestStars[7]],
+    [tab8, TAB_NAMES[8], bestStars[8]],
   ]
   for (const [el, base, best] of tabs) {
     el.textContent = base
@@ -1110,6 +1150,7 @@ function updateBestUI() {
     )
   }
   certEl.hidden = !(bestStars[1] === 5 && bestStars[2] === 5)
+  updateGalleryCurrent()
 }
 
 // 首次点亮认证时的少量金色像素纸屑（减少动效时不放）
@@ -1617,8 +1658,10 @@ function setSpeed(n) {
 }
 
 function updateTrapButton() {
-  // 还没解锁二单时，首单预约卡不留空白拉闸行；解锁后两单同高
-  trapSlotEl.hidden = !secondUnlocked
+  // 预约区只给本关真的需要的临场按钮留高度：
+  // 两张教学图仍按原来的 32px 行对齐，工坊留给止摆，其余正篇不留空行
+  const teachingRow = secondUnlocked && (order === 1 || order === 2)
+  trapSlotEl.hidden = !(teachingRow || order === 6)
   // 布置期也把待命条留在预约区：二单玩家开门前就知道可以走近路拉闸
   const show = secondUnlocked && order === 2 && (mode === 'setup' || runHasTrap)
   btnTrap.hidden = !show
@@ -1704,8 +1747,7 @@ function setOrder(n) {
     guestAvatarEl.src = charAvatarDataURL(variant)
     avatarFrameEl.className = 'avatar-frame ' + variant
   }
-  orderTabs.hidden = !secondUnlocked
-  galleryTitleEl.hidden = !secondUnlocked
+  setGalleryOpen(false)
   ledgerDividerEl.hidden = secondUnlocked
   tab3.hidden = !thirdUnlocked
   tab4.hidden = !fourthUnlocked
@@ -1992,6 +2034,11 @@ function trySwitchOrder(n) {
   if (n === 8 && !eighthUnlocked) return
   setOrder(n)
 }
+
+galleryToggleEl.addEventListener('click', () => {
+  if (!secondUnlocked) return
+  setGalleryOpen(!galleryOpen)
+})
 
 tab1.addEventListener('click', () => trySwitchOrder(1))
 tab2.addEventListener('click', () => trySwitchOrder(2))
@@ -3426,8 +3473,6 @@ if (bestStars[1] === 5 && bestStars[2] === 5 && !certCelebrated) {
   saveCertSeen()
 }
 if (bestStars[1] === 5) onboardingRetired = true
-orderTabs.hidden = !secondUnlocked
-galleryTitleEl.hidden = !secondUnlocked
 ledgerDividerEl.hidden = secondUnlocked
 tab3.hidden = !thirdUnlocked
 tab4.hidden = !fourthUnlocked
@@ -3435,6 +3480,7 @@ tab5.hidden = !fifthUnlocked
 tab6.hidden = !sixthUnlocked
 tab7.hidden = !seventhUnlocked
 tab8.hidden = !eighthUnlocked
+syncGallery()
 updateHUD()
 updateLogUI()
 requestAnimationFrame(frame)
