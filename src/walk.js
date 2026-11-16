@@ -1,8 +1,16 @@
 // 客人行走计划：BFS 寻路 + 基于岔口/拾取/战斗规则生成动作脚本。
 // 动作：move | bubble | open | pickupShield | skeleton | effect | stagger | log | badge | wait | end
 
-import { JUNCTIONS, MAP2, ROOMS, SKELETON, buildGrid, buildGrid2 } from './map.js'
+import {
+  JUNCTIONS,
+  MAP2,
+  ROOMS,
+  SKELETON,
+  buildGrid,
+  buildGrid2,
+} from './map.js'
 import { tileKey, isFloor } from './game.js'
+import { planRouteMarket } from './market-route.js'
 
 export const WALK = {
   STEP_MS: 170,
@@ -85,6 +93,7 @@ function signPointsToSide(game, junction) {
 
 export function planRoute(game, order = 1) {
   if (order === 2) return planRouteArmory(game)
+  if (order === 3) return planRouteMarket(game)
   const grid = buildGrid()
   const actions = []
   let cur = { ...WALK.SPAWN }

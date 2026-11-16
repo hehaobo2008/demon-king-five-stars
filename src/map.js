@@ -106,6 +106,87 @@ export function buildGrid2() {
   return grid
 }
 
+// ===== 正篇第三关：回声集市 =====
+// 中央岛被一圈一宽的回廊围住；西铺/东铺各有两个门，南广场有三个入口，
+// 北侧挑战房有东西两扇门。真实岔口由 MARKET.junctions 标记，路牌只在那里生效。
+export const MARKET = {
+  spawn: { x: 11, y: 16 },
+  challengeStop: { x: 14, y: 2 },
+  skeleton: { x: 15, y: 2 },
+  arena: { x: 12.5, y: 3.1 },
+  stand: { x: 17, y: 2 },
+  shops: {
+    west: { x1: 1, y1: 7, x2: 4, y2: 11, name: '西铺', label: '西铺 · 草料' },
+    east: { x1: 19, y1: 7, x2: 22, y2: 11, name: '东铺', label: '东铺 · 陶器' },
+  },
+  junctions: [
+    { x: 6, y: 7 }, // 西铺北门 / 西回廊
+    { x: 6, y: 11 }, // 西铺南门 / 西回廊
+    { x: 17, y: 7 }, // 东铺北门 / 东回廊
+    { x: 17, y: 11 }, // 东铺南门 / 东回廊
+    { x: 7, y: 12 }, // 南回廊西
+    { x: 11, y: 12 }, // 南回廊中 / 主入口
+    { x: 16, y: 12 }, // 南回廊东
+    { x: 9, y: 6 }, // 挑战房西门
+    { x: 10, y: 6 },
+    { x: 15, y: 6 }, // 挑战房东门
+    { x: 16, y: 6 },
+  ],
+  doors: {
+    west: [
+      { x: 5, y: 7 },
+      { x: 5, y: 11 },
+    ],
+    east: [
+      { x: 18, y: 7 },
+      { x: 18, y: 11 },
+    ],
+    plaza: [
+      { x: 7, y: 13 },
+      { x: 11, y: 13 },
+      { x: 16, y: 13 },
+    ],
+    challenge: [
+      { x: 9, y: 5 },
+      { x: 10, y: 5 },
+      { x: 15, y: 5 },
+      { x: 16, y: 5 },
+    ],
+  },
+}
+
+const RECTS3 = [
+  { zone: 'plaza', x1: 4, y1: 14, x2: 19, y2: 16 },
+  { zone: 'plaza', x1: 7, y1: 13, x2: 7, y2: 13 },
+  { zone: 'plaza', x1: 11, y1: 13, x2: 11, y2: 13 },
+  { zone: 'plaza', x1: 16, y1: 13, x2: 16, y2: 13 },
+  { zone: 'market', x1: 6, y1: 6, x2: 17, y2: 6 },
+  { zone: 'market', x1: 6, y1: 12, x2: 17, y2: 12 },
+  { zone: 'market', x1: 6, y1: 6, x2: 6, y2: 12 },
+  { zone: 'market', x1: 17, y1: 6, x2: 17, y2: 12 },
+  { zone: 'challenge', x1: 9, y1: 1, x2: 16, y2: 4 },
+  { zone: 'market', x1: 9, y1: 5, x2: 10, y2: 5 },
+  { zone: 'market', x1: 15, y1: 5, x2: 16, y2: 5 },
+  { zone: 'westShop', x1: 1, y1: 7, x2: 4, y2: 11 },
+  { zone: 'westShop', x1: 5, y1: 7, x2: 5, y2: 7 },
+  { zone: 'westShop', x1: 5, y1: 11, x2: 5, y2: 11 },
+  { zone: 'eastShop', x1: 19, y1: 7, x2: 22, y2: 11 },
+  { zone: 'eastShop', x1: 18, y1: 7, x2: 18, y2: 7 },
+  { zone: 'eastShop', x1: 18, y1: 11, x2: 18, y2: 11 },
+]
+
+export function buildGrid3() {
+  const grid = Array.from({ length: ROWS }, () => Array(COLS).fill('wall'))
+  for (const r of RECTS3) {
+    for (let y = r.y1; y <= r.y2; y++) {
+      for (let x = r.x1; x <= r.x2; x++) {
+        grid[y][x] = r.zone
+      }
+    }
+  }
+  return grid
+}
+
 // 侧室标签单独给锚点
 export const SIDE_LABELS = [
   { x: 4.5, y: 5.5 },

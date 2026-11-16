@@ -1,4 +1,13 @@
-import { COLS, ROWS, TILE, SCALE, buildGrid, buildGrid2 } from './map.js'
+import {
+  COLS,
+  ROWS,
+  TILE,
+  SCALE,
+  MARKET,
+  buildGrid,
+  buildGrid2,
+  buildGrid3,
+} from './map.js'
 
 const CELL = TILE * SCALE
 
@@ -13,9 +22,13 @@ const FLOORS = {
   sideB: { base: '#55371f', light: '#5f3f25', dark: '#4a2f1a' }, // 深木
   challenge: { base: '#4f4b5c', light: '#595567', dark: '#444052' }, // 冷石
   supply: { base: '#6b4a30', light: '#78563a', dark: '#5d3f27' },
+  market: { base: '#5b5560', light: '#66606b', dark: '#4d4852' }, // 集市回廊石
+  plaza: { base: '#6b5942', light: '#78654d', dark: '#5b4b38' }, // 南广场暖石
+  westShop: { base: '#3f5a44', light: '#4a684f', dark: '#344c39' }, // 西铺青绿
+  eastShop: { base: '#6a4730', light: '#78533a', dark: '#5b3c28' }, // 东铺暖褐
 }
 
-const WOOD_ZONES = new Set(['supply', 'entrance', 'sideB'])
+const WOOD_ZONES = new Set(['supply', 'entrance', 'sideB', 'westShop', 'eastShop'])
 
 const WALL = {
   top: '#2b2835',
@@ -46,6 +59,14 @@ export const TORCHES_BY_ORDER = {
     { x: 19, y: 10 }, // 近路右廊
     { x: 20, y: 1 }, // 训练房北墙
   ],
+  3: [
+    { x: 3, y: 6 }, // 西铺门楣
+    { x: 20, y: 6 }, // 东铺门楣
+    { x: 4, y: 12 }, // 西铺南墙
+    { x: 19, y: 12 }, // 东铺南墙
+    { x: 9, y: 0 }, // 挑战房北墙
+    { x: 16, y: 0 },
+  ],
 }
 
 // 黄灯位置：暖光在角色层之后再叠加，灯架本体留在底图
@@ -57,6 +78,10 @@ export const LAMPS_BY_ORDER = {
   2: [
     { x: 4, y: 7 },
     { x: 17, y: 3 },
+  ],
+  3: [
+    { x: 3, y: 9 }, // 西铺
+    { x: 20, y: 9 }, // 东铺
   ],
 }
 
@@ -912,6 +937,52 @@ function drawItemShadow(ctx, ox, oy) {
   ctx.restore()
 }
 
+// 正篇隔栅：两根木柱 + 两道横杆 + 中间红白警示条，占一格挡路
+function drawBarrierItem(ctx, ox, oy) {
+  // 后柱
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(ox + 21, oy + 5, 6, 24)
+  ctx.fillStyle = '#6d4a2f'
+  ctx.fillRect(ox + 22, oy + 6, 4, 22)
+  ctx.fillStyle = '#8a5f38'
+  ctx.fillRect(ox + 22, oy + 6, 1, 22)
+  // 前柱
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(ox + 5, oy + 5, 6, 24)
+  ctx.fillStyle = '#6d4a2f'
+  ctx.fillRect(ox + 6, oy + 6, 4, 22)
+  ctx.fillStyle = '#8a5f38'
+  ctx.fillRect(ox + 6, oy + 6, 1, 22)
+  // 横杆
+  for (const ry of [10, 19]) {
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(ox + 5, oy + ry, 22, 5)
+    ctx.fillStyle = '#6d4a2f'
+    ctx.fillRect(ox + 6, oy + ry + 1, 20, 3)
+    ctx.fillStyle = '#8a5f38'
+    ctx.fillRect(ox + 6, oy + ry + 1, 20, 1)
+  }
+  // 红白警示条
+  ctx.fillStyle = '#e8d8b0'
+  ctx.fillRect(ox + 9, oy + 15, 14, 4)
+  for (let i = 0; i < 4; i++) {
+    ctx.fillStyle = i % 2 === 0 ? '#a34a3a' : '#c9a24b'
+    ctx.fillRect(ox + 10 + i * 3, oy + 15, 2, 4)
+  }
+  // 柱帽与脚
+  ctx.fillStyle = '#c9a24b'
+  ctx.fillRect(ox + 5, oy + 4, 6, 2)
+  ctx.fillRect(ox + 21, oy + 4, 6, 2)
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(ox + 4, oy + 27, 8, 2)
+  ctx.fillRect(ox + 20, oy + 27, 8, 2)
+  ctx.fillStyle = '#c9a24b'
+  ctx.fillRect(ox + 7, oy + 12, 1, 1)
+  ctx.fillRect(ox + 23, oy + 12, 1, 1)
+  ctx.fillRect(ox + 7, oy + 21, 1, 1)
+  ctx.fillRect(ox + 23, oy + 21, 1, 1)
+}
+
 export function drawItem(ctx, type, ox, oy, dir = 0, opened = false, taken = false) {
   drawItemShadow(ctx, ox, oy)
   if (type === 'sign') {
@@ -933,6 +1004,10 @@ export function drawItem(ctx, type, ox, oy, dir = 0, opened = false, taken = fal
   }
   if (type === 'shield') {
     drawItemMatrix(ctx, taken ? ITEM_MATRICES.shieldEmpty : ITEM_MATRICES.shield, ox, oy)
+    return
+  }
+  if (type === 'barrier') {
+    drawBarrierItem(ctx, ox, oy)
     return
   }
 }
@@ -1037,6 +1112,19 @@ const FAN_PALETTE = {
   g: '#ffcd75',
   S: '#b98a3c', // 棕黄围巾
   T: '#6d4a2f',
+  b: '#2a2018',
+}
+
+// 淘货客：绿兜帽 + 皮甲 + 褐披风，与剑士/机关迷区分
+const TRADER_PALETTE = {
+  o: '#1a1c2c',
+  H: '#4f6a3a',
+  h: '#3a512b',
+  F: '#e8c19a',
+  E: '#1a1c2c',
+  A: '#8a5f38',
+  g: '#ffcd75',
+  C: '#6b4a2f',
   b: '#2a2018',
 }
 
@@ -1265,7 +1353,12 @@ function drawChar(ctx, sets, palette, facing, phase, cx, feetY) {
 // 预约卡片头像：正脸半身裁切
 export function charAvatarDataURL(variant) {
   const sets = variant === 'fan' ? FAN_FRAMES : KNIGHT_FRAMES
-  const palette = variant === 'fan' ? FAN_PALETTE : KNIGHT_PALETTE
+  const palette =
+    variant === 'fan'
+      ? FAN_PALETTE
+      : variant === 'trader'
+        ? TRADER_PALETTE
+        : KNIGHT_PALETTE
   const rows = sets.down[0].slice(0, 9)
   const c = document.createElement('canvas')
   c.width = CHAR_W * CHAR_PX
@@ -1500,7 +1593,8 @@ function drawSwingTrail(ctx, hx, hy, dir, p) {
 }
 
 function drawGuestWeapon(ctx, variant, cx, feetY, facing, side, gesture, p) {
-  const armColor = variant === 'fan' ? '#6d4a2f' : '#5b6b80'
+  const armColor =
+    variant === 'fan' ? '#6d4a2f' : variant === 'trader' ? '#8a5f38' : '#5b6b80'
   if (gesture && gesture.kind === 'slash') {
     const dir = facing === 'left' ? -1 : 1
     const hx = cx + dir * 8
@@ -1635,9 +1729,15 @@ export function drawHeroBadge(ctx, cx, cy, s = 1, opts = {}) {
 
 // 客人：浮点格坐标；方向/步态由行走驱动；影子、分层盾牌与受击闪白
 export function drawGuest(ctx, guest) {
-  const variant = guest.variant === 'fan' ? 'fan' : 'knight'
+  const variant =
+    guest.variant === 'fan' ? 'fan' : guest.variant === 'trader' ? 'trader' : 'knight'
   const sets = variant === 'fan' ? FAN_FRAMES : KNIGHT_FRAMES
-  const palette = variant === 'fan' ? FAN_PALETTE : KNIGHT_PALETTE
+  const palette =
+    variant === 'fan'
+      ? FAN_PALETTE
+      : variant === 'trader'
+        ? TRADER_PALETTE
+        : KNIGHT_PALETTE
   const cx = (guest.x + 0.5) * CELL + (guest.offsetX || 0)
   const crouch = guest.blocking ? 3 : 0
   const feetY = (guest.y + 1) * CELL - 3 + (guest.offsetY || 0) + crouch
@@ -1649,7 +1749,8 @@ export function drawGuest(ctx, guest) {
     : 0
   const shieldRaise =
     gesture && gesture.kind === 'shield' ? Math.sin(Math.PI * gp) : 0
-  const armColor = variant === 'fan' ? '#6d4a2f' : '#5b6b80'
+  const armColor =
+    variant === 'fan' ? '#6d4a2f' : variant === 'trader' ? '#8a5f38' : '#5b6b80'
 
   // 脚下像素影子（走动时宽度微变）
   ctx.save()
@@ -1862,6 +1963,7 @@ export function itemDataURL(type, dir = 0) {
 // 底图（地牢场景）只画一次，缓存离屏
 export function makeBaseMap(order = 1) {
   if (order === 2) return makeArmoryBase()
+  if (order === 3) return makeMarketBase()
   const c = document.createElement('canvas')
   c.width = COLS * CELL
   c.height = ROWS * CELL
@@ -2092,6 +2194,163 @@ function makeArmoryBase() {
     { text: '弩廊 →', x: 14.5, y: 15.5 },
     { text: '军械库', x: 11.5, y: 12.5 },
     { text: '训练房', x: 20.5, y: 1.5 },
+  ])
+
+  return c
+}
+
+// ===== 正篇：回声集市底图 =====
+function drawMarketAwning(ctx, x1, x2, wallY, main, cream) {
+  const ux = x1 * 8
+  const uy = wallY * 8
+  const w = (x2 - x1 + 1) * 8
+  rect(ctx, ux, uy + 5, w, 3, '#2a2117')
+  for (let i = 0; i < w; i += 4) {
+    const col = Math.floor(i / 4) % 2 === 0 ? main : cream
+    rect(ctx, ux + i, uy + 4, 4, 4, col)
+  }
+  // 波浪边
+  for (let i = 0; i < w; i += 4) {
+    const col = Math.floor(i / 4) % 2 === 0 ? main : cream
+    rect(ctx, ux + i + 1, uy + 8, 2, 1, col)
+  }
+  rect(ctx, ux, uy + 4, 1, 4, '#6d4a2f')
+  rect(ctx, ux + w - 1, uy + 4, 1, 4, '#6d4a2f')
+}
+
+function drawAwningText(ctx, text, cx, cy, color) {
+  ctx.save()
+  ctx.font = '10px "Fusion Pixel 12px", "Courier New", monospace'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = 'rgba(26, 18, 12, 0.55)'
+  ctx.fillText(text, cx * 8 * U + 1, cy * 8 * U + 1)
+  ctx.fillStyle = color
+  ctx.fillText(text, cx * 8 * U, cy * 8 * U)
+  ctx.restore()
+}
+
+// 中央岛：一整片带条纹顶棚的集市棚屋
+function drawMarketPavilion(ctx) {
+  const x = 7 * 8
+  const y = 7 * 8
+  const w = 10 * 8
+  const h = 5 * 8
+  rect(ctx, x + 1, y + 1, w - 2, h - 2, '#2a2117')
+  for (let i = 0; i < 10; i++) {
+    const col = i % 2 === 0 ? '#d8c49a' : '#8c4436'
+    rect(ctx, x + 2 + i * 8, y + 2, 7, h - 5, col)
+  }
+  rect(ctx, x + 1, y + h - 4, w - 2, 2, '#1a1410')
+  rect(ctx, x + 1, y + 1, w - 2, 1, '#5f452e')
+  // 四角立柱
+  for (const px of [x + 1, x + w - 3]) {
+    rect(ctx, px, y + 2, 2, h - 6, '#4e3826')
+    rect(ctx, px, y + 2, 2, 1, '#c9a24b')
+  }
+  // 摊位零碎：木箱与陶罐
+  rect(ctx, x + 4, y + h - 9, 4, 5, '#3a2718')
+  rect(ctx, x + 5, y + h - 10, 2, 1, '#8a5f38')
+  rect(ctx, x + w - 7, y + h - 9, 4, 5, '#3a2718')
+  rect(ctx, x + w - 6, y + h - 10, 2, 1, '#8a5f38')
+}
+
+function drawMarketDoorCross(ctx, tx, ty) {
+  const x = tx * 8
+  const y = ty * 8
+  rect(ctx, x + 2, y + 3, 4, 2, '#c9a24b')
+  rect(ctx, x + 3, y + 2, 2, 4, '#e8c97a')
+  rect(ctx, x + 3, y + 3, 2, 2, '#3a2a18')
+}
+
+// 罗盘岔口：路牌只在这些格生效
+function drawMarketJunctionMark(ctx, tx, ty) {
+  const x = tx * 8
+  const y = ty * 8
+  rect(ctx, x + 2, y + 2, 4, 4, '#241c12')
+  rect(ctx, x + 3, y + 3, 2, 2, '#c9a24b')
+  rect(ctx, x + 3, y + 2, 2, 1, '#e8c97a')
+  rect(ctx, x + 3, y + 5, 2, 1, '#8a6a2b')
+  rect(ctx, x + 2, y + 3, 1, 2, '#8a6a2b')
+  rect(ctx, x + 5, y + 3, 1, 2, '#8a6a2b')
+}
+
+function drawMarketCarpet(ctx) {
+  const x = 11 * 8
+  const y = 2 * 8
+  const w = 5 * 8
+  const h = 2 * 8
+  drawCarpetBase(ctx, x, y, w, h)
+  const holes = [
+    [6, 3],
+    [15, 8],
+    [25, 5],
+    [32, 11],
+    [10, 13],
+  ]
+  for (const [hx, hy] of holes) rect(ctx, x + hx, y + hy, 1 + (hx % 2), 1, '#7d7165')
+  drawDemonCrest(ctx, x + w / 2, y + h / 2)
+}
+
+function makeMarketBase() {
+  const c = document.createElement('canvas')
+  c.width = COLS * CELL
+  c.height = ROWS * CELL
+  const ctx = c.getContext('2d')
+  const grid = buildGrid3()
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (grid[y][x] !== 'wall') drawFloorTile(ctx, grid, x, y, grid[y][x])
+    }
+  }
+
+  // 地面：欢迎垫 / 挑战房地毯 / 罗盘岔口
+  drawWelcomeMat(ctx, MARKET.spawn.x, MARKET.spawn.y)
+  drawMarketCarpet(ctx)
+  for (const j of MARKET.junctions) drawMarketJunctionMark(ctx, j.x, j.y)
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (grid[y][x] === 'wall') drawWallTile(ctx, grid, x, y)
+    }
+  }
+
+  // 中央岛棚顶与两侧铺面雨棚
+  drawMarketPavilion(ctx)
+  drawMarketAwning(ctx, 1, 4, 6, '#4d7a55', '#d8c49a')
+  drawMarketAwning(ctx, 19, 22, 6, '#a34a3a', '#d8c49a')
+
+  // 门洞小铜十字：铺面、广场、挑战房
+  for (const group of Object.values(MARKET.doors)) {
+    for (const d of group) drawMarketDoorCross(ctx, d.x, d.y)
+  }
+
+  drawGuardPedestal(ctx, MARKET.skeleton.x, MARKET.skeleton.y)
+  drawBadgeStand(ctx, MARKET.stand.x, MARKET.stand.y)
+
+  // 靠墙陈设：两口铺子的货桶与木箱
+  drawBarrelNiche(ctx, 0, 9)
+  drawCrateNiche(ctx, 0, 10)
+  drawBarrelNiche(ctx, 23, 9)
+  drawCrateNiche(ctx, 23, 10)
+
+  for (const l of LAMPS_BY_ORDER[3]) drawLamp(ctx, l.x, l.y)
+  for (const t of TORCHES_BY_ORDER[3]) {
+    const mode =
+      t.y + 1 < ROWS && grid[t.y + 1][t.x] !== 'wall' ? 'bracket' : 'brazier'
+    drawTorch(ctx, t.x, t.y, mode)
+  }
+
+  drawVignette(ctx)
+
+  // 店名与区域牌
+  drawAwningText(ctx, '西铺 · 草料', 3.0, 6.5, '#e8dcc0')
+  drawAwningText(ctx, '东铺 · 陶器', 21.0, 6.5, '#f0d9a5')
+  drawAwningText(ctx, '回声集市', 12.0, 9.5, '#f4e6c4')
+  drawWallLabels(ctx, [
+    { text: '入口', x: 11.5, y: 17.4 },
+    { text: '挑战房', x: 13.0, y: 0.7 },
   ])
 
   return c

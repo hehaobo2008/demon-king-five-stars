@@ -5,6 +5,7 @@ export const ITEMS = {
   chest: { name: '宝箱', price: 20 },
   shield: { name: '盾牌架', price: 30 },
   sign: { name: '路牌', price: 15 },
+  barrier: { name: '隔栅', price: 15 },
 }
 
 export const START_GOLD = 100
@@ -35,8 +36,10 @@ export function createGame(grid, reserved = []) {
   }
 }
 
-export function addLog(game, kind) {
-  game.log.push({ kind, label: EVENT_LABELS[kind] || kind, t: Date.now() })
+export function addLog(game, kind, extra = null) {
+  const entry = { kind, label: EVENT_LABELS[kind] || kind, t: Date.now() }
+  if (extra) Object.assign(entry, extra)
+  game.log.push(entry)
 }
 
 export function isFloor(grid, x, y) {

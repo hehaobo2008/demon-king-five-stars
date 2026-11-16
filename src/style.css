@@ -833,6 +833,10 @@ h1 {
   background: #6a4a22;
 }
 
+.avatar-frame.trader {
+  background: #3e5c3a;
+}
+
 /* 头像四角金边 */
 .avatar-frame::before {
   content: '';
@@ -944,6 +948,17 @@ h1 {
 
 .tab.active .tab-best {
   color: #8a5a18;
+}
+
+/* 三张页签同排时收一点字号/内边距，375 宽也不挤 */
+.order-tabs.with-third .tab {
+  font-size: 10.5px;
+  padding: 6px 2px;
+  letter-spacing: 0;
+}
+
+.order-tabs.with-third .tab-best {
+  font-size: 9.5px;
 }
 
 /* 两单历史最高都到五星后点亮；刷新与重玩都保留 */

@@ -34,7 +34,79 @@ function pickEventKinds(kinds, order) {
   return EVENT_PRIORITY[order].filter((k) => kinds.has(k)).slice(0, 3)
 }
 
+
+// ===== 正篇第三关：回声集市 =====
+// 徽章保底 3 星；开一箱 4 星；再挡锤或到另一处铺面开第二箱 5 星。
+function buildMarketReview(log) {
+  const kinds = new Set(log.map((e) => e.kind))
+  const chests = log.filter((e) => e.kind === 'chest')
+  const shops = new Set(chests.map((e) => e.shop).filter(Boolean))
+  const hasBadge = kinds.has('badge')
+  const hasChest = chests.length > 0
+  const hasBlock = kinds.has('block')
+  const hasSecondShop = shops.size >= 2
+
+  const events = []
+  const eventKinds = []
+  const push = (kind, text) => {
+    if (events.length >= 4) return
+    events.push(text)
+    eventKinds.push(kind)
+  }
+  if (hasBadge) push('badge', '拿到了勇者徽章')
+  let chestShown = 0
+  for (const e of chests) {
+    if (chestShown >= 2) break
+    const name = e.shop === 'west' ? '西铺' : e.shop === 'east' ? '东铺' : '店里'
+    push('chest', `打开了${name}的宝箱`)
+    chestShown++
+  }
+  if (hasBlock) push('block', '挡住了守卫的大锤')
+  else if (kinds.has('hit')) push('hit', '挨了守卫一锤')
+  if (events.length < 4 && kinds.has('shield')) push('shield', '在路边捡到了盾牌')
+
+  if (!hasBadge) {
+    return {
+      status: 'incomplete',
+      stars: 0,
+      events,
+      eventKinds,
+      comment: '',
+      missing: ['预约未完成：没拿到勇者徽章'],
+    }
+  }
+
+  let stars = 3
+  if (hasChest) stars += 1
+  const fifth = hasChest && (hasBlock || hasSecondShop)
+  if (fifth) stars += 1
+
+  const missing = []
+  if (!hasChest) {
+    missing.push('第四颗星：去西铺或东铺开一只宝箱')
+    missing.push('第五颗星：先开箱，再挡锤或去另一处铺面开第二箱')
+  } else if (!hasBlock && !hasSecondShop) {
+    missing.push('第五颗星：挡住守卫那一锤，或再去另一处铺面开第二箱')
+  }
+
+  let comment
+  if (stars === 5) {
+    comment = hasBlock
+      ? '铺子里的箱子翻到了，守卫那一锤也稳稳挡住，这趟集市逛得值。'
+      : '西铺东铺我都逛到了，两处铺面的箱子一只没落下。'
+  } else if (stars === 4) {
+    comment = '箱子翻到了一只，另一处铺面没来得及去，守卫那锤也没挡住。'
+  } else if (hasBlock) {
+    comment = '锤是挡住了，可铺子里的箱子一只都没开成。'
+  } else {
+    comment = '一路找到挑战房，铺子里的箱子没翻着，锤也没挡住，下回得好好逛。'
+  }
+
+  return { status: 'rated', stars, events, eventKinds, comment, missing }
+}
+
 export function buildReview(log, order = 1) {
+  if (order === 3) return buildMarketReview(log)
   const kinds = new Set(log.map((e) => e.kind))
   const hasBadge = kinds.has('badge')
   const eventKinds = pickEventKinds(kinds, order)
