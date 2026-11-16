@@ -6,6 +6,7 @@ import {
   MARKET,
   ARCHIVE,
   MOSS,
+  NIGHT,
   PENDULUM,
   TIDE,
   buildGrid,
@@ -15,6 +16,7 @@ import {
   buildGrid5,
   buildGrid6,
   buildGrid7,
+  buildGrid8,
 } from './map.js'
 
 const CELL = TILE * SCALE
@@ -40,6 +42,9 @@ const FLOORS = {
   library: { base: '#4a3d32', light: '#56483b', dark: '#3e332a' }, // 档案库木廊
   workshop: { base: '#5d5044', light: '#6a5b4d', dark: '#4e4338' }, // 工坊铁石
   moss: { base: '#44523f', light: '#4f5f48', dark: '#394534' }, // 苔火绿石
+  nightWest: { base: '#5b4632', light: '#664f39', dark: '#4c3a27' }, // 夜场西门木廊
+  nightEast: { base: '#43505a', light: '#4d5b66', dark: '#38444d' }, // 夜场东门石廊
+  nightHall: { base: '#4b4552', light: '#565060', dark: '#3f3947' }, // 夜场主厅
 }
 
 const WOOD_ZONES = new Set([
@@ -49,6 +54,7 @@ const WOOD_ZONES = new Set([
   'westShop',
   'eastShop',
   'library',
+  'nightWest',
 ])
 
 const WALL = {
@@ -109,6 +115,14 @@ export const TORCHES_BY_ORDER = {
     { x: 21, y: 13 },
     { x: 12, y: 3 },
   ],
+  8: [
+    { x: 7, y: 1 }, // 西门挑战房
+    { x: 16, y: 1 }, // 东门挑战房
+    { x: 8, y: 7 }, // 主厅西柱
+    { x: 17, y: 7 }, // 主厅东柱
+    { x: 1, y: 10 }, // 外廊西
+    { x: 22, y: 10 }, // 外廊东
+  ],
   5: [
     { x: 3, y: 3 }, // 外圈西北
     { x: 9, y: 3 }, // 北廊
@@ -147,6 +161,10 @@ export const LAMPS_BY_ORDER = {
   7: [
     { x: 7, y: 7 },
     { x: 20, y: 9 },
+  ],
+  8: [
+    { x: 7, y: 10 }, // 主厅西门
+    { x: 16, y: 10 }, // 主厅东门
   ],
 }
 
@@ -2111,6 +2129,7 @@ export function makeBaseMap(order = 1) {
   if (order === 5) return makeArchiveBase()
   if (order === 6) return makeWorkshopBase()
   if (order === 7) return makeMossBase()
+  if (order === 8) return makeNightBase()
   const c = document.createElement('canvas')
   c.width = COLS * CELL
   c.height = ROWS * CELL
@@ -2945,6 +2964,76 @@ function makeMossBase() {
   return c
 }
 
+// ===== 正篇第七图：夜场总店底图 =====
+// 西门寻宝房与东门护卫房各有一块旧地毯、守卫座和徽章台；主厅与外廊负责绕行。
+function makeNightBase() {
+  const c = document.createElement('canvas')
+  c.width = COLS * CELL
+  c.height = ROWS * CELL
+  const ctx = c.getContext('2d')
+  const grid = buildGrid8()
+  const [west, east] = NIGHT.guests
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (grid[y][x] !== 'wall') drawFloorTile(ctx, grid, x, y, grid[y][x])
+    }
+  }
+
+  // 两个入口的欢迎垫与两间挑战房的旧地毯
+  drawWelcomeMat(ctx, west.spawn.x, west.spawn.y)
+  drawWelcomeMat(ctx, east.spawn.x, east.spawn.y)
+  drawCarpetBase(ctx, 2 * 8, 3 * 8, 6 * 8, 3 * 8)
+  drawDemonCrest(ctx, 5 * 8, 4 * 8 + 4)
+  drawCarpetBase(ctx, 16 * 8, 3 * 8, 6 * 8, 3 * 8)
+  drawDemonCrest(ctx, 19 * 8, 4 * 8 + 4)
+
+  // 主厅中央的暗金店徽
+  drawDemonCrest(ctx, 12 * 8, 10 * 8 + 4)
+
+  for (const g of NIGHT.guests) {
+    drawGuardPedestal(ctx, g.skeleton.x, g.skeleton.y)
+  }
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (grid[y][x] === 'wall') drawWallTile(ctx, grid, x, y)
+    }
+  }
+
+  for (const g of NIGHT.guests) drawBadgeStand(ctx, g.stand.x, g.stand.y)
+
+  // 中央隔墙上的两面旧旗，点出「夜场总店」的营业气
+  drawPennant(ctx, 10, 4)
+  drawPennant(ctx, 13, 4)
+
+  for (const l of LAMPS_BY_ORDER[8]) drawLamp(ctx, l.x, l.y)
+  for (const t of TORCHES_BY_ORDER[8]) {
+    const mode =
+      t.y + 1 < ROWS && grid[t.y + 1][t.x] !== 'wall' ? 'bracket' : 'brazier'
+    drawTorch(ctx, t.x, t.y, mode)
+  }
+
+  drawVignette(ctx)
+  drawWallLabels(ctx, [
+    { text: '夜场总店', x: 12, y: 1.2 },
+    { text: '西门 · 寻宝房', x: 4.5, y: 2.25 },
+    { text: '东门 · 护卫房', x: 18.5, y: 2.25 },
+    { text: '主厅', x: 12, y: 9.2 },
+    { text: '外廊', x: 4, y: 14.3 },
+    { text: '外廊', x: 20, y: 14.3 },
+  ])
+  ctx.save()
+  ctx.font = '9px "Fusion Pixel 12px", "Courier New", monospace'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#c9a24b'
+  ctx.fillText('西门 · 第一场', 4.5 * 8 * U, 16.4 * 8 * U)
+  ctx.fillText('东门 · 第二场', 19.5 * 8 * U, 16.4 * 8 * U)
+  ctx.restore()
+  return c
+}
+
 // 工坊动态：钟摆、零件
 export function drawWorkshopParts(ctx, taken) {
   for (const p of PENDULUM.parts) {
@@ -3575,6 +3664,7 @@ LOG_ICON_ART.patrol = LOG_ICON_ART.hit
 LOG_ICON_ART.part = LOG_ICON_ART.chest
 LOG_ICON_ART.moss = LOG_ICON_ART.supply
 LOG_ICON_ART.pendulumStop = LOG_ICON_ART.safe
+LOG_ICON_ART.nightSwitch = LOG_ICON_ART.badge
 
 const logIconCache = new Map()
 
@@ -4001,7 +4091,12 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   }
 
   // 徽章展示台（墙面原位陈列）
-  if (scene && scene.stand && scene.standBadge) {
+  if (scene && scene.stands) {
+    for (const s of scene.stands) {
+      if (!s.showBadge) continue
+      drawHeroBadge(ctx, (s.x + 0.5) * CELL, s.y * CELL + 18, 1)
+    }
+  } else if (scene && scene.stand && scene.standBadge) {
     drawHeroBadge(
       ctx,
       (scene.stand.x + 0.5) * CELL,
@@ -4016,7 +4111,19 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   if (scene && scene.patrol) drawMossPatrol(ctx, scene.patrol, now, still)
   if (scene && scene.moss) drawMossSample(ctx, scene.moss, now, still)
   if (scene && scene.dust) drawWalkDust(ctx, scene.dust)
-  if (scene && scene.skeleton) {
+  if (scene && scene.skeletons) {
+    for (const sk of scene.skeletons) {
+      drawSkeleton(
+        ctx,
+        sk.x,
+        sk.y,
+        sk.pose,
+        now,
+        !!sk.flash,
+        still,
+      )
+    }
+  } else if (scene && scene.skeleton) {
     drawSkeleton(
       ctx,
       scene.skeleton.x,

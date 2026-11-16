@@ -34,6 +34,7 @@ export const EVENT_LABELS = {
   patrol: '被巡卫撞见',
   pendulumHit: '被钟摆打到',
   pendulumStop: '及时止摆',
+  nightSwitch: '换场',
 }
 
 export const tileKey = (x, y) => x + ',' + y

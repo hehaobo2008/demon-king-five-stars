@@ -374,7 +374,115 @@ function buildMossReview(log) {
   return { status: 'rated', stars, events, eventKinds, comment, missing }
 }
 
+// ===== 正篇第六图：夜场总店 =====
+// 两位客人都拿到徽章 = 3 星；西门寻宝客开到箱 +1；东门护卫客拾盾挡锤 +1。
+// 评价单只在整晚结束后出，要能说清前客拿走了什么、后客为什么没拿到。
+function buildNightReview(log) {
+  const badgeGuests = new Set(
+    log.filter((e) => e.kind === 'badge' && e.guest).map((e) => e.guest),
+  )
+  const chests = log.filter((e) => e.kind === 'chest' && e.guest === 1)
+  const shields = log.filter((e) => e.kind === 'shield')
+  const frontShields = shields.filter((e) => e.guest === 1)
+  const backShields = shields.filter((e) => e.guest === 2)
+  const backBlocks = log.filter((e) => e.kind === 'block' && e.guest === 2)
+  const backHits = log.filter((e) => e.kind === 'hit' && e.guest === 2)
+  const frontHits = log.filter((e) => e.kind === 'hit' && e.guest === 1)
+
+  const hasFrontBadge = badgeGuests.has(1)
+  const hasBackBadge = badgeGuests.has(2)
+  const hasChest = chests.length > 0
+  const backHasShield = backShields.length > 0
+  const backBlocked = backBlocks.length > 0
+  const backStar = backHasShield && backBlocked
+
+  const events = []
+  const eventKinds = []
+  const push = (kind, text) => {
+    if (events.length >= 5) return
+    events.push(text)
+    eventKinds.push(kind)
+  }
+  if (hasFrontBadge) push('badge', '西门寻宝客拿到了勇者徽章')
+  if (hasChest) {
+    push('chest', `西门寻宝客打开了${chests.length > 1 ? ` ${chests.length} 只` : ''}宝箱`)
+  }
+  if (frontShields.length) {
+    push(
+      'shield',
+      `西门寻宝客沿途拿走了${frontShields.length > 1 ? ` ${frontShields.length} 面` : '一面'}盾`,
+    )
+  }
+  if (hasBackBadge) push('badge', '东门护卫客拿到了勇者徽章')
+  if (backHasShield && backBlocked) {
+    push('block', '东门护卫客拾盾挡住了守卫')
+  } else if (backHasShield) {
+    push('shield', '东门护卫客捡到了盾')
+    if (backHits.length) push('hit', '东门护卫客还是挨了一锤')
+  } else if (backHits.length) {
+    push('hit', '东门护卫客没捡到盾，空手挨了一锤')
+  } else if (hasBackBadge) {
+    push('shield', '东门护卫客没捡到盾')
+  }
+
+  if (!hasFrontBadge || !hasBackBadge) {
+    const missing = []
+    if (!hasFrontBadge) missing.push('整晚评价：西门寻宝客没拿到勇者徽章')
+    if (!hasBackBadge) missing.push('整晚评价：东门护卫客没拿到勇者徽章')
+    return {
+      status: 'incomplete',
+      stars: 0,
+      events,
+      eventKinds,
+      comment: '',
+      missing,
+    }
+  }
+
+  let stars = 3
+  if (hasChest) stars += 1
+  if (backStar) stars += 1
+
+  const missing = []
+  if (!hasChest) {
+    missing.push('第四颗星：把宝箱摆到西门寻宝客会贴近的路旁，让他开箱')
+  }
+  if (!backStar) {
+    if (!backHasShield) {
+      if (frontShields.length) {
+        missing.push(
+          '第五颗星：东门护卫客没捡到盾——前一位已经把沿途的盾拿走了；把留给东门的盾摆到东侧独走路线',
+        )
+      } else {
+        missing.push('第五颗星：东门护卫客路上没有盾；把盾摆到他必走的东侧路线')
+      }
+    } else {
+      missing.push('第五颗星：东门护卫客捡了盾，却没挡住守卫')
+    }
+  }
+
+  let comment
+  if (stars === 5) {
+    comment = '前客开箱，后客拾盾挡锤，一晚上两枚徽章，总店这账挑不出毛病。'
+  } else if (hasChest && backHasShield === false) {
+    comment = frontShields.length
+      ? `前客开箱时顺手把沿途的${frontShields.length > 1 ? ` ${frontShields.length} 面` : '那面'}盾也拿走了，后客只能空手挨锤；箱子再漂亮，也补不回这面盾。`
+      : '前客箱子开得漂亮；后客路上没摆到盾，守卫那一锤只能硬挨。'
+  } else if (hasChest) {
+    comment = '前客箱子开了，后客盾也捡了，可那一锤还是没挡住，这晚差一口气。'
+  } else if (backStar) {
+    comment = '后客拾盾挡住了锤；前客一路没贴近箱子，寻宝客空手而归。'
+  } else if (frontHits.length && backHits.length) {
+    comment = '两枚徽章都拿到了，可箱子没开、盾也没挡，两位客人都挨了锤，这晚只能算勉强开张。'
+  } else {
+    comment = '两枚徽章都拿到了，可箱子没开、盾也没挡，这一晚只能算勉强开张。'
+  }
+
+  return { status: 'rated', stars, events, eventKinds, comment, missing }
+}
+
 export function buildReview(log, order = 1) {
+  if (order === 8) return buildNightReview(log)
   if (order === 4) return buildTideReview(log)
   if (order === 5) return buildArchiveReview(log)
   if (order === 6) return buildPendulumReview(log)

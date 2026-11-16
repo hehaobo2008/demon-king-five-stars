@@ -901,6 +901,58 @@ h1 {
   color: var(--ink);
 }
 
+/* 夜场总店：布置期切看两位客人的脚印 */
+.night-preview {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding-top: 5px;
+  border-top: 1px dashed rgba(122, 85, 40, 0.45);
+  color: #4a3215;
+}
+
+.night-preview-label {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #6e4d1d;
+  margin-right: 2px;
+}
+
+.night-tab {
+  font-family: inherit;
+  font-size: 10px;
+  padding: 3px 6px;
+  border: 1.5px solid #8a6a3b;
+  background: #d9c193;
+  color: #4a3215;
+  cursor: inherit;
+  transition: filter 0.12s ease;
+}
+
+.night-tab:hover {
+  filter: brightness(1.06);
+}
+
+.night-tab:focus-visible {
+  outline: 2px solid #7a2e2e;
+  outline-offset: 1px;
+}
+
+.night-tab.active {
+  background: #7a2e2e;
+  border-color: #5a1f1f;
+  color: #ffe2ad;
+}
+
+.night-preview-note {
+  width: 100%;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #5a4022;
+}
+
 /* 图册：有名字的关卡列表，保留已有最高星 */
 .gallery-title {
   font-size: 10px;

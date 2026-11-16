@@ -6,6 +6,7 @@ import {
   MARKET,
   MAP2,
   MOSS,
+  NIGHT,
   PENDULUM,
   mossThreatZone,
   ROOMS,
@@ -19,6 +20,7 @@ import {
   buildGrid5,
   buildGrid6,
   buildGrid7,
+  buildGrid8,
 } from './map.js'
 import {
   ITEMS,
@@ -35,6 +37,13 @@ import {
   addLog,
 } from './game.js'
 import { planRoute, WALK } from './walk.js'
+import {
+  planNightFull,
+  planNightPreview,
+  planNightGuest,
+  nightBlockedGuests,
+  nightGuestName,
+} from './night-route.js'
 import { buildReview } from './review.js'
 import {
   makeBaseMap,
@@ -107,6 +116,11 @@ const tab4 = document.getElementById('tab-order4')
 const tab5 = document.getElementById('tab-order5')
 const tab6 = document.getElementById('tab-order6')
 const tab7 = document.getElementById('tab-order7')
+const tab8 = document.getElementById('tab-order8')
+const nightPreviewEl = document.getElementById('night-preview')
+const nightWestBtn = document.getElementById('night-west')
+const nightEastBtn = document.getElementById('night-east')
+const nightPreviewNoteEl = document.getElementById('night-preview-note')
 const galleryTitleEl = document.getElementById('gallery-title')
 const certEl = document.getElementById('five-star-cert')
 const guestTitleEl = document.getElementById('guest-title')
@@ -179,6 +193,11 @@ const MAP_DEFS = {
     arena: MOSS.arena,
     stand: MOSS.stand,
   },
+  8: {
+    skeleton: NIGHT.guests[0].skeleton,
+    arena: NIGHT.guests[0].arena,
+    stand: NIGHT.guests[0].stand,
+  },
 }
 const games = {
   1: createGame(buildGrid(), [SKELETON]),
@@ -194,6 +213,10 @@ const games = {
     MOSS.skeleton,
     { x: MOSS.sample.x, y: MOSS.sample.y },
   ]),
+  8: createGame(buildGrid8(), [
+    NIGHT.guests[0].skeleton,
+    NIGHT.guests[1].skeleton,
+  ]),
 }
 let game = games[1]
 const bases = {
@@ -204,6 +227,7 @@ const bases = {
   5: makeBaseMap(5),
   6: makeBaseMap(6),
   7: makeBaseMap(7),
+  8: makeBaseMap(8),
 }
 let base = bases[1]
 let currentMap = MAP_DEFS[1]
@@ -216,6 +240,7 @@ const shownGold = {
   5: games[5].gold,
   6: games[6].gold,
   7: games[7].gold,
+  8: games[8].gold,
 }
 let goldFxTimer = 0
 
@@ -231,6 +256,11 @@ window.__ui = () => ({
   fifthUnlocked,
   sixthUnlocked,
   seventhUnlocked,
+  eighthUnlocked,
+  nightGuest,
+  nightPreviewGuest,
+  nightBadges: { ...nightBadges },
+  nightBlocked: nightBlockedGuests(games[8]),
   speed,
   simT: Math.round(simT),
   trapMode: crossbow.mode,
@@ -265,6 +295,12 @@ let fourthUnlocked = false
 let fifthUnlocked = false
 let sixthUnlocked = false
 let seventhUnlocked = false
+let eighthUnlocked = false
+// 夜场总店：一晚两位客人，前一位用掉的道具后一位不再补
+let nightGuest = 1
+let nightPreviewGuest = 1
+let nightBadges = { 1: false, 2: false }
+let nightGuardPoses = { 1: 'idle', 2: 'idle' }
 // 营业时钟：simT 按倍速推进（走路/台词/演出），弩机预警仍用真实毫秒
 let speed = 1
 let simT = 0
@@ -329,6 +365,7 @@ function readBestStars() {
     5: readOrderBestStars(5),
     6: readOrderBestStars(6),
     7: readOrderBestStars(7),
+    8: readOrderBestStars(8),
   }
 }
 
@@ -358,6 +395,7 @@ function mergeBestFromStorage() {
     5: Math.max(bestStars[5], stored[5]),
     6: Math.max(bestStars[6], stored[6]),
     7: Math.max(bestStars[7], stored[7]),
+    8: Math.max(bestStars[8], stored[8]),
   }
 }
 
@@ -390,12 +428,13 @@ window.addEventListener('storage', (e) => {
     e.key !== orderBestKey(4) &&
     e.key !== orderBestKey(5) &&
     e.key !== orderBestKey(6) &&
-    e.key !== orderBestKey(7)
+    e.key !== orderBestKey(7) &&
+    e.key !== orderBestKey(8)
   ) {
     return
   }
   const sig = () =>
-    `${bestStars[1]}|${bestStars[2]}|${bestStars[3]}|${bestStars[4]}|${bestStars[5]}|${bestStars[6]}|${bestStars[7]}`
+    `${bestStars[1]}|${bestStars[2]}|${bestStars[3]}|${bestStars[4]}|${bestStars[5]}|${bestStars[6]}|${bestStars[7]}|${bestStars[8]}`
   const before = sig()
   mergeBestFromStorage()
   if (sig() !== before) updateBestUI()
@@ -449,6 +488,10 @@ const ORDER_INFO = {
     quote:
       '「我是来采<em class="kw">苔火样本</em>的，也想拿勇者徽章。内院有巡卫；把<em class="kw">古铃</em>挂到一侧能引开他，走外廊则碰不着他。」',
   },
+  8: {
+    title: '夜场第一场 · 西门寻宝客',
+    quote: NIGHT.guests[0].quote,
+  },
 }
 const GUEST_VARIANT = {
   1: 'knight',
@@ -458,6 +501,7 @@ const GUEST_VARIANT = {
   5: 'trader',
   6: 'fan',
   7: 'trader',
+  8: 'trader',
 }
 const REVIEW_META = {
   1: { title: '新手剑士的评价单', sign: '新手剑士' },
@@ -467,6 +511,7 @@ const REVIEW_META = {
   5: { title: '抄书人的评价单', sign: '抄书人' },
   6: { title: '钟摆工的评价单', sign: '钟摆工' },
   7: { title: '采苔人的评价单', sign: '采苔人' },
+  8: { title: '夜场总店 · 总评价单', sign: '夜场总店' },
 }
 let guest = null
 let walker = null
@@ -566,12 +611,62 @@ const CARD_USE_COPY = {
     barrier: '占一格挡路，改客人走法',
     bell: '挂上铃位，把巡卫引去一侧',
   },
+  8: {
+    chest: '摆在西门寻宝客路旁，他会开',
+    shield: '留给东门护卫客，捡起挡锤',
+    sign: '放在岔口，给客人指一段路',
+    barrier: '占一格挡路，先看堵住哪一位',
+  },
 }
 
 function updateCardCopy() {
   const copy = CARD_USE_COPY[order] || CARD_USE_COPY[1]
   for (const [type, el] of Object.entries(cardUseEls)) {
     if (el && copy[type]) el.textContent = copy[type]
+  }
+}
+
+// 夜场总店：两台挑战房共用一张图，只把当前场的守卫、站位与展示台切过去
+function applyNightStage(index) {
+  const g = NIGHT.guests[index - 1]
+  currentMap = MAP_DEFS[8]
+  currentMap.skeleton = g.skeleton
+  currentMap.arena = g.arena
+  currentMap.stand = g.stand
+  skeleton.x = g.skeleton.x
+  skeleton.y = g.skeleton.y
+}
+
+function setNightGuestUI(index) {
+  const g = NIGHT.guests[index - 1]
+  guestTitleEl.textContent =
+    index === 1 ? '夜场第一场 · 西门寻宝客' : '夜场第二场 · 东门护卫客'
+  guestQuoteTextEl.innerHTML = g.quote
+  guestAvatarEl.src = charAvatarDataURL(g.variant)
+  avatarFrameEl.className = 'avatar-frame ' + g.variant
+}
+
+function nightBlockedMessage(blocked) {
+  if (!blocked.length) return ''
+  return `隔栅堵住了${blocked.map(nightGuestName).join('、')}的去路，先挪开或收回一格再开门。`
+}
+
+function updateNightPreviewUI() {
+  const show = order === 8 && mode === 'setup'
+  nightPreviewEl.hidden = !show
+  if (!show) return
+  nightWestBtn.classList.toggle('active', nightPreviewGuest === 1)
+  nightEastBtn.classList.toggle('active', nightPreviewGuest === 2)
+  if (nightPreviewGuest === 1) {
+    nightPreviewNoteEl.textContent = '先看西门：路旁宝箱会开，他踩到的盾也会带走。'
+    return
+  }
+  const preview = planNightPreview(game, 2)
+  if (preview.first) {
+    nightPreviewNoteEl.textContent =
+      `后看东门：按第一场用剩的库存算（已开箱 ${preview.first.openedChests.length}、拿走盾 ${preview.first.takenShields.length}）。`
+  } else {
+    nightPreviewNoteEl.textContent = '西门寻宝客被隔栅堵住了，先让西门走通。'
   }
 }
 // 卡片小金币用顶部旋转金币的静态第一帧
@@ -869,6 +964,23 @@ function updateLogProgress() {
                     { done: !kinds.has('patrol'), label: '避开巡卫' },
                     { done: kinds.has('badge'), label: '徽章' },
                   ]
+                : order === 8
+                  ? [
+                      {
+                        done: game.log.some((e) => e.kind === 'chest' && e.guest === 1),
+                        label: '西门开箱',
+                      },
+                      {
+                        done: game.log.some((e) => e.kind === 'block' && e.guest === 2),
+                        label: '东门挡锤',
+                      },
+                      {
+                        done:
+                          game.log.some((e) => e.kind === 'badge' && e.guest === 1) &&
+                          game.log.some((e) => e.kind === 'badge' && e.guest === 2),
+                        label: '两枚徽章',
+                      },
+                    ]
         : [
             { done: kinds.has('safe') || kinds.has('supply'), label: '安全通行或绕路' },
             { done: kinds.has('block'), label: '挡锤' },
@@ -982,6 +1094,7 @@ function updateBestUI() {
     [tab5, '双锁档案库', bestStars[5]],
     [tab6, '钟摆工坊', bestStars[6]],
     [tab7, '苔火巡廊', bestStars[7]],
+    [tab8, '夜场总店', bestStars[8]],
   ]
   for (const [el, base, best] of tabs) {
     el.textContent = base
@@ -1121,10 +1234,10 @@ function showReview() {
   }
   reviewMissing.hidden = r.missing.length === 0
 
-  // 首单四星接二单；之后每单三星起依次接下一单，第五单收尾
+  // 首单四星接二单；之后每单三星起依次接下一单；夜场总店收尾
   const canNext =
     (order === 1 && r.status === 'rated' && r.stars >= 4) ||
-    (order >= 2 && order <= 6 && r.status === 'rated' && r.stars >= 3)
+    (order >= 2 && order <= 7 && r.status === 'rated' && r.stars >= 3)
   btnNext.hidden = !canNext
   btnNext.textContent =
     order === 2
@@ -1137,7 +1250,9 @@ function showReview() {
             ? '接第六单'
             : order === 6
               ? '接第七单'
-              : '接下一单'
+              : order === 7
+                ? '接第八单'
+                : '接下一单'
 
   reviewCard.hidden = false
   // 羊皮票从上方 16px 落下，约 0.28s
@@ -1236,6 +1351,14 @@ btnNext.addEventListener('click', () => {
     seventhUnlocked = true
     setOrder(7)
     status('接下了苔火巡廊。外廊可避开巡卫；古铃能把他引去一侧。')
+    return
+  }
+  if (order === 7) {
+    hideReview()
+    resetBusiness()
+    eighthUnlocked = true
+    setOrder(8)
+    status('接下了夜场总店。西门先迎寻宝客，东门后迎护卫客；前一位用掉的箱和盾当晚不补。')
   }
 })
 
@@ -1256,8 +1379,16 @@ window.addEventListener('keydown', (e) => {
 })
 
 // 按真实 planRoute 生成脚印序列、事件标记和未经过的盾架
-function buildRoute(g) {
-  const plan = planRoute(g, order)
+function buildRoute(g, guestOverride = null) {
+  let plan
+  let source = g
+  if (order === 8) {
+    const preview = planNightPreview(g, guestOverride || nightPreviewGuest)
+    plan = preview.plan
+    source = preview.game || g
+  } else {
+    plan = planRoute(g, order)
+  }
   const raw = []
   const markers = []
   let pickedShield = false
@@ -1324,8 +1455,8 @@ function buildRoute(g) {
 
   const visited = new Set(raw.map((t) => tileKey(t.x, t.y)))
   const offRouteShields = []
-  for (const item of g.items.values()) {
-    if (item.type === 'shield' && !visited.has(tileKey(item.x, item.y))) {
+  for (const item of source.items.values()) {
+    if (item.type === 'shield' && !item.taken && !visited.has(tileKey(item.x, item.y))) {
       offRouteShields.push({ x: item.x, y: item.y })
     }
   }
@@ -1440,7 +1571,9 @@ function updateHUD() {
   goldEl.textContent = game.gold
   const chestLocked = order === 2
   const visible =
-    order === 7
+    order === 8
+      ? { chest: true, shield: true, sign: true, barrier: true }
+      : order === 7
       ? { shield: true, sign: true, barrier: true, bell: true }
       : order === 6
         ? { shield: true, sign: true, barrier: true }
@@ -1470,6 +1603,7 @@ function updateHUD() {
   btnOpen.disabled = mode !== 'setup'
   updateTrapButton()
   updateSwingButton()
+  updateNightPreviewUI()
   updateOnboarding()
   // 布置期的真实路线脚印；营业后收起
   footprintsBase = mode === 'setup' ? buildRoute(game) : null
@@ -1552,14 +1686,24 @@ function setOrder(n) {
   invalidFlash = null
   clearFootprintPreview()
   pop = null
-  skeleton.x = currentMap.skeleton.x
-  skeleton.y = currentMap.skeleton.y
-  const info = ORDER_INFO[order]
-  guestTitleEl.textContent = info.title
-  guestQuoteTextEl.innerHTML = info.quote
-  const variant = GUEST_VARIANT[order] || 'knight'
-  guestAvatarEl.src = charAvatarDataURL(variant)
-  avatarFrameEl.className = 'avatar-frame ' + variant
+  skeleton.pose = 'idle'
+  if (n === 8) {
+    nightGuest = 1
+    nightPreviewGuest = 1
+    nightBadges = { 1: false, 2: false }
+    nightGuardPoses = { 1: 'idle', 2: 'idle' }
+    applyNightStage(1)
+    setNightGuestUI(1)
+  } else {
+    skeleton.x = currentMap.skeleton.x
+    skeleton.y = currentMap.skeleton.y
+    const info = ORDER_INFO[order]
+    guestTitleEl.textContent = info.title
+    guestQuoteTextEl.innerHTML = info.quote
+    const variant = GUEST_VARIANT[order] || 'knight'
+    guestAvatarEl.src = charAvatarDataURL(variant)
+    avatarFrameEl.className = 'avatar-frame ' + variant
+  }
   orderTabs.hidden = !secondUnlocked
   galleryTitleEl.hidden = !secondUnlocked
   ledgerDividerEl.hidden = secondUnlocked
@@ -1568,6 +1712,7 @@ function setOrder(n) {
   tab5.hidden = !fifthUnlocked
   tab6.hidden = !sixthUnlocked
   tab7.hidden = !seventhUnlocked
+  tab8.hidden = !eighthUnlocked
   tab1.classList.toggle('active', order === 1)
   tab2.classList.toggle('active', order === 2)
   tab3.classList.toggle('active', order === 3)
@@ -1575,8 +1720,11 @@ function setOrder(n) {
   tab5.classList.toggle('active', order === 5)
   tab6.classList.toggle('active', order === 6)
   tab7.classList.toggle('active', order === 7)
+  tab8.classList.toggle('active', order === 8)
   status(
-    order === 7
+    order === 8
+      ? '夜场总店：西门先迎寻宝客，东门后迎护卫客；前一位开掉的箱和拿走的盾当晚不补。'
+      : order === 7
       ? '外廊可避开巡卫；古铃能把巡卫引到一侧，样本在内院。'
       : order === 6
         ? '两条钟摆捷径、干净南道和中间检修道；全局只有一次止摆。'
@@ -1760,6 +1908,23 @@ function updateOnboarding() {
     }
     return
   }
+  if (order === 8) {
+    onbStep = 'route'
+    const blocked = nightBlockedGuests(game)
+    if (blocked.length) {
+      guideState = null
+      setCoach(nightBlockedMessage(blocked), 34, 55)
+      return
+    }
+    const g = NIGHT.guests[nightPreviewGuest - 1]
+    guideState = { room: null, tile: { x: g.spawn.x, y: g.spawn.y } }
+    if (nightPreviewGuest === 1) {
+      setCoach('先看西门：宝箱摆到他路旁会开；他踩到的盾也会带走。', 32, 61)
+    } else {
+      setCoach('后看东门：按第一场用剩的库存算；留给东门的盾要走东侧。', 32, 61)
+    }
+    return
+  }
   if (onboardingRetired) {
     coachEl.hidden = true
     guideState = null
@@ -1824,6 +1989,7 @@ function trySwitchOrder(n) {
   if (n === 5 && !fifthUnlocked) return
   if (n === 6 && !sixthUnlocked) return
   if (n === 7 && !seventhUnlocked) return
+  if (n === 8 && !eighthUnlocked) return
   setOrder(n)
 }
 
@@ -1834,6 +2000,23 @@ tab4.addEventListener('click', () => trySwitchOrder(4))
 tab5.addEventListener('click', () => trySwitchOrder(5))
 tab6.addEventListener('click', () => trySwitchOrder(6))
 tab7.addEventListener('click', () => trySwitchOrder(7))
+tab8.addEventListener('click', () => trySwitchOrder(8))
+
+// 夜场布置：切看两位客人的脚印；东门那条按西门用剩的库存重算
+function chooseNightPreview(index) {
+  if (mode !== 'setup' || order !== 8 || nightPreviewGuest === index) return
+  nightPreviewGuest = index
+  clearFootprintPreview()
+  updateNightPreviewUI()
+  updateHUD()
+  status(
+    index === 1
+      ? '预览西门寻宝客：路旁宝箱会开，他踩到的盾也会带走。'
+      : '预览东门护卫客：脚印已按第一场用剩的库存重算。',
+  )
+}
+nightWestBtn.addEventListener('click', () => chooseNightPreview(1))
+nightEastBtn.addEventListener('click', () => chooseNightPreview(2))
 
 // 营业倍速：随时可切，走动中的时钟不重置也不跳步
 spd1El.addEventListener('click', () => setSpeed(1))
@@ -1902,7 +2085,24 @@ function currentGearPhase(now) {
 
 function startBusiness() {
   if (mode !== 'setup') return
-  const plan = planRoute(game, order)
+  let plan
+  if (order === 8) {
+    const full = planNightFull(game)
+    if (!full || full.blockedGuests.length) {
+      status(nightBlockedMessage(full ? full.blockedGuests : [1, 2]), 'fail')
+      return
+    }
+    plan = full
+    nightGuest = 1
+    nightPreviewGuest = 1
+    nightBadges = { 1: false, 2: false }
+    nightGuardPoses = { 1: 'idle', 2: 'idle' }
+    game.badgeTaken = false
+    applyNightStage(1)
+    setNightGuestUI(1)
+  } else {
+    plan = planRoute(game, order)
+  }
   if (!plan) {
     status(
       order === 6
@@ -1941,7 +2141,7 @@ function startBusiness() {
     y: plan.start.y,
     hasShield: false,
     hasBadge: false,
-    variant: GUEST_VARIANT[order] || 'knight',
+    variant: order === 8 ? NIGHT.guests[0].variant : GUEST_VARIANT[order] || 'knight',
     facing: 'down',
     walkPhase: 0,
     moving: false,
@@ -1985,6 +2185,14 @@ function resetBusiness() {
   pop = null
   clearFootprintPreview()
   skeleton.pose = 'idle'
+  if (order === 8) {
+    nightGuest = 1
+    nightPreviewGuest = 1
+    nightBadges = { 1: false, 2: false }
+    nightGuardPoses = { 1: 'idle', 2: 'idle' }
+    applyNightStage(1)
+    setNightGuestUI(1)
+  }
   fx = null
   stagger = null
   badgeFly = null
@@ -2110,12 +2318,14 @@ function stepWalker(t, realT) {
         addLog(
           game,
           'chest',
-          a.shop
-            ? {
-                shop: a.shop,
-                label: a.shop === 'west' ? '打开西铺宝箱' : '打开东铺宝箱',
-              }
-            : null,
+          a.guest
+            ? { guest: a.guest, guestName: a.guestName, label: a.label || '打开宝箱' }
+            : a.shop
+              ? {
+                  shop: a.shop,
+                  label: a.shop === 'west' ? '打开西铺宝箱' : '打开东铺宝箱',
+                }
+              : null,
         )
         updateLogUI()
         sfx.chest()
@@ -2179,7 +2389,17 @@ function stepWalker(t, realT) {
         if (a.picked) {
           item.taken = true
           guest.hasShield = true
-          addLog(game, 'shield')
+          addLog(
+            game,
+            'shield',
+            a.guest
+              ? {
+                  guest: a.guest,
+                  guestName: a.guestName,
+                  label: a.label || `${a.guestName || '客人'}捡起盾牌`,
+                }
+              : null,
+          )
           updateLogUI()
           showBubble(a.say || '正好用得上！')
           startGuestGesture('shield', 800, t)
@@ -2197,6 +2417,7 @@ function stepWalker(t, realT) {
     }
     if (a.type === 'skeleton') {
       skeleton.pose = a.pose
+      if (order === 8) nightGuardPoses[nightGuest] = a.pose
       advanceWalker(t)
       continue
     }
@@ -2209,6 +2430,7 @@ function stepWalker(t, realT) {
     if (a.type === 'badge') {
       guest.hasBadge = true
       game.badgeTaken = true
+      if (order === 8) nightBadges[nightGuest] = true
       badgeFly = { start: t, dur: reducedMotion ? 0 : 650 }
       startGuestGesture('badge', 820, t)
       sfx.badge()
@@ -2216,7 +2438,13 @@ function stepWalker(t, realT) {
       continue
     }
     if (a.type === 'log') {
-      addLog(game, a.event)
+      addLog(
+        game,
+        a.event,
+        a.guest || a.label
+          ? { guest: a.guest, guestName: a.guestName, label: a.label }
+          : null,
+      )
       updateLogUI()
       advanceWalker(t)
       continue
@@ -2482,9 +2710,57 @@ function stepWalker(t, realT) {
       }
       return
     }
+    if (a.type === 'nightSwitch') {
+      if (!a.started) {
+        a.started = true
+        nightGuest = a.guest || 2
+        nightBadges[1] = nightBadges[1] || !!(guest && guest.hasBadge)
+        nightGuardPoses[1] = skeleton.pose || nightGuardPoses[1]
+        const nextGuest = NIGHT.guests[nightGuest - 1]
+        applyNightStage(nightGuest)
+        skeleton.pose = nightGuardPoses[nightGuest] || 'idle'
+        if (guest) {
+          guest.x = nextGuest.spawn.x
+          guest.y = nextGuest.spawn.y
+          guest.hasShield = false
+          guest.hasBadge = false
+          guest.variant = nextGuest.variant
+          guest.facing = 'down'
+          guest.moving = false
+          guest.walkPhase = 0
+          guest.gesture = null
+          guest.blockStart = 0
+        }
+        nightPreviewGuest = 2
+        setNightGuestUI(2)
+        updateNightPreviewUI()
+        hideBubble()
+        fx = null
+        stagger = null
+        badgeFly = null
+        spark = null
+        footDust = []
+        lastGuestTile = { x: nextGuest.spawn.x, y: nextGuest.spawn.y }
+        addLog(game, 'nightSwitch', { guest: 2, label: '换场：东门护卫客入场' })
+        updateLogUI()
+        sfx.sign()
+        showBubble('东门护卫客从东门入场')
+        status('夜场换边：东门护卫客从东门入场。上一场用掉的道具今晚不再补。')
+      }
+      if (t - walker.actionStart >= (a.ms || 1000)) {
+        advanceWalker(t)
+        continue
+      }
+      return
+    }
     if (a.type === 'end') {
       walker = null
-      status('训练战结束。看看客人留下的评价单吧。')
+      if (order === 8) {
+        nightBadges[2] = nightBadges[2] || !!(guest && guest.hasBadge)
+        status('整晚营业结束。两位客人的总评价单出来了。')
+      } else {
+        status('训练战结束。看看客人留下的评价单吧。')
+      }
       showReview()
       return
     }
@@ -3060,6 +3336,15 @@ function frame(realT) {
       : null,
     dust: dustScene,
     skeleton,
+    skeletons:
+      order === 8
+        ? NIGHT.guests.map((g, i) => ({
+            x: g.skeleton.x,
+            y: g.skeleton.y,
+            pose: nightGuardPoses[i + 1] || 'idle',
+            flash: flash === 'skeleton' && nightGuest === i + 1,
+          }))
+        : null,
     fx,
     guide: guideState,
     torches: TORCHES_BY_ORDER[order],
@@ -3092,7 +3377,15 @@ function frame(realT) {
     patrol: mossPatrol,
     moss: order === 7 ? { taken: game.takenMoss } : null,
     stand: currentMap.stand,
-    standBadge: !game.badgeTaken,
+    standBadge: order === 8 ? false : !game.badgeTaken,
+    stands:
+      order === 8
+        ? NIGHT.guests.map((g, i) => ({
+            x: g.stand.x,
+            y: g.stand.y,
+            showBadge: !nightBadges[i + 1],
+          }))
+        : null,
     badgeFly: badgeFlyScene,
     spark: sparkScene,
     flash,
@@ -3118,7 +3411,8 @@ function frame(realT) {
 
 // 用已存历史星恢复进度：后一关到过三星即可依次接下一单；
 // 无存储时全为 0，照旧从首单流程解锁
-if (bestStars[6] >= 3 || bestStars[7] > 0) seventhUnlocked = true
+if (bestStars[7] >= 3 || bestStars[8] > 0) eighthUnlocked = true
+if (bestStars[6] >= 3 || bestStars[7] > 0 || eighthUnlocked) seventhUnlocked = true
 if (bestStars[5] >= 3 || bestStars[6] > 0 || seventhUnlocked) sixthUnlocked = true
 if (bestStars[4] >= 3 || bestStars[5] > 0 || sixthUnlocked) fifthUnlocked = true
 if (bestStars[3] >= 3 || bestStars[4] > 0 || fifthUnlocked) fourthUnlocked = true
@@ -3140,6 +3434,7 @@ tab4.hidden = !fourthUnlocked
 tab5.hidden = !fifthUnlocked
 tab6.hidden = !sixthUnlocked
 tab7.hidden = !seventhUnlocked
+tab8.hidden = !eighthUnlocked
 updateHUD()
 updateLogUI()
 requestAnimationFrame(frame)

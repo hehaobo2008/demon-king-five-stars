@@ -15,6 +15,7 @@ import { planRouteTide } from './tide-route.js'
 import { planRouteArchive } from './archive-route.js'
 import { planRoutePendulum } from './pendulum-route.js'
 import { planRouteMoss } from './moss-route.js'
+import { planNightFull } from './night-route.js'
 
 export const WALK = {
   STEP_MS: 170,
@@ -102,6 +103,10 @@ export function planRoute(game, order = 1) {
   if (order === 5) return planRouteArchive(game)
   if (order === 6) return planRoutePendulum(game)
   if (order === 7) return planRouteMoss(game)
+  if (order === 8) {
+    const full = planNightFull(game)
+    return full.blockedGuests.length ? null : { start: full.start, actions: full.actions }
+  }
   const grid = buildGrid()
   const actions = []
   let cur = { ...WALK.SPAWN }

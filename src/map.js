@@ -503,3 +503,68 @@ export function mossThreatZone(side) {
   MOSS_THREAT_CACHE.set(side, out)
   return out
 }
+
+// ===== 正篇第六图：夜场总店 =====
+const NIGHT_ROWS = [
+  '########################',
+  '########################',
+  '##......########......##',
+  '##..A...########...a..##',
+  '##......########......##',
+  '##......########......##',
+  '####................####',
+  '####..#.#.####.#.#..####',
+  '##....#.#......#.#....##',
+  '##....#.#......#.#....##',
+  '##....................##',
+  '####..#.#......#.#..####',
+  '####..#.#......#.#..####',
+  '#......................#',
+  '#.......########.......#',
+  '#.E.....########.....e.#',
+  '#.......########.......#',
+  '########################',
+]
+
+export const NIGHT = {
+  guests: [
+    {
+      id: 1,
+      name: '西门寻宝客',
+      title: '夜场西门 · 寻宝客',
+      variant: 'trader',
+      spawn: { x: 2, y: 15 },
+      stop: { x: 4, y: 3 },
+      skeleton: { x: 5, y: 3 },
+      stand: { x: 8, y: 2 },
+      arena: { x: 4.5, y: 4.3 },
+      quote:
+        '「我走西门，想拿<em class="kw">勇者徽章</em>。今晚只要让我开一只<em class="kw">宝箱</em>，这趟就算没白来。」',
+    },
+    {
+      id: 2,
+      name: '东门护卫客',
+      title: '夜场东门 · 护卫客',
+      variant: 'knight',
+      spawn: { x: 21, y: 15 },
+      stop: { x: 19, y: 3 },
+      skeleton: { x: 18, y: 3 },
+      stand: { x: 15, y: 2 },
+      arena: { x: 18.5, y: 4.3 },
+      quote:
+        '「我走东门，也要<em class="kw">勇者徽章</em>。路上得给我留一面<em class="kw">盾</em>，守卫那锤我要挡下来。」',
+    },
+  ],
+}
+
+export function buildGrid8() {
+  const grid = Array.from({ length: ROWS }, () => Array(COLS).fill('wall'))
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (NIGHT_ROWS[y][x] !== '#') {
+        grid[y][x] = x <= 8 ? 'nightWest' : x >= 16 ? 'nightEast' : 'nightHall'
+      }
+    }
+  }
+  return grid
+}
