@@ -1,7 +1,6 @@
 import { COLS, ROWS, TILE, SCALE, buildGrid, buildGrid2 } from './map.js'
 
 const CELL = TILE * SCALE
-const PX = 3 // 8x8 图案放大到 24x24
 
 // ===== 场景美术：1 单位 = 4px（每格 8x8 单位） =====
 const U = 4
@@ -834,18 +833,18 @@ const ITEM_MATRICES = {
   ],
   shieldEmpty: [
     '................',
-    '................',
-    '................',
-    '................',
-    '................',
-    '................',
-    '................',
-    '................',
-    '.wWWWWWWWWWWWWw.',
-    '.wW..........Ww.',
-    '.wW..........Ww.',
-    '.wW..........Ww.',
-    '.wWWWWWWWWWWWWw.',
+    '....o......o....',
+    '...oCo....oCo...',
+    '...oCo....oCo...',
+    '....o......o....',
+    '..oooooooooooo..',
+    '..oWwwwwwwwwWo..',
+    '..oWo......oWo..',
+    '..oWo......oWo..',
+    '..oWo......oWo..',
+    '..oWo......oWo..',
+    '..oWo......oWo..',
+    '..oWWWWWWWWWWo..',
     '..oooooooooooo..',
     '................',
     '................',
@@ -938,15 +937,77 @@ export function drawItem(ctx, type, ox, oy, dir = 0, opened = false, taken = fal
   }
 }
 
-function drawPattern(ctx, sprite) {
-  for (let r = 0; r < sprite.rows.length; r++) {
-    for (let c = 0; c < 8; c++) {
-      const ch = sprite.rows[r][c]
-      if (ch === '.') continue
-      ctx.fillStyle = sprite.colors[ch]
-      ctx.fillRect(c * PX, r * PX, PX, PX)
-    }
+// 路牌方向的淡琥珀脉冲箭头（只画在地图道具上，不进侧栏图标）
+function drawSignPulse(ctx, ox, oy, dir, now) {
+  const pulse = 0.5 + 0.5 * Math.sin(now / 360 + ox * 0.07 + oy * 0.11)
+  const alpha = 0.24 + 0.3 * pulse
+  const cx = ox + CELL / 2
+  const cy = oy + CELL / 2
+  const px = cx + (dir === 1 ? 8 : dir === 3 ? -8 : 0)
+  const py = cy + (dir === 2 ? 8 : dir === 0 ? -8 : 0)
+  // 以朝上的 2px 小箭头为基准，按 90° 旋转
+  const blocks = [
+    [-4, -2],
+    [-2, -4],
+    [0, -6],
+    [2, -4],
+    [4, -2],
+    [0, 0],
+  ]
+  const toScreen = (x, y) => {
+    if (dir === 1) return [-y, x]
+    if (dir === 2) return [-x, -y]
+    if (dir === 3) return [y, -x]
+    return [x, y]
   }
+  ctx.save()
+  for (const [lx, ly] of blocks) {
+    const [sx, sy] = toScreen(lx, ly)
+    ctx.globalAlpha = alpha * 0.38
+    ctx.fillStyle = '#24170f'
+    ctx.fillRect(px + sx + 1, py + sy + 1, 2, 2)
+    ctx.globalAlpha = alpha
+    ctx.fillStyle = '#ffd98a'
+    ctx.fillRect(px + sx, py + sy, 2, 2)
+  }
+  ctx.restore()
+}
+
+// 闭箱锁扣约每 2.5 秒的一下短闪
+function drawChestGlint(ctx, item, now) {
+  const cycle = (now + item.x * 311 + item.y * 173) % 2500
+  if (cycle > 150) return
+  const a = 1 - cycle / 150
+  const ox = item.x * CELL
+  const oy = item.y * CELL
+  ctx.save()
+  ctx.globalAlpha = a
+  ctx.fillStyle = '#ffcd75'
+  ctx.fillRect(ox + 14, oy + 20, 2, 1)
+  ctx.fillRect(ox + 18, oy + 20, 2, 1)
+  ctx.fillRect(ox + 16, oy + 17, 1, 2)
+  ctx.fillRect(ox + 16, oy + 22, 1, 2)
+  ctx.fillStyle = '#fff3c0'
+  ctx.fillRect(ox + 16, oy + 19, 2, 2)
+  ctx.restore()
+}
+
+function drawStarMote(ctx, x, y, alpha) {
+  ctx.save()
+  ctx.globalAlpha = alpha
+  ctx.fillStyle = '#ffcd75'
+  ctx.fillRect(x - 3, y - 1, 2, 2)
+  ctx.fillRect(x + 2, y - 1, 2, 2)
+  ctx.fillRect(x - 1, y - 3, 2, 2)
+  ctx.fillRect(x - 1, y + 2, 2, 2)
+  ctx.fillStyle = '#fff3c0'
+  ctx.fillRect(x - 1, y - 1, 2, 2)
+  ctx.fillStyle = '#e8a53c'
+  ctx.fillRect(x - 3, y - 3, 1, 1)
+  ctx.fillRect(x + 3, y - 3, 1, 1)
+  ctx.fillRect(x - 3, y + 3, 1, 1)
+  ctx.fillRect(x + 3, y + 3, 1, 1)
+  ctx.restore()
 }
 
 // ===== 角色像素：约 24×32（8×11 格，每格 3px），四向 + 两帧走路 =====
@@ -1304,7 +1365,197 @@ function makeWhitePalette() {
   return new Proxy({}, { get: () => '#ffffff' })
 }
 
-function drawHeldShield(ctx, cx, feetY, facing, blocking) {
+const WEAPON_PAL = {
+  dark: '#1a1c2c',
+  blade: '#c9d4dd',
+  edge: '#eef2f7',
+  guard: '#c9a24b',
+  grip: '#4a3020',
+  skin: '#e8c19a',
+  brass: '#c9a24b',
+  brassDark: '#8a6a2b',
+  brassLight: '#ffcd75',
+}
+
+function drawArm(ctx, x0, y0, x1, y1, color) {
+  ctx.fillStyle = color
+  const n = 5
+  for (let i = 0; i <= n; i++) {
+    const x = Math.round(x0 + ((x1 - x0) * i) / n)
+    const y = Math.round(y0 + ((y1 - y0) * i) / n)
+    ctx.fillRect(x - 1, y - 1, 3, 3)
+  }
+}
+
+function drawHand(ctx, x, y) {
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(x - 2, y - 2, 5, 5)
+  ctx.fillStyle = WEAPON_PAL.skin
+  ctx.fillRect(x - 1, y - 1, 3, 3)
+  ctx.fillStyle = '#c99a6a'
+  ctx.fillRect(x - 1, y + 1, 3, 1)
+}
+
+function drawSwordUp(ctx, hx, hy) {
+  const P = WEAPON_PAL
+  ctx.fillStyle = P.dark
+  ctx.fillRect(hx - 2, hy - 16, 5, 13)
+  ctx.fillStyle = P.blade
+  ctx.fillRect(hx - 1, hy - 15, 3, 11)
+  ctx.fillStyle = P.edge
+  ctx.fillRect(hx, hy - 15, 1, 10)
+  ctx.fillStyle = P.dark
+  ctx.fillRect(hx - 4, hy - 4, 9, 3)
+  ctx.fillStyle = P.guard
+  ctx.fillRect(hx - 3, hy - 3, 7, 1)
+  ctx.fillStyle = P.grip
+  ctx.fillRect(hx - 1, hy - 1, 2, 4)
+  ctx.fillStyle = P.guard
+  ctx.fillRect(hx - 1, hy + 3, 2, 2)
+}
+
+function drawWrenchUp(ctx, hx, hy) {
+  const P = WEAPON_PAL
+  const ty = hy - 17
+  // 开口扳手头：两片黄铜颚 + 底部，中央留缺口
+  ctx.fillStyle = P.dark
+  ctx.fillRect(hx - 4, ty, 1, 9)
+  ctx.fillRect(hx + 3, ty, 1, 9)
+  ctx.fillRect(hx - 4, ty + 7, 8, 2)
+  ctx.fillStyle = P.brass
+  ctx.fillRect(hx - 3, ty, 2, 7)
+  ctx.fillRect(hx + 1, ty, 2, 7)
+  ctx.fillRect(hx - 3, ty + 7, 6, 1)
+  ctx.fillStyle = P.brassLight
+  ctx.fillRect(hx - 3, ty, 1, 2)
+  ctx.fillRect(hx + 2, ty, 1, 2)
+  // 手柄
+  ctx.fillStyle = P.dark
+  ctx.fillRect(hx - 2, ty + 9, 4, 10)
+  ctx.fillStyle = P.brassDark
+  ctx.fillRect(hx - 1, ty + 9, 2, 9)
+  ctx.fillStyle = P.brass
+  ctx.fillRect(hx - 1, ty + 9, 1, 8)
+}
+
+function drawSwordSwing(ctx, hx, hy, dir) {
+  const P = WEAPON_PAL
+  ctx.save()
+  ctx.translate(hx, 0)
+  ctx.scale(dir, 1)
+  // 竖护手
+  ctx.fillStyle = P.dark
+  ctx.fillRect(-1, hy - 6, 2, 12)
+  ctx.fillStyle = P.guard
+  ctx.fillRect(0, hy - 5, 1, 10)
+  // 横向剑刃
+  ctx.fillStyle = P.dark
+  ctx.fillRect(2, hy - 2, 17, 5)
+  ctx.fillStyle = P.blade
+  ctx.fillRect(3, hy - 1, 15, 3)
+  ctx.fillStyle = P.edge
+  ctx.fillRect(4, hy, 13, 1)
+  ctx.restore()
+}
+
+function drawWrenchSwing(ctx, hx, hy, dir) {
+  const P = WEAPON_PAL
+  ctx.save()
+  ctx.translate(hx, 0)
+  ctx.scale(dir, 1)
+  // 横手柄
+  ctx.fillStyle = P.dark
+  ctx.fillRect(1, hy - 2, 10, 5)
+  ctx.fillStyle = P.brassDark
+  ctx.fillRect(2, hy - 1, 9, 3)
+  ctx.fillStyle = P.brass
+  ctx.fillRect(2, hy - 1, 8, 1)
+  // 远端开口扳手头
+  ctx.fillStyle = P.dark
+  ctx.fillRect(10, hy - 5, 2, 11)
+  ctx.fillRect(10, hy - 5, 8, 3)
+  ctx.fillRect(10, hy + 3, 8, 3)
+  ctx.fillStyle = P.brass
+  ctx.fillRect(12, hy - 4, 6, 2)
+  ctx.fillRect(12, hy + 2, 6, 2)
+  ctx.fillRect(10, hy - 4, 2, 8)
+  ctx.fillStyle = P.brassLight
+  ctx.fillRect(12, hy - 4, 1, 1)
+  ctx.fillRect(12, hy + 3, 1, 1)
+  ctx.restore()
+}
+
+function drawSwingTrail(ctx, hx, hy, dir, p) {
+  const a = Math.sin(Math.PI * Math.min(1, Math.max(0, p))) * 0.5
+  if (a <= 0.02) return
+  ctx.save()
+  ctx.globalAlpha = a
+  ctx.fillStyle = '#e8e2d0'
+  ctx.translate(hx, 0)
+  ctx.scale(dir, 1)
+  for (let i = 0; i < 3; i++) {
+    ctx.fillRect(10 + i * 4, hy - 7 - i * 2, 3, 2)
+  }
+  ctx.restore()
+}
+
+function drawGuestWeapon(ctx, variant, cx, feetY, facing, side, gesture, p) {
+  const armColor = variant === 'fan' ? '#6d4a2f' : '#5b6b80'
+  if (gesture && gesture.kind === 'slash') {
+    const dir = facing === 'left' ? -1 : 1
+    const hx = cx + dir * 8
+    const hy = feetY - 20
+    drawArm(ctx, cx + dir * 3, feetY - 18, hx, hy, armColor)
+    if (variant === 'fan') drawWrenchSwing(ctx, hx, hy, dir)
+    else drawSwordSwing(ctx, hx, hy, dir)
+    drawHand(ctx, hx, hy)
+    drawSwingTrail(ctx, hx, hy, dir, p)
+    return
+  }
+
+  let hx
+  let hy
+  let u = 0
+  if (gesture && (gesture.kind === 'chest' || gesture.kind === 'badge')) {
+    u = Math.sin(Math.PI * Math.min(1, Math.max(0, p)))
+    hx = cx + side * 12
+    hy = feetY - 14 - u * 21
+    drawArm(ctx, cx + side * 6, feetY - 20, hx, hy, armColor)
+  } else {
+    hx = cx + side * 13
+    hy = feetY - 14
+    drawArm(ctx, cx + side * 7, feetY - 19, hx, hy, armColor)
+  }
+  if (variant === 'fan') drawWrenchUp(ctx, hx, hy)
+  else drawSwordUp(ctx, hx, hy)
+  drawHand(ctx, hx, hy)
+}
+
+function drawHeldShield(ctx, cx, feetY, facing, blocking, raise = 0, armColor = '#5b6b80') {
+  if (raise > 0.02 && !blocking) {
+    const side = facing === 'right' ? 1 : -1
+    const sx = side > 0 ? cx + 8 : cx - 20
+    const top = feetY - 34 - raise * 18
+    drawArm(
+      ctx,
+      cx + side * 5,
+      feetY - 20,
+      cx + side * 14,
+      top + 15,
+      armColor,
+    )
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(sx - 1, top - 1, 14, 18)
+    ctx.fillStyle = '#94b0c2'
+    ctx.fillRect(sx, top, 12, 16)
+    ctx.fillStyle = '#566c86'
+    ctx.fillRect(sx + 1, top + 1, 2, 14)
+    ctx.fillStyle = '#3b5dc9'
+    ctx.fillRect(sx + 4, top + 7, 4, 5)
+    ctx.fillStyle = '#ffcd75'
+    ctx.fillRect(sx + 5, top + 4, 2, 2)
+    return
+  }
   if (blocking) {
     const sx = facing === 'right' ? cx + 6 : cx - 18
     const top = feetY - 34
@@ -1392,6 +1643,13 @@ export function drawGuest(ctx, guest) {
   const feetY = (guest.y + 1) * CELL - 3 + (guest.offsetY || 0) + crouch
   const facing = guest.facing || 'down'
   const phase = guest.moving ? guest.walkPhase || 0 : 0
+  const gesture = guest.gesture && guest.gesture.ms > 0 ? guest.gesture : null
+  const gp = gesture
+    ? Math.min(1, Math.max(0, gesture.t / gesture.ms))
+    : 0
+  const shieldRaise =
+    gesture && gesture.kind === 'shield' ? Math.sin(Math.PI * gp) : 0
+  const armColor = variant === 'fan' ? '#6d4a2f' : '#5b6b80'
 
   // 脚下像素影子（走动时宽度微变）
   ctx.save()
@@ -1402,9 +1660,11 @@ export function drawGuest(ctx, guest) {
   ctx.fillRect(cx - 6 + wob, feetY + 2, 12 - wob, 1)
   ctx.restore()
 
-  // 朝上时盾先画（背在身后）
-  if (guest.hasShield && facing === 'up' && !guest.blocking) {
-    drawHeldShield(ctx, cx, feetY, facing, false)
+  // 朝上时盾先画（背在身后）；抬盾展示时改到身前
+  const shieldBehind =
+    facing === 'up' && !guest.blocking && shieldRaise <= 0.02
+  if (guest.hasShield && shieldBehind) {
+    drawHeldShield(ctx, cx, feetY, facing, false, 0, armColor)
   }
   if (guest.flash) {
     ctx.save()
@@ -1413,9 +1673,29 @@ export function drawGuest(ctx, guest) {
     ctx.restore()
   }
   drawChar(ctx, sets, palette, facing, phase, cx, feetY)
-  if (guest.hasShield && !(facing === 'up' && !guest.blocking)) {
-    drawHeldShield(ctx, cx, feetY, facing, !!guest.blocking)
+  if (guest.hasShield && !shieldBehind) {
+    drawHeldShield(
+      ctx,
+      cx,
+      feetY,
+      facing,
+      !!guest.blocking,
+      shieldRaise,
+      armColor,
+    )
   }
+
+  // 手里的短剑 / 黄铜扳手：行走、举臂展示与横挥共用同一只手
+  const weaponSide = guest.hasShield
+    ? facing === 'right'
+      ? -1
+      : facing === 'left'
+        ? 1
+        : 1
+    : facing === 'left'
+      ? -1
+      : 1
+  drawGuestWeapon(ctx, variant, cx, feetY, facing, weaponSide, gesture, gp)
 
   if (guest.hasBadge && !guest.hideBadge) {
     // 头顶徽章：轻轻浮动 + 交替小星点
@@ -2287,6 +2567,23 @@ function drawFootprints(ctx, data, now) {
   ctx.restore()
 }
 
+// 行走整格后的小脚尘：三粒细尘，约 220ms 内散开淡出
+function drawWalkDust(ctx, dust) {
+  if (!dust || !dust.length) return
+  ctx.save()
+  for (const d of dust) {
+    const p = Math.min(1, d.t / d.ms)
+    const cx = (d.x + 0.5) * CELL
+    const feet = (d.y + 1) * CELL - 2
+    ctx.globalAlpha = 0.4 * (1 - p)
+    ctx.fillStyle = p < 0.5 ? '#b9b0a2' : '#8e857a'
+    ctx.fillRect(cx - 6 - p * 4, feet - 2 - p * 3, 2, 2)
+    ctx.fillRect(cx + 3 + p * 4, feet - 1 - p * 2, 2, 2)
+    ctx.fillRect(cx - 1 + p * 2, feet + 2, 2, 1)
+  }
+  ctx.restore()
+}
+
 // 呼吸四角标：绿=可放 / 红=不可放
 function drawCornerBrackets(ctx, x, y, valid, now) {
   const px = x * CELL
@@ -2354,6 +2651,17 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
     ctx.fillRect(bx + 8 + spread, by + 3, 2, 2)
     ctx.restore()
   }
+
+  // 路牌方向脉冲与闭箱锁扣微光（只在地图道具上）
+  for (const [key, item] of game.items) {
+    if (key === hiddenKey) continue
+    if (item.type === 'sign') {
+      drawSignPulse(ctx, item.x * CELL, item.y * CELL, item.dir || 0, now)
+    } else if (item.type === 'chest' && !item.opened) {
+      drawChestGlint(ctx, item, now)
+    }
+  }
+
   // 徽章展示台（墙面原位陈列）
   if (scene && scene.stand && scene.standBadge) {
     drawHeroBadge(
@@ -2363,6 +2671,7 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
       1,
     )
   }
+  if (scene && scene.dust) drawWalkDust(ctx, scene.dust)
   if (scene && scene.skeleton) {
     drawSkeleton(
       ctx,
@@ -2375,18 +2684,21 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   }
   if (scene && scene.guest) drawGuest(ctx, scene.guest)
   if (scene && scene.fx) drawFx(ctx, scene.fx)
-  // 开箱金光
+  // 开箱：三粒沿不同抛物线散开的星芒
   if (scene && scene.spark) {
     const p = Math.min(1, scene.spark.t / scene.spark.ms)
-    const sx = scene.spark.x * CELL + 6 + p * 10
-    const sy = scene.spark.y * CELL - 6 - Math.sin(p * Math.PI) * 14
-    ctx.save()
-    ctx.globalAlpha = 1 - p
-    ctx.fillStyle = '#1a1c2c'
-    ctx.fillRect(sx, sy, 6, 6)
-    ctx.fillStyle = '#ffcd75'
-    ctx.fillRect(sx + 1, sy + 1, 4, 4)
-    ctx.restore()
+    const cx = (scene.spark.x + 0.5) * CELL
+    const cy = scene.spark.y * CELL + 18
+    const motes = [
+      [14, 18, -2],
+      [-9, 24, 0],
+      [5, 13, -1],
+    ]
+    for (const [dx, h, dy] of motes) {
+      const x = cx + dx * p
+      const y = cy + dy - Math.sin(p * Math.PI) * h
+      drawStarMote(ctx, x, y, 1 - p)
+    }
   }
   // 徽章从展示台飞到客人头边
   if (scene && scene.badgeFly && scene.guest) {

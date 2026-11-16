@@ -186,6 +186,8 @@ const ORDER_INFO = {
 }
 let guest = null
 let walker = null
+let footDust = []
+let lastGuestTile = null
 let pending = null
 let drag = null
 let bounce = null
@@ -719,6 +721,8 @@ function setOrder(n) {
   doorOpen = 0
   doorTween = null
   resetGearSpin()
+  footDust = []
+  lastGuestTile = null
   clearFootprintPreview()
   pop = null
   skeleton.x = currentMap.skeleton.x
@@ -959,6 +963,8 @@ function startBusiness() {
     moving: false,
   }
   walker = { actions: plan.actions, i: 0, actionStart: simT }
+  footDust = []
+  lastGuestTile = null
   skeleton.pose = 'idle'
   fx = null
   stagger = null
@@ -989,6 +995,8 @@ function resetBusiness() {
   clearGoldFx()
   resetGearSpin()
   setDoor(0, DOOR_CLOSE_MS)
+  footDust = []
+  lastGuestTile = null
   pop = null
   clearFootprintPreview()
   skeleton.pose = 'idle'
@@ -1020,6 +1028,11 @@ btnReset.addEventListener('click', resetBusiness)
 
 // ---------- 行走播放器 ----------
 
+function startGuestGesture(kind, ms, at) {
+  if (!guest) return
+  guest.gesture = { kind, start: at, ms }
+}
+
 function advanceWalker(t) {
   walker.i++
   walker.actionStart = t
@@ -1039,15 +1052,17 @@ function patchNextMove() {
 }
 
 // 踩到未拿走的盾牌架就拿起（与常规步行同一规则）
-function tryPickupAt(t) {
+// tile 是脚下的格子，walkClock 是当前行走时钟（模拟时间），两者不能混用
+function tryPickupAt(tile, walkClock) {
   if (!guest || guest.hasShield) return false
-  const item = game.items.get(tileKey(t.x, t.y))
+  const item = game.items.get(tileKey(tile.x, tile.y))
   if (!item || item.type !== 'shield' || item.taken) return false
   item.taken = true
   guest.hasShield = true
   addLog(game, 'shield')
   updateLogUI()
   showBubble('正好用得上！')
+  startGuestGesture('shield', 600, walkClock)
   return true
 }
 
@@ -1102,7 +1117,8 @@ function stepWalker(t, realT) {
         addLog(game, 'chest')
         updateLogUI()
         sfx.chest()
-        // 真开箱：跳一粒金光
+        // 真开箱：抬臂展示 + 三粒星芒
+        startGuestGesture('chest', 520, t)
         spark = { x: a.x, y: a.y, start: t, ms: 520 }
       }
       advanceWalker(t)
@@ -1121,6 +1137,7 @@ function stepWalker(t, realT) {
           addLog(game, 'shield')
           updateLogUI()
           showBubble(a.say || '正好用得上！')
+          startGuestGesture('shield', 800, t)
         }
       }
       if (!a.picked) {
@@ -1148,6 +1165,7 @@ function stepWalker(t, realT) {
       guest.hasBadge = true
       game.badgeTaken = true
       badgeFly = { start: t, dur: reducedMotion ? 0 : 650 }
+      startGuestGesture('badge', 820, t)
       advanceWalker(t)
       continue
     }
@@ -1166,6 +1184,7 @@ function stepWalker(t, realT) {
           guest.blockMs = a.ms
           sfx.block()
         }
+        if (a.kind === 'slash') startGuestGesture('slash', a.ms, t)
       }
       if (t - walker.actionStart >= a.ms) {
         fx = null
@@ -1239,7 +1258,7 @@ function stepWalker(t, realT) {
         while (a.crossIdx < step) {
           a.crossIdx++
           const enter = { x: farTile.x, y: a.crossFrom.y - a.crossIdx }
-          if (tryPickupAt(enter)) a.crossPicked = true
+          if (tryPickupAt(enter, t)) a.crossPicked = true
         }
         const el = Math.min(340, t - a.phaseStart)
         guest.x = a.crossFrom.x
@@ -1294,7 +1313,7 @@ function stepWalker(t, realT) {
           guest.x = beamTile.x
           guest.y = beamTile.y
           guest.moving = false
-          tryPickupAt(beamTile)
+          tryPickupAt(beamTile, t)
           crossbow.mode = 'firing'
           crossbow.boltStart = t
           a.phase = 'fire'
@@ -1337,7 +1356,7 @@ function stepWalker(t, realT) {
           guest.x = farTile.x
           guest.y = farTile.y
           guest.moving = false
-          tryPickupAt(farTile)
+          tryPickupAt(farTile, t)
           patchNextMove()
           advanceWalker(t)
         }
@@ -1639,6 +1658,41 @@ function frame(realT) {
     }
   }
   stepWalker(t, realT)
+
+  // 人物实际动作：抬臂/横挥展示与整格脚尘
+  let guestGestureScene = null
+  if (guest && guest.gesture) {
+    const el = t - guest.gesture.start
+    if (el >= guest.gesture.ms) guest.gesture = null
+    else {
+      guestGestureScene = {
+        kind: guest.gesture.kind,
+        t: el,
+        ms: guest.gesture.ms,
+      }
+    }
+  }
+  if (guest) {
+    const gx = Math.round(guest.x)
+    const gy = Math.round(guest.y)
+    if (
+      lastGuestTile &&
+      (gx !== lastGuestTile.x || gy !== lastGuestTile.y) &&
+      !reducedMotion
+    ) {
+      footDust.push({ x: guest.x, y: guest.y, start: realT })
+    }
+    lastGuestTile = { x: gx, y: gy }
+  } else {
+    lastGuestTile = null
+  }
+  if (footDust.length) {
+    footDust = footDust.filter((d) => realT - d.start < 220)
+  }
+  const dustScene = footDust.length
+    ? footDust.map((d) => ({ x: d.x, y: d.y, t: realT - d.start, ms: 220 }))
+    : null
+
   if (!bubbleEl.hidden) positionBubble()
   if (fx) {
     fx.t = t - fx.start
@@ -1748,9 +1802,11 @@ function frame(realT) {
           offsetX,
           blocking,
           flash: flash === 'guest',
+          gesture: guestGestureScene,
           hideBadge: !!badgeFlyScene, // 飞行期间只画飞的那枚，落地后才显示头顶徽章
         }
       : null,
+    dust: dustScene,
     skeleton,
     fx,
     guide: guideState,
