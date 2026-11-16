@@ -2,14 +2,18 @@ import './style.css'
 import {
   COLS,
   ROWS,
+  ARCHIVE,
   MARKET,
   MAP2,
   ROOMS,
   SKELETON,
+  TIDE,
   TRAP_STOP,
   buildGrid,
   buildGrid2,
   buildGrid3,
+  buildGrid4,
+  buildGrid5,
 } from './map.js'
 import {
   ITEMS,
@@ -75,6 +79,8 @@ const alarmTextEl = document.getElementById('alarm-text')
 const chestCardEl = document.querySelector('.card[data-type="chest"]')
 const chestCardSealEl = chestCardEl.querySelector('.card-seal')
 const barrierCardEl = document.querySelector('.card[data-type="barrier"]')
+const bridgeCardEl = document.querySelector('.card[data-type="bridge"]')
+const weightCardEl = document.querySelector('.card[data-type="weight"]')
 const avatarFrameEl = document.getElementById('avatar-frame')
 const dropHintEl = document.getElementById('drop-hint')
 const btnOpen = document.getElementById('btn-open')
@@ -88,6 +94,9 @@ const orderTabs = document.getElementById('order-tabs')
 const tab1 = document.getElementById('tab-order1')
 const tab2 = document.getElementById('tab-order2')
 const tab3 = document.getElementById('tab-order3')
+const tab4 = document.getElementById('tab-order4')
+const tab5 = document.getElementById('tab-order5')
+const galleryTitleEl = document.getElementById('gallery-title')
 const certEl = document.getElementById('five-star-cert')
 const guestTitleEl = document.getElementById('guest-title')
 const guestQuoteEl = document.getElementById('guest-quote')
@@ -139,18 +148,45 @@ const MAP_DEFS = {
     arena: MARKET.arena,
     stand: MARKET.stand,
   },
+  4: {
+    skeleton: TIDE.skeleton,
+    arena: TIDE.arena,
+    stand: TIDE.stand,
+  },
+  5: {
+    skeleton: ARCHIVE.skeleton,
+    arena: ARCHIVE.arena,
+    stand: ARCHIVE.stand,
+  },
 }
 const games = {
   1: createGame(buildGrid(), [SKELETON]),
   2: createGame(buildGrid2(), [MAP2.skeleton]),
   3: createGame(buildGrid3(), [MARKET.skeleton]),
+  4: createGame(buildGrid4(), [TIDE.skeleton]),
+  5: createGame(buildGrid5(), [
+    ARCHIVE.skeleton,
+    ...ARCHIVE.archives.map((a) => ({ x: a.x, y: a.y })),
+  ]),
 }
 let game = games[1]
-const bases = { 1: makeBaseMap(1), 2: makeBaseMap(2), 3: makeBaseMap(3) }
+const bases = {
+  1: makeBaseMap(1),
+  2: makeBaseMap(2),
+  3: makeBaseMap(3),
+  4: makeBaseMap(4),
+  5: makeBaseMap(5),
+}
 let base = bases[1]
 let currentMap = MAP_DEFS[1]
 // 余额动效以「上一帧真正显示的数字」为基准：移动/取消不跳钱，换单只换数
-const shownGold = { 1: games[1].gold, 2: games[2].gold, 3: games[3].gold }
+const shownGold = {
+  1: games[1].gold,
+  2: games[2].gold,
+  3: games[3].gold,
+  4: games[4].gold,
+  5: games[5].gold,
+}
 let goldFxTimer = 0
 
 // 调试/测试缝：浏览器控制台与自动化实测可读状态
@@ -161,6 +197,8 @@ window.__ui = () => ({
   order,
   secondUnlocked,
   thirdUnlocked,
+  fourthUnlocked,
+  fifthUnlocked,
   speed,
   simT: Math.round(simT),
   trapMode: crossbow.mode,
@@ -191,6 +229,8 @@ let mode = 'setup'
 let order = 1 // 1 首单剑士 | 2 二单机关迷 | 3 正篇回声集市
 let secondUnlocked = false
 let thirdUnlocked = false
+let fourthUnlocked = false
+let fifthUnlocked = false
 // 营业时钟：simT 按倍速推进（走路/台词/演出），弩机预警仍用真实毫秒
 let speed = 1
 let simT = 0
@@ -247,6 +287,8 @@ function readBestStars() {
     1: Math.max(readOrderBestStars(1), legacy[1]),
     2: Math.max(readOrderBestStars(2), legacy[2]),
     3: readOrderBestStars(3),
+    4: readOrderBestStars(4),
+    5: readOrderBestStars(5),
   }
 }
 
@@ -272,6 +314,8 @@ function mergeBestFromStorage() {
     1: Math.max(bestStars[1], stored[1]),
     2: Math.max(bestStars[2], stored[2]),
     3: Math.max(bestStars[3], stored[3]),
+    4: Math.max(bestStars[4], stored[4]),
+    5: Math.max(bestStars[5], stored[5]),
   }
 }
 
@@ -300,13 +344,20 @@ window.addEventListener('storage', (e) => {
     e.key !== LEGACY_BEST_KEY &&
     e.key !== orderBestKey(1) &&
     e.key !== orderBestKey(2) &&
-    e.key !== orderBestKey(3)
+    e.key !== orderBestKey(3) &&
+    e.key !== orderBestKey(4) &&
+    e.key !== orderBestKey(5)
   ) {
     return
   }
-  const before = `${bestStars[1]}|${bestStars[2]}|${bestStars[3]}`
+  const before = `${bestStars[1]}|${bestStars[2]}|${bestStars[3]}|${bestStars[4]}|${bestStars[5]}`
   mergeBestFromStorage()
-  if (`${bestStars[1]}|${bestStars[2]}|${bestStars[3]}` !== before) updateBestUI()
+  if (
+    `${bestStars[1]}|${bestStars[2]}|${bestStars[3]}|${bestStars[4]}|${bestStars[5]}` !==
+    before
+  ) {
+    updateBestUI()
+  }
 })
 let doorOpen = 0
 let doorTween = null
@@ -337,12 +388,24 @@ const ORDER_INFO = {
     quote:
       '「我是回声集市的淘货客，想拿<em class="kw">勇者徽章</em>。西铺、东铺的<em class="kw">宝箱</em>至少让我翻一只；守卫那锤能<em class="kw">挡</em>就挡。」',
   },
+  4: {
+    title: '今日预约 · 潮汐工',
+    quote:
+      '「我是看潮的匠人，想拿<em class="kw">勇者徽章</em>。先到<em class="kw">水尺</em>记水位；桥板搭好我就从桥上过，不然绕两岸干路。」',
+  },
+  5: {
+    title: '今日预约 · 抄书人',
+    quote:
+      '「我是档案库的抄书人，想拿<em class="kw">勇者徽章</em>。红门黄门的<em class="kw">压板</em>对上就能抄近；档案至少取一份，两间都翻更好。」',
+  },
 }
-const GUEST_VARIANT = { 1: 'knight', 2: 'fan', 3: 'trader' }
+const GUEST_VARIANT = { 1: 'knight', 2: 'fan', 3: 'trader', 4: 'fan', 5: 'trader' }
 const REVIEW_META = {
   1: { title: '新手剑士的评价单', sign: '新手剑士' },
   2: { title: '机关迷的评价单', sign: '机关迷' },
   3: { title: '淘货客的评价单', sign: '淘货客' },
+  4: { title: '潮汐工的评价单', sign: '潮汐工' },
+  5: { title: '抄书人的评价单', sign: '抄书人' },
 }
 let guest = null
 let walker = null
@@ -418,6 +481,18 @@ const CARD_USE_COPY = {
     shield: '摆在客人经过的路上，捡起挡锤',
     sign: '插在罗盘岔口，给客人引路',
     barrier: '占一格挡路，改客人走法',
+  },
+  4: {
+    shield: '摆在客人经过的路上，捡起挡锤',
+    sign: '放在岔口，给客人指一段路',
+    barrier: '占一格挡路，改客人走法',
+    bridge: '拖到标出的桥位，架通整段水',
+  },
+  5: {
+    shield: '摆在客人经过的路上，捡起挡锤',
+    sign: '放在岔口，给客人指一段路',
+    barrier: '占一格挡路，改客人走法',
+    weight: '压上红/黄压板，开对应门',
   },
 }
 
@@ -519,7 +594,7 @@ async function refreshMapArt() {
       await Promise.race([
         document.fonts.load(
           '12px "Fusion Pixel 12px"',
-          '五星好评入口通道侧室挑战房补给廊弩廊训练房军械库回声集市西铺草料东铺陶器',
+          '五星好评入口通道侧室挑战房补给廊弩廊训练房军械库回声集市西铺草料东铺陶器潮汐蓄水厅西岸东岸双锁档案库西档案间东档案间红门黄门',
         ),
         new Promise((_, reject) => setTimeout(() => reject(new Error('font-timeout')), 1500)),
       ])
@@ -531,6 +606,8 @@ async function refreshMapArt() {
     bases[1] = makeBaseMap(1)
     bases[2] = makeBaseMap(2)
     bases[3] = makeBaseMap(3)
+    bases[4] = makeBaseMap(4)
+    bases[5] = makeBaseMap(5)
     base = bases[order]
   } catch (e) {
     /* 重绘失败保留原底图 */
@@ -673,6 +750,11 @@ function updateLogProgress() {
   const chestShops = new Set(
     game.log.filter((e) => e.kind === 'chest' && e.shop).map((e) => e.shop),
   )
+  const archiveSites = new Set(
+    game.log.filter((e) => e.kind === 'archive' && e.site).map((e) => e.site),
+  )
+  const usedDoor =
+    kinds.has('redDoor') || kinds.has('yellowDoor')
   const slots =
     order === 1
       ? [
@@ -686,6 +768,21 @@ function updateLogProgress() {
             { done: kinds.has('block') || chestShops.size >= 2, label: '挡锤或第二箱' },
             { done: kinds.has('badge'), label: '徽章' },
           ]
+        : order === 4
+          ? [
+              { done: kinds.has('gauge'), label: '水尺' },
+              { done: kinds.has('bridge') || kinds.has('block'), label: '跨桥或挡锤' },
+              { done: kinds.has('badge'), label: '徽章' },
+            ]
+          : order === 5
+            ? [
+                { done: archiveSites.size > 0, label: '取档案' },
+                {
+                  done: archiveSites.size >= 2 || (archiveSites.size > 0 && usedDoor),
+                  label: '两档或近门',
+                },
+                { done: kinds.has('badge'), label: '徽章' },
+              ]
         : [
             { done: kinds.has('safe') || kinds.has('supply'), label: '安全通行或绕路' },
             { done: kinds.has('block'), label: '挡锤' },
@@ -794,7 +891,9 @@ function updateBestUI() {
   const tabs = [
     [tab1, '首单 · 剑士', bestStars[1]],
     [tab2, '二单 · 机关迷', bestStars[2]],
-    [tab3, '正篇 · 集市', bestStars[3]],
+    [tab3, '回声集市', bestStars[3]],
+    [tab4, '潮汐蓄水厅', bestStars[4]],
+    [tab5, '双锁档案库', bestStars[5]],
   ]
   for (const [el, base, best] of tabs) {
     el.textContent = base
@@ -809,7 +908,6 @@ function updateBestUI() {
       best > 0 ? `${base}，历史最高 ${best} 星` : `${base}，暂无历史星级`,
     )
   }
-  orderTabs.classList.toggle('with-third', thirdUnlocked)
   certEl.hidden = !(bestStars[1] === 5 && bestStars[2] === 5)
 }
 
@@ -931,12 +1029,13 @@ function showReview() {
   }
   reviewMissing.hidden = r.missing.length === 0
 
-  // 首单四星/五星接二单；二单三星起接正篇；正篇无下一单
+  // 首单四星接二单；之后每单三星起依次接下一单，第五单收尾
   const canNext =
     (order === 1 && r.status === 'rated' && r.stars >= 4) ||
-    (order === 2 && r.status === 'rated' && r.stars >= 3)
+    (order >= 2 && order <= 4 && r.status === 'rated' && r.stars >= 3)
   btnNext.hidden = !canNext
-  btnNext.textContent = order === 2 ? '接第三单' : '接下一单'
+  btnNext.textContent =
+    order === 2 ? '接第三单' : order === 3 ? '接第四单' : order === 4 ? '接第五单' : '接下一单'
 
   reviewCard.hidden = false
   // 羊皮票从上方 16px 落下，约 0.28s
@@ -1002,7 +1101,23 @@ btnNext.addEventListener('click', () => {
     resetBusiness()
     thirdUnlocked = true
     setOrder(3)
-    status('接下了正篇：回声集市。先把客人要的宝箱和路引备好。')
+    status('接下了回声集市。先把客人要的宝箱和路引备好。')
+    return
+  }
+  if (order === 3) {
+    hideReview()
+    resetBusiness()
+    fourthUnlocked = true
+    setOrder(4)
+    status('接下了潮汐蓄水厅。桥板和其他道具共用预算，备好再开门。')
+    return
+  }
+  if (order === 4) {
+    hideReview()
+    resetBusiness()
+    fifthUnlocked = true
+    setOrder(5)
+    status('接下了双锁档案库。重块压对压板，两扇门和后门都看清再开门。')
   }
 })
 
@@ -1164,6 +1279,30 @@ function clearGoldFx() {
   goldDeltaEl.classList.remove('spend', 'refund')
 }
 
+// 正篇第四/五图的特殊落点：桥板只上桥位，重块只上压板
+function specialPlaceReason(type, x, y, ignoreKey = null) {
+  const base = placeReason(game, x, y, ignoreKey)
+  if (order === 4) {
+    const slot = TIDE.bridgeSlots.has(tileKey(x, y))
+    if (type === 'bridge') {
+      if (!slot) return 'bridge-slot'
+      if (base !== 'ok') return base
+      const other = [...game.items.values()].some(
+        (it) =>
+          it.type === 'bridge' &&
+          it.y === y &&
+          tileKey(it.x, it.y) !== ignoreKey,
+      )
+      return other ? 'bridge-taken' : 'ok'
+    }
+    if (slot) return 'bridge-slot'
+  }
+  if (order === 5 && type === 'weight') {
+    if (!ARCHIVE.plates.some((p) => p.x === x && p.y === y)) return 'weight-plate'
+  }
+  return base
+}
+
 function updateHUD() {
   // 只给真实收支做动效：移动/取消/拖错余额不变，换单只换数字
   const prev = shownGold[order]
@@ -1171,7 +1310,13 @@ function updateHUD() {
   shownGold[order] = game.gold
   goldEl.textContent = game.gold
   const chestLocked = order === 2
-  barrierCardEl.hidden = order !== 3
+  const visible =
+    order >= 4
+      ? { shield: true, sign: true, barrier: true, [order === 4 ? 'bridge' : 'weight']: true }
+      : order === 3
+        ? { chest: true, shield: true, sign: true, barrier: true }
+        : { chest: true, shield: true, sign: true }
+  for (const el of cardEls) el.hidden = !visible[el.dataset.type]
   updateCardCopy()
   for (const el of cardEls) {
     const locked = chestLocked && el === chestCardEl
@@ -1256,18 +1401,26 @@ function setOrder(n) {
   guestAvatarEl.src = charAvatarDataURL(variant)
   avatarFrameEl.className = 'avatar-frame ' + variant
   orderTabs.hidden = !secondUnlocked
+  galleryTitleEl.hidden = !secondUnlocked
   ledgerDividerEl.hidden = secondUnlocked
-  orderTabs.classList.toggle('with-third', thirdUnlocked)
   tab3.hidden = !thirdUnlocked
+  tab4.hidden = !fourthUnlocked
+  tab5.hidden = !fifthUnlocked
   tab1.classList.toggle('active', order === 1)
   tab2.classList.toggle('active', order === 2)
   tab3.classList.toggle('active', order === 3)
+  tab4.classList.toggle('active', order === 4)
+  tab5.classList.toggle('active', order === 5)
   status(
-    order === 3
-      ? '宝箱放进西铺或东铺；路牌插在罗盘岔口才引路，隔栅可挡路改道。'
-      : order === 2
-        ? '路牌放在岔口并朝上，客人就绕补给廊；其他方向走近路。'
-        : '把道具拖到空地砖上摆放',
+    order === 5
+      ? '重块压红/黄压板开对应门；路牌可引客人走开启的近门或后门。'
+      : order === 4
+        ? '桥板拖到标出的桥位；客人先看水尺，再跨桥或带盾挡锤。'
+        : order === 3
+          ? '宝箱放进西铺或东铺；路牌插在罗盘岔口才引路，隔栅可挡路改道。'
+          : order === 2
+            ? '路牌放在岔口并朝上，客人就绕补给廊；其他方向走近路。'
+            : '把道具拖到空地砖上摆放',
   )
   updateLogUI()
   updateHUD()
@@ -1391,6 +1544,28 @@ function updateOnboarding() {
     }
     return
   }
+  if (order === 4) {
+    onbStep = 'route'
+    if (!planRoute(game, 4)) {
+      guideState = null
+      setCoach('隔栅封死了去挑战房的路，先挪开或收回一格再开门。', 37, 55)
+    } else {
+      guideState = { room: null, tile: { x: 7, y: 10 } }
+      setCoach('桥板拖到标出的桥位；先到水尺，再跨桥或带盾挡锤。', 36, 58)
+    }
+    return
+  }
+  if (order === 5) {
+    onbStep = 'route'
+    if (!planRoute(game, 5)) {
+      guideState = null
+      setCoach('去挑战房的路被隔栅封死了，先挪开再开门。', 37, 55)
+    } else {
+      guideState = { room: null, tile: { x: 4, y: 8 } }
+      setCoach('重块压红/黄压板开对应门；路牌可引客人走开启的近门或后门。', 34, 58)
+    }
+    return
+  }
   if (onboardingRetired) {
     coachEl.hidden = true
     guideState = null
@@ -1451,12 +1626,16 @@ function trySwitchOrder(n) {
   }
   if (n === 2 && !secondUnlocked) return
   if (n === 3 && !thirdUnlocked) return
+  if (n === 4 && !fourthUnlocked) return
+  if (n === 5 && !fifthUnlocked) return
   setOrder(n)
 }
 
 tab1.addEventListener('click', () => trySwitchOrder(1))
 tab2.addEventListener('click', () => trySwitchOrder(2))
 tab3.addEventListener('click', () => trySwitchOrder(3))
+tab4.addEventListener('click', () => trySwitchOrder(4))
+tab5.addEventListener('click', () => trySwitchOrder(5))
 
 // 营业倍速：随时可切，走动中的时钟不重置也不跳步
 spd1El.addEventListener('click', () => setSpeed(1))
@@ -1519,9 +1698,13 @@ function startBusiness() {
   const plan = planRoute(game, order)
   if (!plan) {
     status(
-      order === 3
-        ? '隔栅封死了去挑战房的路，先挪开或收回一格再开门。'
-        : '客人找不到去挑战房的路',
+      order === 4
+        ? '桥位和干路都走不通，或隔栅封住了必经路，先调整再开门。'
+        : order === 5
+          ? '隔栅把去挑战房的路封死了，先挪开或收回一格再开门。'
+          : order === 3
+            ? '隔栅封死了去挑战房的路，先挪开或收回一格再开门。'
+            : '客人找不到去挑战房的路',
       'fail',
     )
     return
@@ -1604,6 +1787,7 @@ function resetBusiness() {
   trapTimerFillEl.style.transform = 'scaleX(0)'
   runHasTrap = true
   game.badgeTaken = false
+  game.takenArchives.clear()
   restoreItems(game)
   game.log.length = 0
   updateLogUI()
@@ -1718,6 +1902,20 @@ function stepWalker(t, realT) {
         startGuestGesture('chest', 520, t)
         spark = { x: a.x, y: a.y, start: t, ms: 520 }
       }
+      advanceWalker(t)
+      continue
+    }
+    if (a.type === 'archive') {
+      game.takenArchives.add(a.site)
+      addLog(game, 'archive', {
+        site: a.site,
+        name: a.name,
+        label: `取到${a.name}的档案`,
+      })
+      updateLogUI()
+      sfx.chest()
+      startGuestGesture('chest', 520, t)
+      spark = { x: a.x, y: a.y, start: t, ms: 520 }
       advanceWalker(t)
       continue
     }
@@ -2129,7 +2327,11 @@ window.addEventListener('pointermove', (e) => {
     return
   }
   const ignore = drag.source === 'shop' ? null : tileKey(drag.source.x, drag.source.y)
-  drag.target = { x: t.x, y: t.y, valid: placeReason(game, t.x, t.y, ignore) === 'ok' }
+  drag.target = {
+    x: t.x,
+    y: t.y,
+    valid: specialPlaceReason(drag.type, t.x, t.y, ignore) === 'ok',
+  }
   // 合法候选格：先看拟放后的真实路线；不合法则退回当前场布的路线
   if (drag.target.valid) previewRouteForDrag(drag)
   else clearFootprintPreview()
@@ -2197,8 +2399,8 @@ window.addEventListener('pointerup', () => {
     hideGhost()
   } else {
     const reason = d.target
-      ? placeReason(
-          game,
+      ? specialPlaceReason(
+          d.type,
           d.target.x,
           d.target.y,
           d.source === 'shop' ? null : tileKey(d.source.x, d.source.y),
@@ -2220,8 +2422,14 @@ window.addEventListener('pointerup', () => {
         : reason === 'occupied'
           ? '弹回：这格已有道具'
           : reason === 'reserved'
-            ? '弹回：那是骷髅守卫的站位'
-            : '弹回：没落在地图上',
+            ? '弹回：那是守卫或档案的固定位置'
+            : reason === 'bridge-slot'
+              ? '弹回：桥板只能搭在水道标出的整段桥位'
+              : reason === 'bridge-taken'
+                ? '弹回：这段桥位已经搭了桥板'
+                : reason === 'weight-plate'
+                  ? '弹回：重块只能压在红/黄压板上'
+                  : '弹回：没落在地图上',
       'fail',
     )
   }
@@ -2445,6 +2653,22 @@ function frame(realT) {
     shakeY = Math.round(Math.cos(fx.t * 1.1) * amp)
   }
 
+  const tideBridges =
+    order === 4
+      ? [...game.items.entries()]
+          .filter(([key, it]) => it.type === 'bridge' && key !== hiddenKey)
+          .map(([, it]) => ({ x: it.x, y: it.y }))
+      : null
+  const archiveDoors =
+    order === 5
+      ? Object.fromEntries(
+          ARCHIVE.doors.map((d) => {
+            const k = tileKey(d.plate.x, d.plate.y)
+            const it = game.items.get(k)
+            return [d.id, !!(it && it.type === 'weight' && k !== hiddenKey)]
+          }),
+        )
+      : null
   // 整帧清理，防止位移时画布边缘残留上一帧条纹
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   ctx.save()
@@ -2485,6 +2709,9 @@ function frame(realT) {
     hover: mode === 'setup' ? hoverItem : null,
     invalid: invalidScene,
     pop: popScene,
+    bridges: tideBridges,
+    doors: archiveDoors,
+    archives: order === 5 ? game.takenArchives : null,
     stand: currentMap.stand,
     standBadge: !game.badgeTaken,
     badgeFly: badgeFlyScene,
@@ -2510,9 +2737,11 @@ function frame(realT) {
   requestAnimationFrame(frame)
 }
 
-// 用已存历史星恢复进度：二单到过三星（或正篇已有记录）恢复正篇解锁，
-// 首单到过四星恢复二单；无存储时全为 0，照旧从首单流程解锁
-if (bestStars[2] >= 3 || bestStars[3] > 0) thirdUnlocked = true
+// 用已存历史星恢复进度：后一关到过三星即可依次接下一单；
+// 无存储时全为 0，照旧从首单流程解锁
+if (bestStars[4] >= 3 || bestStars[5] > 0) fifthUnlocked = true
+if (bestStars[3] >= 3 || bestStars[4] > 0 || fifthUnlocked) fourthUnlocked = true
+if (bestStars[2] >= 3 || bestStars[3] > 0 || fourthUnlocked) thirdUnlocked = true
 if (bestStars[1] >= 4 || bestStars[2] > 0 || thirdUnlocked) secondUnlocked = true
 
 updateBestUI()
@@ -2523,8 +2752,11 @@ if (bestStars[1] === 5 && bestStars[2] === 5 && !certCelebrated) {
 }
 if (bestStars[1] === 5) onboardingRetired = true
 orderTabs.hidden = !secondUnlocked
+galleryTitleEl.hidden = !secondUnlocked
 ledgerDividerEl.hidden = secondUnlocked
 tab3.hidden = !thirdUnlocked
+tab4.hidden = !fourthUnlocked
+tab5.hidden = !fifthUnlocked
 updateHUD()
 updateLogUI()
 requestAnimationFrame(frame)

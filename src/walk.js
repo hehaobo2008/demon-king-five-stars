@@ -11,6 +11,8 @@ import {
 } from './map.js'
 import { tileKey, isFloor } from './game.js'
 import { planRouteMarket } from './market-route.js'
+import { planRouteTide } from './tide-route.js'
+import { planRouteArchive } from './archive-route.js'
 
 export const WALK = {
   STEP_MS: 170,
@@ -94,6 +96,8 @@ function signPointsToSide(game, junction) {
 export function planRoute(game, order = 1) {
   if (order === 2) return planRouteArmory(game)
   if (order === 3) return planRouteMarket(game)
+  if (order === 4) return planRouteTide(game)
+  if (order === 5) return planRouteArchive(game)
   const grid = buildGrid()
   const actions = []
   let cur = { ...WALK.SPAWN }

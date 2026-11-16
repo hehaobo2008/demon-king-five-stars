@@ -4,9 +4,13 @@ import {
   TILE,
   SCALE,
   MARKET,
+  ARCHIVE,
+  TIDE,
   buildGrid,
   buildGrid2,
   buildGrid3,
+  buildGrid4,
+  buildGrid5,
 } from './map.js'
 
 const CELL = TILE * SCALE
@@ -26,9 +30,20 @@ const FLOORS = {
   plaza: { base: '#6b5942', light: '#78654d', dark: '#5b4b38' }, // 南广场暖石
   westShop: { base: '#3f5a44', light: '#4a684f', dark: '#344c39' }, // 西铺青绿
   eastShop: { base: '#6a4730', light: '#78533a', dark: '#5b3c28' }, // 东铺暖褐
+  tideWest: { base: '#54604e', light: '#5f6d58', dark: '#485343' }, // 潮汐西岸
+  tideEast: { base: '#665444', light: '#726050', dark: '#594a3b' }, // 潮汐东岸
+  tideCross: { base: '#565b66', light: '#616774', dark: '#4a4f59' }, // 南北干路
+  library: { base: '#4a3d32', light: '#56483b', dark: '#3e332a' }, // 档案库木廊
 }
 
-const WOOD_ZONES = new Set(['supply', 'entrance', 'sideB', 'westShop', 'eastShop'])
+const WOOD_ZONES = new Set([
+  'supply',
+  'entrance',
+  'sideB',
+  'westShop',
+  'eastShop',
+  'library',
+])
 
 const WALL = {
   top: '#2b2835',
@@ -67,6 +82,19 @@ export const TORCHES_BY_ORDER = {
     { x: 9, y: 0 }, // 挑战房北墙
     { x: 16, y: 0 },
   ],
+  4: [
+    { x: 7, y: 1 }, // 北墙
+    { x: 16, y: 1 },
+    { x: 3, y: 4 }, // 西岸
+    { x: 21, y: 3 }, // 东岸挑战房外
+  ],
+  5: [
+    { x: 3, y: 3 }, // 外圈西北
+    { x: 9, y: 3 }, // 北廊
+    { x: 18, y: 4 }, // 东廊
+    { x: 3, y: 12 }, // 外圈西
+    { x: 10, y: 6 }, // 内圈
+  ],
 }
 
 // 黄灯位置：暖光在角色层之后再叠加，灯架本体留在底图
@@ -82,6 +110,14 @@ export const LAMPS_BY_ORDER = {
   3: [
     { x: 3, y: 9 }, // 西铺
     { x: 20, y: 9 }, // 东铺
+  ],
+  4: [
+    { x: 6, y: 9 }, // 西岸
+    { x: 18, y: 8 }, // 东岸
+  ],
+  5: [
+    { x: 7, y: 6 }, // 内圈
+    { x: 20, y: 8 }, // 东廊
   ],
 }
 
@@ -983,6 +1019,50 @@ function drawBarrierItem(ctx, ox, oy) {
   ctx.fillRect(ox + 23, oy + 21, 1, 1)
 }
 
+// 桥板卡片/拖拽图标：一段带栏杆的木桥
+function drawBridgeItem(ctx, ox, oy) {
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(ox + 3, oy + 14, 26, 9)
+  ctx.fillStyle = '#6d4a2f'
+  ctx.fillRect(ox + 4, oy + 15, 24, 7)
+  for (let i = 0; i < 5; i++) {
+    ctx.fillStyle = '#8a5f38'
+    ctx.fillRect(ox + 5 + i * 5, oy + 15, 4, 2)
+    ctx.fillStyle = '#4a3020'
+    ctx.fillRect(ox + 5 + i * 5, oy + 19, 4, 1)
+  }
+  ctx.fillStyle = '#c9a24b'
+  ctx.fillRect(ox + 7, oy + 9, 3, 10)
+  ctx.fillRect(ox + 22, oy + 9, 3, 10)
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(ox + 7, oy + 8, 3, 2)
+  ctx.fillRect(ox + 22, oy + 8, 3, 2)
+  ctx.fillStyle = '#e8d8b0'
+  ctx.fillRect(ox + 10, oy + 11, 12, 1)
+  ctx.fillRect(ox + 10, oy + 13, 12, 1)
+}
+
+// 重块卡片/拖拽图标：石墩 + 黄铜箍 + 绳
+function drawWeightItem(ctx, ox, oy) {
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(ox + 6, oy + 8, 20, 18)
+  ctx.fillStyle = '#6c6a72'
+  ctx.fillRect(ox + 7, oy + 9, 18, 16)
+  ctx.fillStyle = '#8b8992'
+  ctx.fillRect(ox + 8, oy + 10, 16, 2)
+  ctx.fillStyle = '#4b4952'
+  ctx.fillRect(ox + 8, oy + 22, 16, 2)
+  ctx.fillStyle = '#3a2a18'
+  ctx.fillRect(ox + 9, oy + 14, 14, 2)
+  ctx.fillStyle = '#c9a24b'
+  ctx.fillRect(ox + 10, oy + 14, 2, 2)
+  ctx.fillRect(ox + 20, oy + 14, 2, 2)
+  ctx.fillStyle = '#e8d8b0'
+  ctx.fillRect(ox + 13, oy + 12, 6, 1)
+  ctx.fillStyle = '#a34a3a'
+  ctx.fillRect(ox + 15, oy + 18, 2, 3)
+}
+
 export function drawItem(ctx, type, ox, oy, dir = 0, opened = false, taken = false) {
   drawItemShadow(ctx, ox, oy)
   if (type === 'sign') {
@@ -1008,6 +1088,14 @@ export function drawItem(ctx, type, ox, oy, dir = 0, opened = false, taken = fal
   }
   if (type === 'barrier') {
     drawBarrierItem(ctx, ox, oy)
+    return
+  }
+  if (type === 'bridge') {
+    drawBridgeItem(ctx, ox, oy)
+    return
+  }
+  if (type === 'weight') {
+    drawWeightItem(ctx, ox, oy)
     return
   }
 }
@@ -1964,6 +2052,8 @@ export function itemDataURL(type, dir = 0) {
 export function makeBaseMap(order = 1) {
   if (order === 2) return makeArmoryBase()
   if (order === 3) return makeMarketBase()
+  if (order === 4) return makeTideBase()
+  if (order === 5) return makeArchiveBase()
   const c = document.createElement('canvas')
   c.width = COLS * CELL
   c.height = ROWS * CELL
@@ -2354,6 +2444,291 @@ function makeMarketBase() {
   ])
 
   return c
+}
+
+// ===== 正篇第二图：潮汐蓄水厅底图 =====
+function drawWaterTile(ctx, grid, x, y) {
+  const ux = x * 8
+  const uy = y * 8
+  const v = (x * 13 + y * 29) % 5
+  const base = v === 0 ? '#2b526b' : v === 2 ? '#23455c' : '#274b62'
+  rect(ctx, ux, uy, 8, 8, base)
+  alphaRect(ctx, ux, uy, 8, 1, '#4f8ba0', 0.28)
+  const wy = 2 + v
+  alphaRect(ctx, ux + 1, uy + wy, 5, 1, '#6fb6c4', 0.55)
+  alphaRect(ctx, ux + 2, uy + wy + 3, 4, 1, '#3f7890', 0.6)
+  alphaRect(ctx, ux + (x % 2 ? 0 : 5), uy + wy + 1, 3, 1, '#8fd0d4', 0.28)
+  if (v === 3) rect(ctx, ux + 5, uy + 5, 1, 1, '#9fd6d8')
+  const near = (xx, yy) =>
+    yy >= 0 &&
+    yy < ROWS &&
+    xx >= 0 &&
+    xx < COLS &&
+    grid[yy][xx] !== 'water' &&
+    grid[yy][xx] !== 'bridgeSlot'
+  if (near(x, y - 1)) alphaRect(ctx, ux, uy, 8, 1, '#b9e4e2', 0.38)
+  if (near(x, y + 1)) alphaRect(ctx, ux, uy + 7, 8, 1, '#b9e4e2', 0.3)
+  if (near(x - 1, y)) alphaRect(ctx, ux, uy, 1, 8, '#b9e4e2', 0.24)
+  if (near(x + 1, y)) alphaRect(ctx, ux + 7, uy, 1, 8, '#b9e4e2', 0.24)
+}
+
+function drawBridgeSite(ctx, span) {
+  const uy = span.y * 8
+  for (let x = span.x1; x <= span.x2; x++) {
+    const ux = x * 8
+    rect(ctx, ux + 1, uy + 4, 6, 1, '#6d4a2f')
+    rect(ctx, ux + 2, uy + 4, 2, 1, '#c9a24b')
+  }
+  const left = (span.x1 - 1) * 8
+  const right = (span.x2 + 1) * 8
+  rect(ctx, left + 2, uy + 1, 2, 7, '#2a2117')
+  rect(ctx, left + 2, uy + 2, 1, 5, '#8a5f38')
+  rect(ctx, right + 4, uy + 1, 2, 7, '#2a2117')
+  rect(ctx, right + 4, uy + 2, 1, 5, '#8a5f38')
+  rect(ctx, left + 2, uy + 1, 2, 1, '#c9a24b')
+  rect(ctx, right + 4, uy + 1, 2, 1, '#c9a24b')
+}
+
+function drawWaterGauge(ctx, tx, ty) {
+  const x = tx * 8
+  const y = ty * 8
+  rect(ctx, x + 3, y, 2, 8, '#2a2117')
+  rect(ctx, x + 4, y + 1, 1, 6, '#c9a24b')
+  rect(ctx, x + 2, y + 1, 4, 1, '#e8c97a')
+  rect(ctx, x + 2, y + 3, 3, 1, '#8a6a2b')
+  rect(ctx, x + 2, y + 5, 3, 1, '#8a6a2b')
+  rect(ctx, x + 1, y + 4, 1, 3, '#e8e0cf')
+  rect(ctx, x + 1, y + 6, 2, 1, '#4f8ba0')
+  rect(ctx, x + 6, y + 2, 1, 1, '#a34a3a')
+}
+
+function makeTideBase() {
+  const c = document.createElement('canvas')
+  c.width = COLS * CELL
+  c.height = ROWS * CELL
+  const ctx = c.getContext('2d')
+  const grid = buildGrid4()
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const z = grid[y][x]
+      if (z === 'wall') continue
+      if (z === 'water' || z === 'bridgeSlot') drawWaterTile(ctx, grid, x, y)
+      else drawFloorTile(ctx, grid, x, y, z)
+    }
+  }
+
+  drawWelcomeMat(ctx, TIDE.spawn.x, TIDE.spawn.y)
+  for (const span of TIDE.spans) drawBridgeSite(ctx, span)
+  drawWaterGauge(ctx, TIDE.gauge.x, TIDE.gauge.y)
+
+  drawCarpetBase(ctx, 19 * 8, 4 * 8, 4 * 8, 3 * 8)
+  drawDemonCrest(ctx, 21 * 8, 5 * 8 + 8)
+  drawGuardPedestal(ctx, TIDE.skeleton.x, TIDE.skeleton.y)
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (grid[y][x] === 'wall') drawWallTile(ctx, grid, x, y)
+    }
+  }
+
+  drawBadgeStand(ctx, TIDE.stand.x, TIDE.stand.y)
+  for (const l of LAMPS_BY_ORDER[4]) drawLamp(ctx, l.x, l.y)
+  for (const t of TORCHES_BY_ORDER[4]) {
+    const mode =
+      t.y + 1 < ROWS && grid[t.y + 1][t.x] !== 'wall' ? 'bracket' : 'brazier'
+    drawTorch(ctx, t.x, t.y, mode)
+  }
+
+  drawVignette(ctx)
+  drawWallLabels(ctx, [
+    { text: '潮汐蓄水厅', x: 12, y: 1.4 },
+    { text: '西岸', x: 4.5, y: 12.4 },
+    { text: '东岸', x: 18.5, y: 12.4 },
+    { text: '挑战房', x: 21.5, y: 3.4 },
+  ])
+  return c
+}
+
+// ===== 正篇第三图：双锁档案库底图 =====
+function drawArchiveDoorFrame(ctx, door) {
+  const x = door.x * 8
+  const y = door.y * 8
+  const col = door.id === 'red' ? '#a34a3a' : '#c9a24b'
+  const hi = door.id === 'red' ? '#c96a52' : '#e8c97a'
+  rect(ctx, x, y, 8, 1, '#2a2117')
+  rect(ctx, x, y + 7, 8, 1, '#2a2117')
+  rect(ctx, x, y + 1, 1, 6, col)
+  rect(ctx, x + 7, y + 1, 1, 6, col)
+  rect(ctx, x + 1, y + 1, 6, 1, hi)
+  rect(ctx, x + 1, y + 6, 6, 1, col)
+  rect(ctx, x + 2, y + 3, 4, 2, '#3a2a18')
+}
+
+function drawArchivePlate(ctx, plate, doorId) {
+  const x = plate.x * 8
+  const y = plate.y * 8
+  const col = doorId === 'red' ? '#a34a3a' : '#c9a24b'
+  rect(ctx, x + 1, y + 1, 6, 6, '#241c14')
+  rect(ctx, x + 1, y + 1, 6, 1, col)
+  rect(ctx, x + 1, y + 6, 6, 1, col)
+  rect(ctx, x + 1, y + 1, 1, 6, col)
+  rect(ctx, x + 6, y + 1, 1, 6, col)
+  rect(ctx, x + 3, y + 3, 2, 2, col)
+  rect(ctx, x + 2, y + 2, 1, 1, '#e8d8b0')
+  rect(ctx, x + 5, y + 5, 1, 1, '#e8d8b0')
+}
+
+function drawArchivePedestal(ctx, a) {
+  const x = a.x * 8
+  const y = a.y * 8
+  rect(ctx, x + 2, y + 3, 4, 4, '#2a2117')
+  rect(ctx, x + 2, y + 3, 4, 1, '#8a6a2b')
+  rect(ctx, x + 3, y + 4, 2, 2, '#c9a24b')
+  rect(ctx, x + 3, y + 6, 2, 1, '#4e3826')
+}
+
+function drawLibraryShelf(ctx, tx, ty) {
+  const x = tx * 8
+  const y = ty * 8
+  rect(ctx, x + 1, y + 1, 6, 6, '#2a2117')
+  rect(ctx, x + 1, y + 2, 6, 1, '#6d4a2f')
+  rect(ctx, x + 1, y + 4, 6, 1, '#6d4a2f')
+  const cols = ['#8c3b35', '#3f6b34', '#8a6a2b', '#566c86']
+  for (let i = 0; i < 4; i++) {
+    ctx.fillStyle = cols[i]
+    ctx.fillRect((x + 2 + i) * U, (y + 2.5) * U, U, U)
+    ctx.fillRect((x + 2 + i) * U, (y + 4.5) * U, U, U)
+  }
+}
+
+function makeArchiveBase() {
+  const c = document.createElement('canvas')
+  c.width = COLS * CELL
+  c.height = ROWS * CELL
+  const ctx = c.getContext('2d')
+  const grid = buildGrid5()
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (grid[y][x] !== 'wall') drawFloorTile(ctx, grid, x, y, grid[y][x])
+    }
+  }
+
+  drawWelcomeMat(ctx, ARCHIVE.spawn.x, ARCHIVE.spawn.y)
+
+  drawCarpetBase(ctx, 6 * 8, 8 * 8, 4 * 8, 2 * 8)
+  drawCarpetBase(ctx, 13 * 8, 8 * 8, 4 * 8, 2 * 8)
+  drawDemonCrest(ctx, 8 * 8, 9 * 8)
+  drawDemonCrest(ctx, 15 * 8, 9 * 8)
+
+  for (const d of ARCHIVE.doors) drawArchiveDoorFrame(ctx, d)
+  for (const p of ARCHIVE.plates) drawArchivePlate(ctx, p, p.door)
+  for (const a of ARCHIVE.archives) drawArchivePedestal(ctx, a)
+
+  drawCarpetBase(ctx, 19 * 8, 4 * 8, 4 * 8, 3 * 8)
+  drawDemonCrest(ctx, 21 * 8, 5 * 8 + 8)
+  drawGuardPedestal(ctx, ARCHIVE.skeleton.x, ARCHIVE.skeleton.y)
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (grid[y][x] === 'wall') drawWallTile(ctx, grid, x, y)
+    }
+  }
+
+  drawBadgeStand(ctx, ARCHIVE.stand.x, ARCHIVE.stand.y)
+  drawLibraryShelf(ctx, 3, 4)
+  drawLibraryShelf(ctx, 5, 7)
+  drawLibraryShelf(ctx, 9, 3)
+  drawLibraryShelf(ctx, 18, 3)
+  drawLibraryShelf(ctx, 4, 12)
+  drawLibraryShelf(ctx, 20, 12)
+
+  for (const l of LAMPS_BY_ORDER[5]) drawLamp(ctx, l.x, l.y)
+  for (const t of TORCHES_BY_ORDER[5]) {
+    const mode =
+      t.y + 1 < ROWS && grid[t.y + 1][t.x] !== 'wall' ? 'bracket' : 'brazier'
+    drawTorch(ctx, t.x, t.y, mode)
+  }
+
+  drawVignette(ctx)
+  drawWallLabels(ctx, [
+    { text: '双锁档案库', x: 12, y: 1.4 },
+    { text: '挑战房', x: 21.5, y: 3.3 },
+  ])
+  drawAwningText(ctx, '西档案间', 7, 6.7, '#e8dcc0')
+  drawAwningText(ctx, '东档案间', 16, 11.5, '#f0d9a5')
+  drawAwningText(ctx, '红门', 8, 6.3, '#c96a52')
+  drawAwningText(ctx, '黄门', 15, 9.5, '#e8c97a')
+  return c
+}
+
+// ===== 动态机关层：桥板、门扇、档案 =====
+export function drawTideBridges(ctx, bridges) {
+  if (!bridges || !bridges.length) return
+  const ys = new Set()
+  for (const b of bridges) {
+    if (ys.has(b.y)) continue
+    ys.add(b.y)
+    const span = TIDE.spans.find((s) => s.y === b.y)
+    if (!span) continue
+    const y = span.y * 8
+    const x1 = span.x1 * 8
+    const x2 = (span.x2 + 1) * 8
+    rect(ctx, x1 - 1, y + 2, x2 - x1 + 2, 1, '#3a2718')
+    rect(ctx, x1, y + 3, x2 - x1, 5, '#6d4a2f')
+    for (let i = 0; i < (x2 - x1) / 4; i++) {
+      rect(ctx, x1 + i * 4, y + 3, 1, 5, '#4a3020')
+      rect(ctx, x1 + i * 4 + 1, y + 3, 3, 1, '#8a5f38')
+    }
+    rect(ctx, x1, y + 2, x2 - x1, 1, '#c9a24b')
+    rect(ctx, x1, y + 8, x2 - x1, 1, '#c9a24b')
+    rect(ctx, x1 - 1, y + 1, 1, 8, '#2a2117')
+    rect(ctx, x2, y + 1, 1, 8, '#2a2117')
+    rect(ctx, x1 - 1, y, 1, 2, '#ffcd75')
+    rect(ctx, x2, y, 1, 2, '#ffcd75')
+  }
+}
+
+export function drawArchiveDoors(ctx, doors) {
+  if (!doors) return
+  for (const d of ARCHIVE.doors) {
+    const open = !!doors[d.id]
+    const x = d.x * 8
+    const y = d.y * 8
+    const col = d.id === 'red' ? '#a34a3a' : '#c9a24b'
+    const hi = d.id === 'red' ? '#c96a52' : '#e8c97a'
+    if (!open) {
+      rect(ctx, x + 1, y + 1, 6, 6, col)
+      rect(ctx, x + 1, y + 1, 6, 1, hi)
+      rect(ctx, x + 3, y + 1, 1, 6, '#6b2f2b')
+      rect(ctx, x + 5, y + 3, 1, 1, '#2a2117')
+      rect(ctx, x + 2, y + 5, 2, 1, '#6b2f2b')
+    } else {
+      rect(ctx, x + 1, y + 1, 1, 6, col)
+      rect(ctx, x + 2, y + 2, 1, 4, hi)
+      ctx.save()
+      ctx.globalAlpha = 0.16
+      ctx.fillStyle = '#ffcd75'
+      ctx.fillRect(x + 2 * U, y + 1 * U, 5 * U, 6 * U)
+      ctx.restore()
+    }
+  }
+}
+
+export function drawArchiveBooks(ctx, taken) {
+  for (const a of ARCHIVE.archives) {
+    const x = a.x * 8
+    const y = a.y * 8
+    if (taken && taken.has(a.id)) {
+      rect(ctx, x + 2, y + 2, 4, 1, '#3a2a18')
+      continue
+    }
+    rect(ctx, x + 2, y + 1, 4, 2, '#e8d8b0')
+    rect(ctx, x + 2, y + 1, 1, 2, '#a34a3a')
+    rect(ctx, x + 5, y + 1, 1, 2, '#c9a24b')
+    rect(ctx, x + 3, y + 0, 2, 1, '#3a2a18')
+  }
 }
 
 // 机械弩：底座 + 横扫当前地图通道的射线；cb: { mode, boltT, x, y, beamLeft, stopX }
@@ -2779,6 +3154,91 @@ const LOG_ICON_ART = {
       '............',
     ],
   },
+  gauge: {
+    pal: { o: '#1a1c2c', y: '#c9a24b', Y: '#ffcd75', B: '#4f8ba0' },
+    rows: [
+      '............',
+      '....oo......',
+      '....oy...Y..',
+      '....oy......',
+      '....oyy.....',
+      '....oBo.....',
+      '....oy......',
+      '....oyy.....',
+      '....oBo.....',
+      '....oy......',
+      '....oo......',
+      '............',
+    ],
+  },
+  bridge: {
+    pal: { o: '#1a1c2c', y: '#8a5f38', Y: '#c9a24b' },
+    rows: [
+      '............',
+      '..o......o..',
+      '..o......o..',
+      '.oyyyyyyyyo.',
+      '.oYyYyYyYYo.',
+      '.oYyYyYyYYo.',
+      '.oyyyyyyyyo.',
+      '..o......o..',
+      '..o......o..',
+      '............',
+      '............',
+      '............',
+    ],
+  },
+  archive: {
+    pal: { o: '#1a1c2c', Y: '#e8d8b0', R: '#a34a3a', y: '#c9a24b' },
+    rows: [
+      '............',
+      '..oooooooo..',
+      '.oYYYYYYYYo.',
+      '.oYRRYYYYYo.',
+      '.oYYYYYYYYo.',
+      '.oYYYyYYYYo.',
+      '.oYYYYYYYYo.',
+      '.oYRRYYYYYo.',
+      '.oYYYYYYYYo.',
+      '..oooooooo..',
+      '............',
+      '............',
+    ],
+  },
+  redDoor: {
+    pal: { o: '#1a1c2c', R: '#a34a3a', r: '#c96a52', y: '#c9a24b' },
+    rows: [
+      '............',
+      '.oooooooooo.',
+      '.oRRRRRRRRo.',
+      '.oRrrrrrrRo.',
+      '.oRrRRRRrRo.',
+      '.oRrRooRrRo.',
+      '.oRrRooRrRo.',
+      '.oRrRRRRrRo.',
+      '.oRRRRRRRRo.',
+      '.oyyyyyyyyo.',
+      '..oooooooo..',
+      '............',
+    ],
+  },
+}
+LOG_ICON_ART.yellowDoor = {
+  pal: { o: '#1a1c2c', Y: '#c9a24b', y: '#e8c97a' },
+  rows: [
+    '............',
+    '.oooooooooo.',
+    '.oYYYYYYYYo.',
+    '.oYyyyyyyYo.',
+    '.oYyYYYYyYo.',
+    '.oYyYooYyYo.',
+    '.oYyYooYyYo.',
+    '.oYyYYYYyYo.',
+    '.oYYYYYYYYo.',
+    '.oyyyyyyyyo.',
+    '..oooooooo..',
+    '............',
+  ],
 }
 LOG_ICON_ART.shot = LOG_ICON_ART.hit
 
@@ -3147,6 +3607,7 @@ function drawCornerBrackets(ctx, x, y, valid, now) {
 
 export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene = null) {
   ctx.drawImage(base, 0, 0)
+  if (scene && scene.bridges) drawTideBridges(ctx, scene.bridges)
   const now = performance.now()
   const still = !!(scene && scene.still)
   if (scene && scene.door) drawDoor(ctx, scene.door)
@@ -3160,6 +3621,7 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   if (scene && scene.hover) drawHoverGlow(ctx, scene.hover)
   for (const [key, item] of game.items) {
     if (key === hiddenKey) continue
+    if (item.type === 'bridge') continue
     if (scene && scene.pop && scene.pop.key === key) continue
     drawItem(ctx, item.type, item.x * CELL, item.y * CELL, item.dir, item.opened, item.taken)
   }
@@ -3212,6 +3674,8 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
       1,
     )
   }
+  if (scene && scene.doors) drawArchiveDoors(ctx, scene.doors)
+  if (scene && scene.archives) drawArchiveBooks(ctx, scene.archives)
   if (scene && scene.dust) drawWalkDust(ctx, scene.dust)
   if (scene && scene.skeleton) {
     drawSkeleton(

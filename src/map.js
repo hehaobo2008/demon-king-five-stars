@@ -204,3 +204,132 @@ export function buildGrid() {
   }
   return grid
 }
+// ===== 正篇第二图：潮汐蓄水厅 =====
+// 草图原样转成 24×18：~ 水，+ 整段可架桥位，M 水尺，E 入口，A 挑战。
+const TIDE_ROWS = [
+  '########################',
+  '########################',
+  '####.................###',
+  '####.####~~~~~~~.###.###',
+  '####.####~~~~~~~.....###',
+  '##.......~~~~~~~.#.....#',
+  '##...###.+++++++.#...A.#',
+  '##...###.~~~~~~~.#.....#',
+  '####.###.~~~~~~~.......#',
+  '####.....~~~~~~~.###.###',
+  '####.#.M.~~~~~~~.###.###',
+  '####.#...+++++++.###.###',
+  '####.....~~~~~~~.#.....#',
+  '#....####~~~~~~~.......#',
+  '#.E..####~~~~~~~.#.....#',
+  '#....................###',
+  '#....###################',
+  '########################',
+]
+
+export const TIDE = {
+  spawn: { x: 2, y: 14 },
+  gauge: { x: 7, y: 10 },
+  challengeStop: { x: 21, y: 6 },
+  skeleton: { x: 22, y: 6 },
+  stand: { x: 23, y: 6 },
+  arena: { x: 19, y: 7 },
+  spans: [
+    { y: 6, x1: 9, x2: 15 },
+    { y: 11, x1: 9, x2: 15 },
+  ],
+  bridgeSlots: new Set(
+    TIDE_ROWS.flatMap((row, y) =>
+      [...row].map((ch, x) => (ch === '+' ? x + ',' + y : null)).filter(Boolean),
+    ),
+  ),
+}
+
+export function buildGrid4() {
+  const grid = Array.from({ length: ROWS }, () => Array(COLS).fill('wall'))
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const ch = TIDE_ROWS[y][x]
+      if (ch === '#') continue
+      if (ch === '~') {
+        grid[y][x] = 'water'
+        continue
+      }
+      if (ch === '+') {
+        grid[y][x] = 'bridgeSlot'
+        continue
+      }
+      grid[y][x] = x < 9 ? 'tideWest' : x > 15 ? 'tideEast' : 'tideCross'
+    }
+  }
+  return grid
+}
+
+// ===== 正篇第三图：双锁档案库 =====
+// R/Y 近门，r/y 对应压板，a 两份档案，E 入口，A 挑战。
+const ARCHIVE_ROWS = [
+  '########################',
+  '########################',
+  '##....................##',
+  '##.#######.##########.##',
+  '##.#######.#######.....#',
+  '##.#######.#######...A.#',
+  '##.###.................#',
+  '##.###.##R###.###.###.##',
+  '##..r...a..##.....###.##',
+  '##.###.....##..a..###.##',
+  '##.###.###.###Y##..y..##',
+  '##.###............###.##',
+  '##.########.#########.##',
+  '##.########.#########.##',
+  '#....######.#########.##',
+  '#.....................##',
+  '#.E..###################',
+  '########################',
+]
+
+export const ARCHIVE = {
+  spawn: { x: 2, y: 16 },
+  challengeStop: { x: 21, y: 5 },
+  skeleton: { x: 22, y: 5 },
+  stand: { x: 23, y: 5 },
+  arena: { x: 19, y: 5.5 },
+  archives: [
+    { id: 'west', x: 8, y: 8, name: '西档案间', short: '西档' },
+    { id: 'east', x: 15, y: 9, name: '东档案间', short: '东档' },
+  ],
+  doors: [
+    {
+      id: 'red',
+      color: '红',
+      x: 9,
+      y: 7,
+      plate: { x: 4, y: 8 },
+      name: '红门',
+      archive: 'west',
+    },
+    {
+      id: 'yellow',
+      color: '黄',
+      x: 14,
+      y: 10,
+      plate: { x: 19, y: 10 },
+      name: '黄门',
+      archive: 'east',
+    },
+  ],
+  plates: [
+    { x: 4, y: 8, door: 'red' },
+    { x: 19, y: 10, door: 'yellow' },
+  ],
+}
+
+export function buildGrid5() {
+  const grid = Array.from({ length: ROWS }, () => Array(COLS).fill('wall'))
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (ARCHIVE_ROWS[y][x] !== '#') grid[y][x] = 'library'
+    }
+  }
+  return grid
+}

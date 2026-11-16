@@ -105,7 +105,153 @@ function buildMarketReview(log) {
   return { status: 'rated', stars, events, eventKinds, comment, missing }
 }
 
+
+// ===== 正篇第二图：潮汐蓄水厅 =====
+// 徽章 3 星；实际走到水尺 4 星；再实际跨桥或拾盾挡锤 5 星。
+function buildTideReview(log) {
+  const kinds = new Set(log.map((e) => e.kind))
+  const hasBadge = kinds.has('badge')
+  const hasGauge = kinds.has('gauge')
+  const hasBridge = kinds.has('bridge')
+  const hasBlock = kinds.has('block')
+  const events = []
+  const eventKinds = []
+  const push = (kind, text) => {
+    if (events.length >= 4) return
+    events.push(text)
+    eventKinds.push(kind)
+  }
+  if (hasBadge) push('badge', '拿到了勇者徽章')
+  if (hasGauge) push('gauge', '走到水尺看了水位')
+  if (hasBridge) push('bridge', '从架好的桥板跨过水道')
+  if (hasBlock) push('block', '挡住了守卫的大锤')
+  else if (kinds.has('hit')) push('hit', '挨了守卫一锤')
+  if (events.length < 4 && kinds.has('shield')) push('shield', '在路边捡到了盾牌')
+
+  if (!hasBadge) {
+    return {
+      status: 'incomplete',
+      stars: 0,
+      events,
+      eventKinds,
+      comment: '',
+      missing: ['预约未完成：没拿到勇者徽章'],
+    }
+  }
+
+  let stars = 3
+  if (hasGauge) stars += 1
+  if (hasGauge && (hasBridge || hasBlock)) stars += 1
+
+  const missing = []
+  if (!hasGauge) {
+    missing.push('第四颗星：没走到水尺')
+    missing.push('第五颗星：先到水尺，再实际跨桥或挡锤')
+  } else if (!hasBridge && !hasBlock) {
+    missing.push('第五颗星：搭桥后实际跨过去，或提前拾盾挡锤')
+  }
+
+  let comment
+  if (stars === 5) {
+    comment = hasBridge
+      ? '水尺看过了，桥也真踩过去了，这一趟潮汐厅没白来。'
+      : '水尺看过了，守卫那锤也挡住了，桥钱省得正好。'
+  } else if (stars === 4) {
+    comment = hasBlock
+      ? '水尺和锤子都顾上了，可惜没真从桥上走一趟。'
+      : '水尺看过了，桥没架，锤也没挡住，下回得补一样。'
+  } else {
+    comment = hasBlock
+      ? '锤是挡住了，可水尺没走到，连这厅的水位都没看着。'
+      : '一路摸到挑战房，水尺没看，桥也没走，锤更没挡住。'
+  }
+
+  return { status: 'rated', stars, events, eventKinds, comment, missing }
+}
+
+// ===== 正篇第三图：双锁档案库 =====
+// 徽章 3 星；实际取到一份档案 4 星；拿齐两份，或一份并实际穿过开启的近门 5 星。
+function buildArchiveReview(log) {
+  const kinds = new Set(log.map((e) => e.kind))
+  const hasBadge = kinds.has('badge')
+  const archiveEntries = log.filter((e) => e.kind === 'archive')
+  const sites = new Set(archiveEntries.map((e) => e.site).filter(Boolean))
+  const doors = []
+  if (kinds.has('redDoor')) doors.push('红门')
+  if (kinds.has('yellowDoor')) doors.push('黄门')
+  const hasArchive = archiveEntries.length > 0
+  const hasTwo = sites.size >= 2
+  const hasDoor = doors.length > 0
+  const hasBlock = kinds.has('block')
+
+  const events = []
+  const eventKinds = []
+  const push = (kind, text) => {
+    if (events.length >= 4) return
+    events.push(text)
+    eventKinds.push(kind)
+  }
+  if (hasBadge) push('badge', '拿到了勇者徽章')
+  const shownSites = new Set()
+  for (const e of archiveEntries) {
+    const site = e.site || e.x + ',' + e.y
+    if (shownSites.has(site)) continue
+    shownSites.add(site)
+    const name = e.name || (e.site === 'west' ? '西档案间' : e.site === 'east' ? '东档案间' : '档案间')
+    push('archive', `取到${name}的档案`)
+    if (shownSites.size >= 2) break
+  }
+  if (doors.length) push('door', `穿过${doors.join('、')}`)
+  if (hasBlock) push('block', '挡住了守卫的大锤')
+  else if (kinds.has('hit')) push('hit', '挨了守卫一锤')
+  if (events.length < 4 && kinds.has('shield')) push('shield', '在路边捡到了盾牌')
+
+  if (!hasBadge) {
+    return {
+      status: 'incomplete',
+      stars: 0,
+      events,
+      eventKinds,
+      comment: '',
+      missing: ['预约未完成：没拿到勇者徽章'],
+    }
+  }
+
+  let stars = 3
+  if (hasArchive) stars += 1
+  if (hasTwo || (hasArchive && hasDoor)) stars += 1
+
+  const missing = []
+  if (!hasArchive) {
+    missing.push('第四颗星：去西档案间或东档案间取一份档案')
+    missing.push('第五颗星：拿齐两份，或拿一份并实际穿过开启的近门')
+  } else if (!hasTwo && !hasDoor) {
+    missing.push('第五颗星：再拿另一间档案，或打开一扇门并实际穿过去')
+  }
+
+  let comment
+  if (stars === 5) {
+    if (hasTwo) {
+      comment = '东西两间档案都翻到了，门开不开都拦不住我。'
+    } else if (doors.includes('红门')) {
+      comment = '借着红门抄近路，一份档案也够我交差。'
+    } else {
+      comment = '黄门一开，我直接穿过去把档案取了。'
+    }
+  } else if (stars === 4) {
+    comment = '只翻到一间档案，两扇门也没走过，下次得把另一间也找出来。'
+  } else if (hasBlock) {
+    comment = '锤是挡住了，可档案一份没取，两扇门也没摸到。'
+  } else {
+    comment = '一路走到挑战房，档案没取着，门也没开，锤还没挡住。'
+  }
+
+  return { status: 'rated', stars, events, eventKinds, comment, missing }
+}
+
 export function buildReview(log, order = 1) {
+  if (order === 4) return buildTideReview(log)
+  if (order === 5) return buildArchiveReview(log)
   if (order === 3) return buildMarketReview(log)
   const kinds = new Set(log.map((e) => e.kind))
   const hasBadge = kinds.has('badge')

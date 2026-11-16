@@ -901,22 +901,30 @@ h1 {
   color: var(--ink);
 }
 
-/* 订单页签贴住预约，像同一本账簿 */
+/* 图册：有名字的关卡列表，保留已有最高星 */
+.gallery-title {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--brass);
+  margin: 1px 0 -2px;
+}
+
 .order-tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 4px;
-  margin: 0 0 -2px;
+  margin: 0;
   position: relative;
   z-index: 1;
 }
 
 .tab {
-  flex: 1;
+  flex: none;
   min-width: 0;
   white-space: nowrap;
   font-family: inherit;
-  font-size: 11px;
-  padding: 6px 4px;
+  font-size: 10.5px;
+  padding: 5px 3px;
   background: #2a2117;
   color: #b9a77f;
   border: 2px solid var(--wood);
@@ -950,16 +958,6 @@ h1 {
   color: #8a5a18;
 }
 
-/* 三张页签同排时收一点字号/内边距，375 宽也不挤 */
-.order-tabs.with-third .tab {
-  font-size: 10.5px;
-  padding: 6px 2px;
-  letter-spacing: 0;
-}
-
-.order-tabs.with-third .tab-best {
-  font-size: 9.5px;
-}
 
 /* 两单历史最高都到五星后点亮；刷新与重玩都保留 */
 .five-star-cert {

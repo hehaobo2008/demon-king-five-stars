@@ -6,6 +6,8 @@ export const ITEMS = {
   shield: { name: '盾牌架', price: 30 },
   sign: { name: '路牌', price: 15 },
   barrier: { name: '隔栅', price: 15 },
+  bridge: { name: '桥板', price: 25 },
+  weight: { name: '重块', price: 20 },
 }
 
 export const START_GOLD = 100
@@ -21,6 +23,11 @@ export const EVENT_LABELS = {
   safe: '平安通过机械弩',
   shot: '被弩箭射中',
   supply: '绕行补给廊',
+  gauge: '走到水尺',
+  bridge: '跨过桥板',
+  archive: '取到档案',
+  redDoor: '穿过红门',
+  yellowDoor: '穿过黄门',
 }
 
 export const tileKey = (x, y) => x + ',' + y
@@ -33,6 +40,7 @@ export function createGame(grid, reserved = []) {
     log: [],
     reserved,
     badgeTaken: false,
+    takenArchives: new Set(),
   }
 }
 
@@ -48,7 +56,8 @@ export function isFloor(grid, x, y) {
     y < grid.length &&
     x >= 0 &&
     x < grid[0].length &&
-    grid[y][x] !== 'wall'
+    grid[y][x] !== 'wall' &&
+    grid[y][x] !== 'water'
   )
 }
 
