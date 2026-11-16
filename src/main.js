@@ -185,7 +185,9 @@ let reviewStampPlayed = false
 let reviewTimers = []
 
 // 历史最高星与五星认证：本地存储不可用时只保留本次会话
-const BEST_STARS_KEY = 'demon-king-five-stars:best'
+// 旧版把两单合在一个 JSON 键里；新版每单一个键，两个页面各写各的，读取时取高
+const LEGACY_BEST_KEY = 'demon-king-five-stars:best'
+const BEST_ORDER_PREFIX = 'demon-king-five-stars:best:'
 const CERT_SEEN_KEY = 'demon-king-five-stars:cert'
 
 function clampBestStars(value) {
@@ -194,9 +196,14 @@ function clampBestStars(value) {
   return Math.min(5, n)
 }
 
-function readBestStars() {
+function orderBestKey(n) {
+  return BEST_ORDER_PREFIX + n
+}
+
+// 旧合并键只读兼容：以前存的两单星数继续读得出来
+function readLegacyBestStars() {
   try {
-    const raw = window.localStorage.getItem(BEST_STARS_KEY)
+    const raw = window.localStorage.getItem(LEGACY_BEST_KEY)
     if (!raw) return { 1: 0, 2: 0 }
     const data = JSON.parse(raw)
     return { 1: clampBestStars(data && data[1]), 2: clampBestStars(data && data[2]) }
@@ -205,14 +212,43 @@ function readBestStars() {
   }
 }
 
-function saveBestStars() {
+function readOrderBestStars(n) {
   try {
-    window.localStorage.setItem(
-      BEST_STARS_KEY,
-      JSON.stringify({ 1: bestStars[1], 2: bestStars[2] }),
-    )
+    return clampBestStars(window.localStorage.getItem(orderBestKey(n)))
   } catch (e) {
-    /* 无存储环境只影响跨刷新记忆 */
+    return 0
+  }
+}
+
+function readBestStars() {
+  const legacy = readLegacyBestStars()
+  return {
+    1: Math.max(readOrderBestStars(1), legacy[1]),
+    2: Math.max(readOrderBestStars(2), legacy[2]),
+  }
+}
+
+// 只写当前订单自己的键：先读一次已存值，取最高后再落盘
+function saveOrderBestStars(n, stars) {
+  const stored = readOrderBestStars(n)
+  const legacy = readLegacyBestStars()[n]
+  const next = Math.max(bestStars[n] || 0, clampBestStars(stars), stored, legacy)
+  bestStars[n] = next
+  if (next > stored) {
+    try {
+      window.localStorage.setItem(orderBestKey(n), String(next))
+    } catch (e) {
+      /* 无存储环境保留本次会话内的最高分 */
+    }
+  }
+}
+
+// 结算后重新读两张订单的键，合并另一页面刚写下的更高分
+function mergeBestFromStorage() {
+  const stored = readBestStars()
+  bestStars = {
+    1: Math.max(bestStars[1], stored[1]),
+    2: Math.max(bestStars[2], stored[2]),
   }
 }
 
@@ -234,6 +270,16 @@ function saveCertSeen() {
 
 let bestStars = readBestStars()
 let certCelebrated = readCertSeen()
+
+// 另一页面结算时实时并入更高分；只刷新最高星与认证，不改当前页面的解锁/摆放
+window.addEventListener('storage', (e) => {
+  if (e.key !== LEGACY_BEST_KEY && e.key !== orderBestKey(1) && e.key !== orderBestKey(2)) {
+    return
+  }
+  const before = `${bestStars[1]}|${bestStars[2]}`
+  mergeBestFromStorage()
+  if (`${bestStars[1]}|${bestStars[2]}` !== before) updateBestUI()
+})
 let doorOpen = 0
 let doorTween = null
 let gearSpinStart = performance.now()
@@ -718,11 +764,11 @@ function playCertConfetti() {
 
 function recordBestStars(review) {
   if (!review || review.status !== 'rated' || !review.stars) return
+  // 结算前先并入另一页面已写下的更高分，再只写本单自己的键
+  mergeBestFromStorage()
   const wasCertified = bestStars[1] === 5 && bestStars[2] === 5
-  if (review.stars > bestStars[order]) {
-    bestStars[order] = review.stars
-    saveBestStars()
-  }
+  saveOrderBestStars(order, review.stars)
+  mergeBestFromStorage()
   updateBestUI()
   const certified = bestStars[1] === 5 && bestStars[2] === 5
   if (certified && !wasCertified && !certCelebrated) {
