@@ -35,13 +35,14 @@
           <div id="review-card" class="review" hidden>
             <div class="receipt">
               <div class="review-panel">
+                <div class="receipt-binding" aria-hidden="true"><span></span><span></span></div>
                 <div class="review-head">
                   <div class="review-title" id="review-title">新手剑士的评价单</div>
                   <div id="review-seal" class="review-seal">五星神店</div>
                 </div>
                 <div id="review-stars" class="review-stars" role="img" aria-label="星级"></div>
                 <ul id="review-events" class="review-events"></ul>
-                <p id="review-comment" class="review-comment"></p>
+                <p id="review-comment" class="review-comment"><span id="review-comment-text"></span><span id="review-sign" class="review-sign" hidden></span></p>
                 <ul id="review-missing" class="review-missing"></ul>
                 <div class="btn-row">
                   <button id="btn-next" class="btn primary" hidden>接下一单</button>
@@ -68,6 +69,10 @@
               <button id="tab-order1" class="tab active">首单 · 剑士</button>
               <button id="tab-order2" class="tab">第二单 · 机关迷</button>
             </div>
+            <div id="five-star-cert" class="five-star-cert" role="status" aria-label="五星魔王认证" hidden>
+              <span class="cert-stars" aria-hidden="true">★★★★★</span>
+              <span class="cert-label">五星魔王认证</span>
+            </div>
           </div>
 
           <div class="ledger-main">
@@ -83,7 +88,7 @@
                 <button id="btn-open" class="btn primary">开门营业</button>
                 <button id="btn-reset" class="btn">重新布置</button>
               </div>
-              <div class="trap-slot">
+              <div class="trap-slot" hidden>
                 <button id="btn-trap" class="btn trap" disabled hidden>
                   <span id="trap-label" class="trap-label">弩机待命 · 客人靠近可拉闸</span>
                   <span id="trap-timer-fill" class="trap-timer-fill" aria-hidden="true"></span>

@@ -127,6 +127,13 @@ function hiss(ac, opts) {
   src.stop(t0 + dur + 0.02)
 }
 
+// 挨锤 / 中箭：160 Hz 急降到 45 Hz 的闷响，外加一小把短噪声
+function muffledThud(ac) {
+  tone(ac, { f0: 160, f1: 45, dur: 0.2, type: 'triangle', gain: 0.58 })
+  tone(ac, { f0: 92, f1: 40, dur: 0.16, type: 'sine', gain: 0.3, delay: 0.006 })
+  hiss(ac, { dur: 0.055, gain: 0.1, freq: 280, q: 0.55 })
+}
+
 function play(fn) {
   if (muted) return
   const ac = ensureContext()
@@ -193,6 +200,66 @@ export const sfx = {
       tone(ac, { f0: 920, f1: 640, dur: 0.16, type: 'square', gain: 0.2 })
       tone(ac, { f0: 1380, f1: 1040, dur: 0.14, type: 'triangle', gain: 0.12, delay: 0.008 })
       hiss(ac, { dur: 0.035, gain: 0.09, freq: 3200, q: 0.7 })
+    })
+  },
+
+  // 挨锤 / 中箭：同一种低压闷响
+  hit() {
+    play(muffledThud)
+  },
+  shot() {
+    play(muffledThud)
+  },
+
+  // 徽章四音：523 / 659 / 784 / 1046 Hz
+  badge() {
+    play((ac) => {
+      const notes = [523, 659, 784, 1046]
+      notes.forEach((f, i) => {
+        tone(ac, {
+          f0: f,
+          f1: f,
+          dur: i === 3 ? 0.22 : 0.11,
+          type: 'triangle',
+          gain: i === 3 ? 0.17 : 0.13,
+          delay: i * 0.09,
+        })
+      })
+    })
+  },
+
+  // 弩机预警：两声短滴答
+  warn() {
+    play((ac) => {
+      tone(ac, { f0: 1180, f1: 1060, dur: 0.032, type: 'square', gain: 0.13 })
+      tone(ac, { f0: 1180, f1: 1060, dur: 0.032, type: 'square', gain: 0.13, delay: 0.12 })
+    })
+  },
+
+  // 退款：1200 / 1600 Hz 两声金币
+  refund() {
+    play((ac) => {
+      tone(ac, { f0: 1200, f1: 1200, dur: 0.06, type: 'triangle', gain: 0.14 })
+      tone(ac, { f0: 1600, f1: 1600, dur: 0.08, type: 'triangle', gain: 0.12, delay: 0.065 })
+    })
+  },
+
+  // 非法弹回：220 / 150 Hz 低木声
+  reject() {
+    play((ac) => {
+      tone(ac, { f0: 220, f1: 190, dur: 0.1, type: 'triangle', gain: 0.34 })
+      tone(ac, { f0: 150, f1: 120, dur: 0.13, type: 'sine', gain: 0.24, delay: 0.09 })
+      hiss(ac, { dur: 0.025, gain: 0.045, freq: 420, q: 0.7 })
+    })
+  },
+
+  // 每颗实得的星：木鱼一声，从 300 Hz 起逐颗升 60 Hz
+  star(index = 0) {
+    play((ac) => {
+      const f = 300 + Math.max(0, Math.min(4, index)) * 60
+      tone(ac, { f0: f, f1: f * 0.82, dur: 0.085, type: 'triangle', gain: 0.25 })
+      tone(ac, { f0: f * 2, f1: f * 2, dur: 0.025, type: 'sine', gain: 0.055, delay: 0.002 })
+      hiss(ac, { dur: 0.018, gain: 0.032, freq: 950, q: 1.3 })
     })
   },
 

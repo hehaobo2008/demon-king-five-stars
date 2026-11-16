@@ -68,12 +68,14 @@ const dropHintEl = document.getElementById('drop-hint')
 const btnOpen = document.getElementById('btn-open')
 const btnReset = document.getElementById('btn-reset')
 const btnTrap = document.getElementById('btn-trap')
+const trapSlotEl = document.querySelector('.trap-slot')
 const trapLabelEl = document.getElementById('trap-label')
 const trapTimerFillEl = document.getElementById('trap-timer-fill')
 const btnNext = document.getElementById('btn-next')
 const orderTabs = document.getElementById('order-tabs')
 const tab1 = document.getElementById('tab-order1')
 const tab2 = document.getElementById('tab-order2')
+const certEl = document.getElementById('five-star-cert')
 const guestTitleEl = document.getElementById('guest-title')
 const guestQuoteEl = document.getElementById('guest-quote')
 const guestQuoteTextEl = document.getElementById('guest-quote-text')
@@ -84,11 +86,14 @@ const logProgressEl = document.getElementById('log-progress')
 const logStarEls = [...logProgressEl.querySelectorAll('.log-star')]
 const runLogEl = document.querySelector('.run-log')
 const reviewCard = document.getElementById('review-card')
+const reviewReceiptEl = reviewCard.querySelector('.receipt')
 const reviewTitle = document.getElementById('review-title')
 const reviewSealEl = document.getElementById('review-seal')
 const reviewStars = document.getElementById('review-stars')
 const reviewEvents = document.getElementById('review-events')
 const reviewComment = document.getElementById('review-comment')
+const reviewCommentTextEl = document.getElementById('review-comment-text')
+const reviewSignEl = document.getElementById('review-sign')
 const reviewMissing = document.getElementById('review-missing')
 const btnAgain = document.getElementById('btn-again')
 const ghost = document.getElementById('ghost')
@@ -155,6 +160,8 @@ window.__ui = () => ({
     : null,
   skeletonPose: skeleton.pose,
   logKinds: game.log.map((e) => e.kind),
+  bestStars: { ...bestStars },
+  certified: !certEl.hidden,
   bubble: bubbleEl.hidden ? null : bubbleEl.textContent,
   done: mode === 'business' && !walker && !!guest,
 })
@@ -175,6 +182,58 @@ let trapUiSig = ''
 let logShownOrder = 0
 let logShownCount = 0
 let reviewStampPlayed = false
+let reviewTimers = []
+
+// 历史最高星与五星认证：本地存储不可用时只保留本次会话
+const BEST_STARS_KEY = 'demon-king-five-stars:best'
+const CERT_SEEN_KEY = 'demon-king-five-stars:cert'
+
+function clampBestStars(value) {
+  const n = Math.floor(Number(value))
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return Math.min(5, n)
+}
+
+function readBestStars() {
+  try {
+    const raw = window.localStorage.getItem(BEST_STARS_KEY)
+    if (!raw) return { 1: 0, 2: 0 }
+    const data = JSON.parse(raw)
+    return { 1: clampBestStars(data && data[1]), 2: clampBestStars(data && data[2]) }
+  } catch (e) {
+    return { 1: 0, 2: 0 }
+  }
+}
+
+function saveBestStars() {
+  try {
+    window.localStorage.setItem(
+      BEST_STARS_KEY,
+      JSON.stringify({ 1: bestStars[1], 2: bestStars[2] }),
+    )
+  } catch (e) {
+    /* 无存储环境只影响跨刷新记忆 */
+  }
+}
+
+function readCertSeen() {
+  try {
+    return window.localStorage.getItem(CERT_SEEN_KEY) === '1'
+  } catch (e) {
+    return false
+  }
+}
+
+function saveCertSeen() {
+  try {
+    window.localStorage.setItem(CERT_SEEN_KEY, '1')
+  } catch (e) {
+    /* 无存储环境不影响游戏 */
+  }
+}
+
+let bestStars = readBestStars()
+let certCelebrated = readCertSeen()
 let doorOpen = 0
 let doorTween = null
 let gearSpinStart = performance.now()
@@ -588,21 +647,114 @@ function updateLogUI() {
 
 // ---------- 评价单 ----------
 
+function clearReviewTimers() {
+  for (const id of reviewTimers) clearTimeout(id)
+  reviewTimers = []
+}
+
+function scheduleReview(fn, ms) {
+  const id = setTimeout(() => {
+    try {
+      fn()
+    } catch (e) {
+      /* 单次演出失败不能阻断游戏 */
+    }
+  }, Math.max(0, ms))
+  reviewTimers.push(id)
+}
+
+// 页签显示各单历史最高星；两单都五星时点亮认证
+function updateBestUI() {
+  const tabs = [
+    [tab1, '首单 · 剑士', bestStars[1]],
+    [tab2, '第二单 · 机关迷', bestStars[2]],
+  ]
+  for (const [el, base, best] of tabs) {
+    el.textContent = base
+    if (best > 0) {
+      const span = document.createElement('span')
+      span.className = 'tab-best'
+      span.textContent = ` ★${best}`
+      el.appendChild(span)
+    }
+    el.setAttribute(
+      'aria-label',
+      best > 0 ? `${base}，历史最高 ${best} 星` : `${base}，暂无历史星级`,
+    )
+  }
+  certEl.hidden = !(bestStars[1] === 5 && bestStars[2] === 5)
+}
+
+// 首次点亮认证时的少量金色像素纸屑（减少动效时不放）
+// 评价单已经打开时从票面上沿落下，窄屏也能看见；否则退到侧栏认证处
+function playCertConfetti() {
+  if (reducedMotion) return
+  const onTicket = !reviewCard.hidden
+  const rect = onTicket
+    ? reviewReceiptEl.getBoundingClientRect()
+    : certEl.getBoundingClientRect()
+  if (!rect.width || !rect.height) return
+  const layer = document.createElement('div')
+  layer.className = 'cert-confetti-layer'
+  layer.setAttribute('aria-hidden', 'true')
+  const colors = ['#ffcd75', '#e8c97a', '#c9a24b', '#fff3c0']
+  for (let i = 0; i < 14; i++) {
+    const bit = document.createElement('span')
+    bit.className = 'cert-confetti-bit'
+    const spread = onTicket ? rect.width * 0.84 : rect.width * 0.7
+    const left = onTicket ? rect.left + rect.width * 0.08 : rect.left + rect.width * 0.15
+    bit.style.left = Math.round(left + Math.random() * spread) + 'px'
+    const topBase = onTicket ? rect.top - 2 : rect.top + 4
+    bit.style.top = Math.round(Math.max(4, topBase) + Math.random() * 8) + 'px'
+    bit.style.background = colors[i % colors.length]
+    bit.style.setProperty('--dx', Math.round((Math.random() * 2 - 1) * (onTicket ? 30 : 56)) + 'px')
+    bit.style.setProperty('--dy', Math.round(28 + Math.random() * 38) + 'px')
+    bit.style.setProperty('--delay', Math.round(Math.random() * 90) + 'ms')
+    layer.appendChild(bit)
+  }
+  document.body.appendChild(layer)
+  setTimeout(() => layer.remove(), 1100)
+}
+
+function recordBestStars(review) {
+  if (!review || review.status !== 'rated' || !review.stars) return
+  const wasCertified = bestStars[1] === 5 && bestStars[2] === 5
+  if (review.stars > bestStars[order]) {
+    bestStars[order] = review.stars
+    saveBestStars()
+  }
+  updateBestUI()
+  const certified = bestStars[1] === 5 && bestStars[2] === 5
+  if (certified && !wasCertified && !certCelebrated) {
+    certCelebrated = true
+    saveCertSeen()
+    playCertConfetti()
+  } else if (certified && !certCelebrated) {
+    // 已有认证但没记过庆祝：只补标记，不在刷新时重放纸屑
+    certCelebrated = true
+    saveCertSeen()
+  }
+}
+
 function showReview() {
+  clearReviewTimers()
   const r = buildReview(game.log, order)
   // 首单真的拿过五星后才收起上手引导；3/4 星回来仍按现状提示
   if (order === 1 && r.status === 'rated' && r.stars === 5) onboardingRetired = true
   reviewTitle.textContent = order === 2 ? '机关迷的评价单' : '新手剑士的评价单'
 
-  // 右上角真实星级印章
+  // 右上角真实星级印章：先留空，最后一颗星落稳后再盖
   const sealText = { 5: '五星神店', 4: '瑕不掩瑜', 3: '差强人意' }[r.stars]
-  reviewSealEl.className = 'review-seal' + (r.status === 'incomplete' ? ' void' : '')
+  reviewSealEl.className =
+    'review-seal' + (r.status === 'incomplete' ? ' void' : '') + ' pending'
   reviewSealEl.innerHTML =
     r.status === 'incomplete' ? '预约<br>未完成' : sealText || '尚未评星'
-  void reviewSealEl.offsetWidth
-  reviewSealEl.classList.add('stamped')
 
-  // 五颗独立星块：得几颗依次落墨，第五颗多一点金光
+  // 五颗独立星块：每 140ms 落一颗，每颗落墨约 200ms
+  const DROP_MS = 280
+  const STAR_GAP_MS = 140
+  const STAR_INK_MS = 200
+  const base = reducedMotion ? 0 : DROP_MS
   const awarded = r.status === 'rated' ? r.stars : 0
   reviewStars.textContent = ''
   reviewStars.setAttribute(
@@ -615,7 +767,7 @@ function showReview() {
       'star-chip' +
       (i < awarded ? ' inked' : '') +
       (awarded === 5 && i === 4 ? ' gold' : '')
-    chip.style.setProperty('--d', i * 150 + 'ms')
+    chip.style.setProperty('--d', base + i * STAR_GAP_MS + 'ms')
     chip.setAttribute('aria-hidden', 'true')
     const ghost = document.createElement('span')
     ghost.className = 'star-ghost'
@@ -637,7 +789,11 @@ function showReview() {
     reviewEvents.appendChild(li)
   })
 
-  reviewComment.textContent = r.comment ? '「' + r.comment + '」' : ''
+  reviewCommentTextEl.textContent = r.comment ? '「' + r.comment + '」' : ''
+  reviewSignEl.textContent = r.comment
+    ? `（${order === 2 ? '机关迷' : '新手剑士'} 留）`
+    : ''
+  reviewSignEl.hidden = !r.comment
   reviewComment.hidden = !r.comment
 
   reviewMissing.textContent = ''
@@ -652,15 +808,50 @@ function showReview() {
   btnNext.hidden = !(order === 1 && r.status === 'rated' && r.stars >= 4)
 
   reviewCard.hidden = false
-  // 一张票只盖一次章；只随真评价出现
-  if (!reviewStampPlayed) {
-    reviewStampPlayed = true
-    sfx.stamp()
+  // 羊皮票从上方 16px 落下，约 0.28s
+  reviewReceiptEl.classList.remove('is-dropping')
+  void reviewReceiptEl.offsetWidth
+  reviewReceiptEl.classList.add('is-dropping')
+
+  // 票面已打开后再记录历史星：首次认证的彩纸才能从票上沿落下
+  recordBestStars(r)
+
+  // 每颗实得的星：落墨时一声木鱼，从 300 Hz 逐颗升 60 Hz
+  for (let i = 0; i < awarded; i++) {
+    scheduleReview(() => sfx.star(i), base + i * STAR_GAP_MS + 20)
   }
+  // 最后一颗落稳后再盖章、响声；只响一次
+  const stampDelay = awarded
+    ? base + (awarded - 1) * STAR_GAP_MS + STAR_INK_MS + 50
+    : base + 180
+  scheduleReview(() => {
+    reviewSealEl.classList.remove('pending')
+    if (reviewStampPlayed) return
+    reviewStampPlayed = true
+    void reviewSealEl.offsetWidth
+    reviewSealEl.classList.add('stamped')
+    sfx.stamp()
+  }, stampDelay)
+
+  // 主按钮优先接下一单，否则再布置；聚焦后原生键位直接生效
+  const primary = btnNext.hidden ? btnAgain : btnNext
+  primary.focus({ preventScroll: true })
 }
 
 function hideReview() {
   reviewCard.hidden = true
+  // 提前关票或重开：取消还没落下的星声与盖章
+  clearReviewTimers()
+  reviewReceiptEl.classList.remove('is-dropping')
+}
+
+function reviewPrimaryButton() {
+  return btnNext.hidden ? btnAgain : btnNext
+}
+
+function triggerReviewPrimary() {
+  if (reviewCard.hidden) return
+  reviewPrimaryButton().click()
 }
 
 btnAgain.addEventListener('click', resetBusiness)
@@ -672,6 +863,22 @@ btnNext.addEventListener('click', () => {
   secondUnlocked = true
   setOrder(2)
   status('接下了第二单：机关迷。弩机已上膛，布置好再开门营业。')
+})
+
+// 评价单打开时：Enter / 空格 / 点遮罩空白处走主按钮；已聚焦的票内按钮保持原生键位
+reviewCard.addEventListener('click', (e) => {
+  if (e.target === reviewCard) triggerReviewPrimary()
+})
+
+window.addEventListener('keydown', (e) => {
+  if (reviewCard.hidden) return
+  if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return
+  if (e.repeat) return
+  const active = document.activeElement
+  if (active && reviewCard.contains(active) && active.tagName === 'BUTTON') return
+  if (active && active !== document.body && typeof active.blur === 'function') active.blur()
+  e.preventDefault()
+  triggerReviewPrimary()
 })
 
 // 按真实 planRoute 生成脚印序列、事件标记和未经过的盾架
@@ -852,6 +1059,8 @@ function setSpeed(n) {
 }
 
 function updateTrapButton() {
+  // 还没解锁二单时，首单预约卡不留空白拉闸行；解锁后两单同高
+  trapSlotEl.hidden = !secondUnlocked
   // 布置期也把待命条留在预约区：二单玩家开门前就知道可以走近路拉闸
   const show = secondUnlocked && order === 2 && (mode === 'setup' || runHasTrap)
   btnTrap.hidden = !show
@@ -1372,6 +1581,7 @@ function stepWalker(t, realT) {
       game.badgeTaken = true
       badgeFly = { start: t, dur: reducedMotion ? 0 : 650 }
       startGuestGesture('badge', 820, t)
+      sfx.badge()
       advanceWalker(t)
       continue
     }
@@ -1390,6 +1600,7 @@ function stepWalker(t, realT) {
           guest.blockMs = a.ms
           sfx.block()
         }
+        if (a.kind === 'hit') sfx.hit()
         if (a.kind === 'slash') startGuestGesture('slash', a.ms, t)
       }
       if (t - walker.actionStart >= a.ms) {
@@ -1424,6 +1635,7 @@ function stepWalker(t, realT) {
         crossbow.pressed = false
         crossbow.windowOpen = true
         crossbow.warnStart = realT // 真实毫秒：倍速不影响四秒窗口
+        sfx.warn()
         updateTrapButton()
         // 警报期间收起白色台词气泡，让客人、亮线和弩机露出来
         hideBubble()
@@ -1533,6 +1745,7 @@ function stepWalker(t, realT) {
           crossbow.mode = 'spent'
           fx = { kind: 'hit', at: beamTile, start: t, ms: 380 }
           stagger = { start: t, ms: 460 }
+          sfx.shot()
           showBubble('中箭了！', null, 'hurt')
           status('没来得及暂停，客人中箭了')
           addLog(game, 'shot')
@@ -1781,6 +1994,7 @@ window.addEventListener('pointerup', () => {
     } else {
       retrieveItem(game, d.source.x, d.source.y)
       hideGhost()
+      sfx.refund()
       status(`收回${def.name}，退款 +${def.price} 金`)
     }
   } else if (d.target && d.target.valid) {
@@ -1817,6 +2031,7 @@ window.addEventListener('pointerup', () => {
         ms: 150,
       }
     }
+    sfx.reject()
     status(
       reason === 'wall'
         ? '弹回：墙上摆不了道具'
@@ -2113,6 +2328,20 @@ function frame(realT) {
   requestAnimationFrame(frame)
 }
 
+updateBestUI()
+if (bestStars[1] === 5 && bestStars[2] === 5 && !certCelebrated) {
+  // 已有认证但没有庆祝记录（旧存档/降级）：点亮即可，不在刷新时重放彩带
+  certCelebrated = true
+  saveCertSeen()
+}
+// 用已存历史星恢复进度：首单到过四星即恢复二单解锁，到过五星继续收起教学
+// 无存储时 bestStars 全为 0，照旧从首单流程解锁
+if (bestStars[1] >= 4 || bestStars[2] > 0) {
+  secondUnlocked = true
+  orderTabs.hidden = false
+  ledgerDividerEl.hidden = true
+}
+if (bestStars[1] === 5) onboardingRetired = true
 updateHUD()
 updateLogUI()
 requestAnimationFrame(frame)

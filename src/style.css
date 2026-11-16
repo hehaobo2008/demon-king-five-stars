@@ -937,6 +937,87 @@ h1 {
   border-bottom-color: #ead7ac;
 }
 
+.tab-best {
+  color: #e8c97a;
+  letter-spacing: 0;
+}
+
+.tab.active .tab-best {
+  color: #8a5a18;
+}
+
+/* 两单历史最高都到五星后点亮；刷新与重玩都保留 */
+.five-star-cert {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 4px 7px;
+  border: 1.5px solid #8f6d31;
+  background: linear-gradient(180deg, #3b2a17, #241a10);
+  color: #e8c97a;
+  font-size: 11px;
+  letter-spacing: 1px;
+  box-shadow:
+    inset 0 0 0 1px rgba(232, 201, 122, 0.16),
+    0 0 9px rgba(232, 201, 122, 0.14);
+  animation: cert-light 0.45s ease-out both;
+}
+
+.cert-stars {
+  color: #ffcd75;
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-shadow: 0 0 5px rgba(255, 205, 117, 0.55);
+}
+
+.cert-label {
+  color: #f0d9a5;
+  font-weight: bold;
+}
+
+@keyframes cert-light {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 首次点亮认证：少量金色像素纸屑，只在当下落一次 */
+.cert-confetti-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.cert-confetti-bit {
+  position: fixed;
+  width: 4px;
+  height: 4px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18);
+  animation: cert-confetti-fall 0.9s cubic-bezier(0.2, 0.6, 0.4, 1) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+@keyframes cert-confetti-fall {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) rotate(0);
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx, 0), var(--dy, 32px)) rotate(140deg);
+  }
+}
+
 /* ===== 商店 ===== */
 .shop {
   display: flex;
@@ -1445,6 +1526,45 @@ h1 {
   filter: drop-shadow(6px 7px 0 rgba(0, 0, 0, 0.38));
 }
 
+/* 开票：羊皮票从上方十几像素轻轻落下（约 0.28 秒） */
+.receipt.is-dropping {
+  animation: receipt-drop 0.28s cubic-bezier(0.2, 0.75, 0.3, 1) both;
+}
+
+@keyframes receipt-drop {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 票头装订孔：两颗打孔 + 黄铜圈，像从账本上撕下来的 */
+.receipt-binding {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin: -6px 0 6px;
+}
+
+.receipt-binding span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #3a2a18;
+  border: 1px solid rgba(122, 90, 45, 0.65);
+  box-shadow:
+    inset 0 2px 2px rgba(0, 0, 0, 0.85),
+    0 0 0 1px rgba(255, 245, 220, 0.35),
+    0 1px 0 rgba(122, 90, 45, 0.25);
+}
+
 .review-panel {
   flex: 1 1 auto;
   min-height: 0;
@@ -1541,6 +1661,11 @@ h1 {
   background: rgba(100, 80, 60, 0.05);
 }
 
+/* 最后一颗星落稳前，章位先留空；到点再盖下 */
+.review-seal.pending {
+  visibility: hidden;
+}
+
 .review-seal.stamped {
   animation: seal-stamp 0.3s ease-out both;
 }
@@ -1606,7 +1731,7 @@ h1 {
 }
 
 .star-chip.inked .star-glyph {
-  animation: star-ink 0.27s ease-out both;
+  animation: star-ink 0.2s ease-out both;
   animation-delay: var(--d, 0ms);
 }
 
@@ -1626,8 +1751,8 @@ h1 {
   background: radial-gradient(circle, rgba(255, 214, 120, 0.42), transparent 65%);
   opacity: 0;
   pointer-events: none;
-  animation: star-gold 0.7s ease-out both;
-  animation-delay: calc(var(--d, 0ms) + 150ms);
+  animation: star-gold 0.2s ease-out both;
+  animation-delay: var(--d, 0ms);
 }
 
 @keyframes star-ink {
@@ -1700,6 +1825,16 @@ h1 {
   color: #46331d;
 }
 
+.review-sign {
+  display: block;
+  margin-top: 4px;
+  text-align: right;
+  font-size: 11.5px;
+  font-style: italic;
+  letter-spacing: 0.5px;
+  color: #6b4a2d;
+}
+
 .review-missing {
   list-style: none;
   margin: 3px 0 0;
@@ -1727,6 +1862,11 @@ h1 {
   padding: 8px 10px;
   font-size: 13px;
   margin-top: 2px;
+  box-shadow: 3px 3px 0 #5f4228;
+}
+
+.review-panel .btn:not(:disabled):active {
+  box-shadow: 1px 1px 0 #5f4228;
 }
 
 .review-panel .btn:not(.primary) {
@@ -1735,9 +1875,12 @@ h1 {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .receipt.is-dropping,
   .review-seal.stamped,
   .star-chip.inked .star-glyph,
   .star-chip.gold::after,
+  .five-star-cert,
+  .cert-confetti-bit,
   .log-entry.is-new {
     animation: none !important;
   }
