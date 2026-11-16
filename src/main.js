@@ -24,9 +24,13 @@ import {
   stewardAvatarDataURL,
   cursorDataURL,
   drawCoinFrame,
+  coinFrameDataURL,
   hourglassDataURL,
   logIconDataURL,
   speakerDataURL,
+  quoteMarkDataURL,
+  turnIconDataURL,
+  boltIconDataURL,
   TORCHES_BY_ORDER,
   LAMPS_BY_ORDER,
 } from './render.js'
@@ -45,6 +49,8 @@ const coinCanvas = document.getElementById('coin-spin')
 const coinCtx = coinCanvas.getContext('2d')
 const spd1El = document.getElementById('spd-1')
 const spd2El = document.getElementById('spd-2')
+const spdBoltEl = document.getElementById('spd-bolt')
+const ledgerDividerEl = document.getElementById('ledger-divider')
 const statusEl = document.getElementById('status')
 const bubbleEl = document.getElementById('bubble')
 const bubbleTextEl = document.getElementById('bubble-text')
@@ -56,6 +62,7 @@ const alarmEl = document.getElementById('alarm')
 const alarmIconEl = document.getElementById('alarm-icon')
 const alarmTextEl = document.getElementById('alarm-text')
 const chestCardEl = document.querySelector('.card[data-type="chest"]')
+const chestCardSealEl = chestCardEl.querySelector('.card-seal')
 const avatarFrameEl = document.getElementById('avatar-frame')
 const dropHintEl = document.getElementById('drop-hint')
 const btnOpen = document.getElementById('btn-open')
@@ -69,8 +76,12 @@ const tab1 = document.getElementById('tab-order1')
 const tab2 = document.getElementById('tab-order2')
 const guestTitleEl = document.getElementById('guest-title')
 const guestQuoteEl = document.getElementById('guest-quote')
+const guestQuoteTextEl = document.getElementById('guest-quote-text')
+const guestQuoteMarkEl = document.getElementById('guest-quote-mark')
 const guestAvatarEl = document.getElementById('guest-avatar')
 const logListEl = document.getElementById('log-list')
+const logProgressEl = document.getElementById('log-progress')
+const logStarEls = [...logProgressEl.querySelectorAll('.log-star')]
 const runLogEl = document.querySelector('.run-log')
 const reviewCard = document.getElementById('review-card')
 const reviewTitle = document.getElementById('review-title')
@@ -82,6 +93,8 @@ const reviewMissing = document.getElementById('review-missing')
 const btnAgain = document.getElementById('btn-again')
 const ghost = document.getElementById('ghost')
 const ghostImg = ghost.querySelector('img')
+const tagDragIconEl = document.getElementById('tag-drag-icon')
+const tagTurnIconEl = document.getElementById('tag-turn-icon')
 
 // 每单独立存档：地图、场布、余额、日志互不影响
 const MAP_DEFS = {
@@ -242,6 +255,15 @@ for (const el of cardEls) {
   el.querySelector('img').src = itemDataURL(type)
   el.querySelector('.price').textContent = ITEMS[type].price
 }
+// 卡片小金币用顶部旋转金币的静态第一帧
+const staticCoinURL = coinFrameDataURL(0)
+for (const coin of document.querySelectorAll('.card .coin')) {
+  coin.style.backgroundImage = `url(${staticCoinURL})`
+}
+guestQuoteMarkEl.src = quoteMarkDataURL()
+spdBoltEl.src = boltIconDataURL()
+tagDragIconEl.src = cursorDataURL('grab')
+tagTurnIconEl.src = turnIconDataURL()
 
 // 预约头像（随订单切换）
 guestAvatarEl.src = charAvatarDataURL('knight')
@@ -469,6 +491,37 @@ function positionBubble() {
   bubbleEl.style.top = (anchorY / H) * 100 + '%'
 }
 
+// 记录标题右侧的三件事进度：只反映本局真实事件，不是最终星级
+function updateLogProgress() {
+  const kinds = new Set(game.log.map((e) => e.kind))
+  const slots =
+    order === 1
+      ? [
+          { done: kinds.has('chest'), label: '开箱' },
+          { done: kinds.has('block'), label: '挡锤' },
+          { done: kinds.has('badge'), label: '徽章' },
+        ]
+      : [
+          { done: kinds.has('safe') || kinds.has('supply'), label: '安全通行或绕路' },
+          { done: kinds.has('block'), label: '挡锤' },
+          { done: kinds.has('badge'), label: '徽章' },
+        ]
+  logStarEls.forEach((el, i) => {
+    const slot = slots[i]
+    el.textContent = slot.done ? '★' : '☆'
+    el.classList.toggle('on', slot.done)
+    el.title = slot.label + (slot.done ? '：已发生' : '：未发生')
+  })
+  const summary = slots
+    .map((s) => `${s.label}${s.done ? '已发生' : '未发生'}`)
+    .join('、')
+  logProgressEl.title = `本单三件事进度：${summary}。不是最终星级，最终星级仍按评价单原规则结算。`
+  logProgressEl.setAttribute(
+    'aria-label',
+    `本单三件事进度：${summary}。最终星级按评价单原规则结算。`,
+  )
+}
+
 function makeLogEntry(entry, animate) {
   const li = document.createElement('li')
   li.className = 'log-entry' + (animate ? ' is-new' : '')
@@ -503,6 +556,7 @@ function showLogWaiting() {
 }
 
 function updateLogUI() {
+  updateLogProgress()
   if (!game.log.length) {
     if (logShownOrder !== order || !logListEl.querySelector('.log-waiting')) {
       showLogWaiting()
@@ -768,12 +822,21 @@ function updateHUD() {
   if (typeof prev === 'number' && prev !== game.gold) triggerGoldFx(game.gold - prev)
   shownGold[order] = game.gold
   goldEl.textContent = game.gold
+  const chestLocked = order === 2
   for (const el of cardEls) {
+    const locked = chestLocked && el === chestCardEl
+    el.classList.toggle('locked', locked)
+    el.dataset.locked = locked ? '1' : '0'
+    el.setAttribute('aria-disabled', locked ? 'true' : 'false')
     el.classList.toggle(
       'disabled',
-      mode !== 'setup' || game.gold < ITEMS[el.dataset.type].price,
+      !locked && (mode !== 'setup' || game.gold < ITEMS[el.dataset.type].price),
     )
   }
+  chestCardSealEl.hidden = !chestLocked
+  chestCardEl.title = chestLocked
+    ? '机关迷不翻宝箱，本单不可购买'
+    : '按住拖到地图空地砖'
   btnOpen.disabled = mode !== 'setup'
   updateTrapButton()
   updateOnboarding()
@@ -789,10 +852,12 @@ function setSpeed(n) {
 }
 
 function updateTrapButton() {
-  const show = secondUnlocked && order === 2 && (mode !== 'business' || runHasTrap)
+  // 布置期也把待命条留在预约区：二单玩家开门前就知道可以走近路拉闸
+  const show = secondUnlocked && order === 2 && (mode === 'setup' || runHasTrap)
   btnTrap.hidden = !show
   if (!show) {
-    btnTrap.classList.remove('armed', 'timing')
+    btnTrap.classList.remove('armed', 'timing', 'standby')
+    btnTrap.disabled = true
     trapTimerFillEl.style.transform = 'scaleX(0)'
     return
   }
@@ -801,6 +866,7 @@ function updateTrapButton() {
   btnTrap.disabled = !armed
   btnTrap.classList.toggle('armed', armed)
   btnTrap.classList.toggle('timing', armed)
+  btnTrap.classList.toggle('standby', mode === 'setup')
   if (!armed) trapTimerFillEl.style.transform = 'scaleX(0)'
   let label = '弩机待命 · 客人靠近可拉闸'
   if (mode === 'business') {
@@ -819,7 +885,6 @@ function setOrder(n) {
   base = bases[n]
   currentMap = MAP_DEFS[n]
   window.__game = game
-  setSpeed(1)
   clearGoldFx()
   doorOpen = 0
   doorTween = null
@@ -834,10 +899,11 @@ function setOrder(n) {
   skeleton.y = currentMap.skeleton.y
   const info = ORDER_INFO[order]
   guestTitleEl.textContent = info.title
-  guestQuoteEl.innerHTML = info.quote
+  guestQuoteTextEl.innerHTML = info.quote
   guestAvatarEl.src = charAvatarDataURL(order === 2 ? 'fan' : 'knight')
   avatarFrameEl.className = 'avatar-frame ' + (order === 2 ? 'fan' : 'knight')
   orderTabs.hidden = !secondUnlocked
+  ledgerDividerEl.hidden = secondUnlocked
   tab1.classList.toggle('active', order === 1)
   tab2.classList.toggle('active', order === 2)
   status(
@@ -845,8 +911,6 @@ function setOrder(n) {
       ? '路牌放在岔口并朝上，客人就绕补给廊；其他方向走近路。'
       : '把道具拖到空地砖上摆放',
   )
-  // 二单商店只上这单用得上的道具
-  chestCardEl.hidden = order === 2
   updateLogUI()
   updateHUD()
 }
@@ -922,8 +986,14 @@ function coachSpotForTile(t) {
   }
 }
 
+function setOpenSuggested(suggested) {
+  btnOpen.classList.toggle('suggest', suggested)
+  btnOpen.textContent = suggested ? '开门营业（建议先摆道具）' : '开门营业'
+}
+
 function updateOnboarding() {
   btnOpen.classList.remove('ready')
+  setOpenSuggested(false)
   if (mode !== 'setup') {
     coachEl.hidden = true
     guideState = null
@@ -969,6 +1039,7 @@ function updateOnboarding() {
       34,
       28,
     )
+    setOpenSuggested(true)
     return
   }
 
@@ -988,6 +1059,7 @@ function updateOnboarding() {
       where.left,
       where.top,
     )
+    setOpenSuggested(true)
     return
   }
 
@@ -1124,7 +1196,6 @@ function resetBusiness() {
   hideBubble()
   hideReview()
   mode = 'setup'
-  setSpeed(1)
   clearGoldFx()
   resetGearSpin()
   setDoor(0, DOOR_CLOSE_MS)
@@ -1584,6 +1655,10 @@ window.addEventListener('pointerdown', (e) => {
 
   const cardEl = e.target.closest ? e.target.closest('.card') : null
   if (cardEl) {
+    if (cardEl.dataset.locked === '1') {
+      status('机关迷不翻宝箱，这张卡本单用不上。')
+      return
+    }
     const type = cardEl.dataset.type
     if (game.gold < ITEMS[type].price) {
       status('金币不够，先收回几个道具吧', 'fail')

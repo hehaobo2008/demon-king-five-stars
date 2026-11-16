@@ -60,9 +60,10 @@
               <div class="gold">金币 <span id="gold">100</span><span id="gold-delta" class="gold-delta" hidden></span></div>
               <div class="speed" role="group" aria-label="营业速度">
                 <button id="spd-1" class="spd active">1×</button>
-                <button id="spd-2" class="spd">2×</button>
+                <button id="spd-2" class="spd"><img id="spd-bolt" class="spd-bolt" alt="" />2×</button>
               </div>
             </div>
+            <div id="ledger-divider" class="ledger-divider" aria-hidden="true"></div>
             <div id="order-tabs" class="order-tabs" hidden>
               <button id="tab-order1" class="tab active">首单 · 剑士</button>
               <button id="tab-order2" class="tab">第二单 · 机关迷</button>
@@ -76,16 +77,18 @@
               </span>
               <div class="guest-info">
                 <div class="guest-title" id="guest-title">今日预约 · 新手剑士</div>
-                <p class="guest-quote" id="guest-quote">「我是新手剑士，想拿到<em class="kw">勇者徽章</em>。侧室的<em class="kw">宝箱</em>我要开，守卫那一锤我也想<em class="kw">挡</em>。」</p>
+                <p class="guest-quote" id="guest-quote"><img id="guest-quote-mark" class="guest-quote-mark" alt="" /><span id="guest-quote-text">「我是新手剑士，想拿到<em class="kw">勇者徽章</em>。侧室的<em class="kw">宝箱</em>我要开，守卫那一锤我也想<em class="kw">挡</em>。」</span></p>
               </div>
               <div class="btn-row">
                 <button id="btn-open" class="btn primary">开门营业</button>
                 <button id="btn-reset" class="btn">重新布置</button>
               </div>
-              <button id="btn-trap" class="btn trap" hidden>
-                <span id="trap-label" class="trap-label">弩机待命 · 客人靠近可拉闸</span>
-                <span id="trap-timer-fill" class="trap-timer-fill" aria-hidden="true"></span>
-              </button>
+              <div class="trap-slot">
+                <button id="btn-trap" class="btn trap" disabled hidden>
+                  <span id="trap-label" class="trap-label">弩机待命 · 客人靠近可拉闸</span>
+                  <span id="trap-timer-fill" class="trap-timer-fill" aria-hidden="true"></span>
+                </button>
+              </div>
             </section>
 
             <section class="shop">
@@ -96,6 +99,7 @@
                   <div class="card-use">放进侧室，客人会去开</div>
                 </div>
                 <div class="card-price"><span class="coin"></span><span class="price"></span></div>
+                <div class="card-seal" hidden>机关迷不翻宝箱</div>
               </div>
 
               <div class="card" data-type="shield" title="按住拖到地图空地砖">
@@ -117,8 +121,8 @@
               </div>
 
               <div class="shop-tags">
-                <span>拖拽 摆放／退回</span>
-                <span>点路牌 转向</span>
+                <span><img id="tag-drag-icon" class="tag-icon" alt="" />拖拽 摆放／退回</span>
+                <span><img id="tag-turn-icon" class="tag-icon" alt="" />点路牌 转向</span>
               </div>
             </section>
           </div>
@@ -126,7 +130,15 @@
           <p id="status" class="status place">把道具拖到空地砖上摆放</p>
 
           <section class="run-log">
-            <div class="run-log-title">本次营业记录</div>
+            <div class="run-log-title">
+              <span>本次营业记录</span>
+              <span class="log-progress-wrap">
+                <span class="log-progress-note">三件事进度</span>
+                <span id="log-progress" class="log-progress" title="本单三件事的进度，不是最终星级；最终星级仍按评价单原规则结算" aria-label="本单三件事进度">
+                  <span class="log-star" data-slot="0">☆</span><span class="log-star" data-slot="1">☆</span><span class="log-star" data-slot="2">☆</span>
+                </span>
+              </span>
+            </div>
             <ul id="log-list" class="log-list"></ul>
           </section>
 

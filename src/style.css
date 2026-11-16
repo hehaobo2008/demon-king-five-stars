@@ -596,6 +596,33 @@ h1 {
   flex: none;
 }
 
+/* 未解锁第二单时，金币行下方用黄铜分割补位 */
+.ledger-divider {
+  position: relative;
+  height: 5px;
+  flex: none;
+  background: linear-gradient(
+    90deg,
+    transparent 0,
+    rgba(201, 162, 75, 0.55) 18%,
+    rgba(138, 106, 59, 0.8) 50%,
+    rgba(201, 162, 75, 0.55) 82%,
+    transparent 100%
+  );
+}
+
+.ledger-divider::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: #c9a24b;
+  box-shadow: 0 0 0 1px #3a2a18;
+}
+
 .gold {
   position: relative;
   display: flex;
@@ -697,13 +724,29 @@ h1 {
 }
 
 .spd {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   font-family: inherit;
   font-size: 11px;
-  padding: 2px 8px;
+  padding: 2px 7px;
   background: #2a2117;
   color: #b9a77f;
   border: 2px solid var(--wood);
   cursor: inherit;
+}
+
+.spd-bolt {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  display: block;
+  visibility: hidden;
+  image-rendering: pixelated;
+}
+
+.spd.active .spd-bolt {
+  visibility: visible;
 }
 
 .spd.active {
@@ -768,18 +811,7 @@ h1 {
   overflow: hidden;
 }
 
-/* 大引号暗纹 */
-.guest-reserve::before {
-  content: '\201C';
-  position: absolute;
-  right: 2px;
-  top: -30px;
-  font-size: 104px;
-  line-height: 1;
-  color: rgba(98, 66, 26, 0.15);
-  font-family: Georgia, 'Times New Roman', serif;
-  pointer-events: none;
-}
+/* 双引号改为预约文字内的内联像素图 */
 
 .avatar-frame {
   position: relative;
@@ -836,9 +868,18 @@ h1 {
 
 .guest-quote {
   margin: 3px 0 0;
+  min-height: 4.65em;
   font-size: 11.5px;
   line-height: 1.55;
   color: #332413;
+}
+
+.guest-quote-mark {
+  width: 14px;
+  height: auto;
+  margin-right: 4px;
+  vertical-align: -2px;
+  image-rendering: pixelated;
 }
 
 .guest-quote .kw {
@@ -905,6 +946,7 @@ h1 {
 }
 
 .card {
+  position: relative;
   display: grid;
   grid-template-columns: 30px 1fr auto;
   align-items: center;
@@ -960,18 +1002,57 @@ h1 {
 
 .coin {
   display: inline-block;
-  width: 9px;
-  height: 9px;
+  width: 12px;
+  height: 12px;
   margin-right: 3px;
-  vertical-align: -1px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #f2d479, #c9a24b 62%, #8a6a2b);
-  box-shadow: 0 0 0 1px #6b4a1f;
+  vertical-align: -2px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  image-rendering: pixelated;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .card.disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* 二单保留宝箱卡的位置与高度，只盖封条并禁止购买 */
+.card.locked {
+  cursor: not-allowed;
+  background: linear-gradient(#2a2319, #211a12);
+}
+
+.card.locked:hover {
+  transform: none;
+  box-shadow: 2px 2px 0 var(--shadow);
+  filter: none;
+}
+
+.card.locked > img,
+.card.locked .card-info,
+.card.locked .card-price {
+  opacity: 0.34;
+}
+
+.card-seal {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%) rotate(-5deg);
+  padding: 2px 7px;
+  background: #ead7ac;
+  color: #8a2f2b;
+  border: 1px dashed #8a2f2b;
+  box-shadow: 0 0 0 1px rgba(244, 230, 196, 0.6), 1px 1px 0 rgba(0, 0, 0, 0.35);
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .shop-tags {
@@ -981,11 +1062,26 @@ h1 {
 }
 
 .shop-tags span {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   font-size: 10.5px;
   color: #b9a77f;
   border: 1px dashed #6b5436;
   background: #221b12;
-  padding: 1px 7px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+.tag-icon {
+  width: 12px;
+  height: auto;
+  max-height: 12px;
+  flex: none;
+  image-rendering: pixelated;
 }
 
 /* ===== 按钮 ===== */
@@ -1043,6 +1139,21 @@ h1 {
   animation: cta-glow 0.9s infinite alternate;
 }
 
+/* 首单仍建议摆箱/盾时：低调木色，但仍可点击开门 */
+.btn.primary.suggest {
+  flex: 1.5;
+  font-size: 11px;
+  color: #e8dcc0;
+  background: linear-gradient(#4a3624, #352718);
+  border-color: #6d4a2f;
+  box-shadow: 2px 2px 0 var(--shadow);
+  animation: none;
+}
+
+.btn.primary.suggest:not(:disabled):hover {
+  filter: brightness(1.08);
+}
+
 @keyframes cta-glow {
   from {
     filter: brightness(1);
@@ -1050,6 +1161,14 @@ h1 {
   to {
     filter: brightness(1.22);
   }
+}
+
+/* 两单预约区底部固定留出拉闸条的位置：无论按钮显隐，卡片和记录都不跳位 */
+.trap-slot {
+  display: flex;
+  width: 100%;
+  height: 32px;
+  flex: none;
 }
 
 .btn.trap {
@@ -1064,6 +1183,12 @@ h1 {
   color: var(--muted);
   border: 2px solid var(--wood);
   box-shadow: none;
+}
+
+/* 布置期的待命提示：看得清，但虚线边框 + 禁用态表示还不能按 */
+.btn.trap.standby:disabled {
+  opacity: 0.7;
+  border-style: dashed;
 }
 
 .btn.trap.armed {
@@ -1088,7 +1213,7 @@ h1 {
   position: relative;
   margin: 0;
   padding: 6px 8px 6px 26px;
-  min-height: 2em;
+  min-height: 46px;
   font-size: 12px;
   line-height: 1.4;
   color: var(--ink);
@@ -1145,8 +1270,50 @@ h1 {
 .run-log-title {
   flex: none;
   margin: 6px 8px 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
   font-size: 11px;
   color: var(--brass);
+}
+
+.log-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+}
+
+.log-progress-note {
+  font-size: 9px;
+  color: #8f816b;
+  letter-spacing: 0.5px;
+}
+
+.log-progress {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.log-star {
+  width: 13px;
+  height: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(201, 162, 75, 0.24);
+  background: rgba(0, 0, 0, 0.24);
+  color: #6a5d49;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.log-star.on {
+  color: #ffcd75;
+  border-color: rgba(201, 162, 75, 0.65);
+  text-shadow: 0 0 4px rgba(255, 205, 117, 0.45);
 }
 
 .log-list {
@@ -1672,5 +1839,45 @@ h1 {
   .shop {
     width: 100%;
     flex: none;
+  }
+}
+
+/* 375 宽：木匾收字号/字距/边距，给标题和喇叭留位 */
+@media (max-width: 480px) {
+  .plaque {
+    padding: 7px 44px 9px;
+  }
+
+  h1 {
+    font-size: 20px;
+    letter-spacing: 2px;
+    line-height: 1.12;
+  }
+
+  .subtitle {
+    margin-top: 3px;
+    font-size: 10.5px;
+    gap: 6px;
+  }
+
+  .subtitle::before,
+  .subtitle::after {
+    width: 18px;
+  }
+
+  /* 375 宽时二单提示会折两行：抬高状态栏下限，让两单同高、记录不跳 */
+  .status {
+    min-height: 48px;
+  }
+
+  .sound-toggle {
+    right: 7px;
+    width: 24px;
+    height: 24px;
+  }
+
+  .sound-toggle img {
+    width: 14px;
+    height: 14px;
   }
 }

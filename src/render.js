@@ -2289,6 +2289,98 @@ export function drawCoinFrame(ctx, f) {
   }
 }
 
+export function coinFrameDataURL(frame = 0) {
+  const c = document.createElement('canvas')
+  c.width = 16
+  c.height = 16
+  drawCoinFrame(c.getContext('2d'), frame)
+  return c.toDataURL()
+}
+
+// 预约小票的内联像素双引号
+export function quoteMarkDataURL() {
+  const rows = [
+    '............',
+    '..oo..oo....',
+    '.oYYooYYo...',
+    '.oYYooYYo...',
+    '..oYo.oYo...',
+    '..oYo.oYo...',
+    '............',
+    '............',
+  ]
+  const pal = { o: '#6e4d1d', Y: '#b8955b' }
+  const c = document.createElement('canvas')
+  c.width = 12
+  c.height = 8
+  const ctx = c.getContext('2d')
+  for (let r = 0; r < rows.length; r++) {
+    for (let i = 0; i < 12; i++) {
+      const ch = rows[r][i]
+      if (!ch || ch === '.') continue
+      ctx.fillStyle = pal[ch]
+      ctx.fillRect(i, r, 1, 1)
+    }
+  }
+  return c.toDataURL()
+}
+
+// 操作提示：拖拽手掌 / 转向小箭头 / 2× 小闪电
+export function turnIconDataURL() {
+  const rows = [
+    '............',
+    '...YYYY..Y..',
+    '..Y....Y.YY.',
+    '.Y......YYY.',
+    '.Y......Y...',
+    '.Y......Y...',
+    '..Y....Y....',
+    '...YYYY.....',
+    '............',
+    '............',
+  ]
+  const c = document.createElement('canvas')
+  c.width = 12
+  c.height = 10
+  const ctx = c.getContext('2d')
+  for (let r = 0; r < rows.length; r++) {
+    for (let i = 0; i < 12; i++) {
+      if (rows[r][i] !== 'Y') continue
+      ctx.fillStyle = '#e8c97a'
+      ctx.fillRect(i, r, 1, 1)
+    }
+  }
+  return c.toDataURL()
+}
+
+export function boltIconDataURL() {
+  const rows = [
+    '....oo...',
+    '...oYo...',
+    '..oYYo...',
+    '.oYYo....',
+    '.oYYYYo..',
+    '...oYYo..',
+    '...oYo...',
+    '..oYo....',
+    '..oo.....',
+  ]
+  const pal = { o: '#1a1c2c', Y: '#ffcd75' }
+  const c = document.createElement('canvas')
+  c.width = 9
+  c.height = 9
+  const ctx = c.getContext('2d')
+  for (let r = 0; r < rows.length; r++) {
+    for (let i = 0; i < 9; i++) {
+      const ch = rows[r][i]
+      if (!ch || ch === '.') continue
+      ctx.fillStyle = pal[ch]
+      ctx.fillRect(i, r, 1, 1)
+    }
+  }
+  return c.toDataURL()
+}
+
 // 营业记录小图标：12×12 像素矩阵（金绿=得分事件，暗红叉=受挫）
 const LOG_ICON_ART = {
   chest: {
