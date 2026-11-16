@@ -1709,14 +1709,23 @@ export function drawGuest(ctx, guest) {
   }
 }
 
-function drawSkeletonHammer(ctx, ox, oy, pose) {
+function drawSkeletonHammer(ctx, ox, oy, pose, now = 0, still = false) {
   if (pose === 'raise') {
+    // 蓄力：锤头约每 90ms 在基准位与右移 1px 之间来回；身体保持站稳
+    const headX = ox + 10 + (still ? 0 : Math.floor(now / 90) % 2)
     ctx.fillStyle = '#ef7d57'
     ctx.fillRect(ox + 17, oy - 6, 3, 18)
     ctx.fillStyle = '#94b0c2'
-    ctx.fillRect(ox + 10, oy - 16, 16, 8)
+    ctx.fillRect(headX, oy - 16, 16, 8)
     ctx.fillStyle = '#1a1c2c'
-    ctx.fillRect(ox + 10, oy - 16, 16, 2)
+    ctx.fillRect(headX, oy - 16, 16, 2)
+    // 锤头右侧两粒暗红小方点往上飘；减少动效时定格
+    const cycle = 520
+    for (let i = 0; i < 2; i++) {
+      const p = still ? (i === 0 ? 0.65 : 0.3) : (now / cycle + i * 0.5) % 1
+      ctx.fillStyle = i === 0 ? '#8c3b35' : '#7a2e2e'
+      ctx.fillRect(ox + 28 + i * 2, oy - 8 - Math.round(p * 12), 2, 2)
+    }
   } else if (pose === 'strike') {
     ctx.fillStyle = '#ef7d57'
     ctx.fillRect(ox - 8, oy + 22, 20, 3)
@@ -1734,8 +1743,8 @@ function drawSkeletonHammer(ctx, ox, oy, pose) {
   }
 }
 
-// 倒地：散骨 + 落下的锤 + 两点小星
-function drawSkeletonDown(ctx, cx, feetY) {
+// 倒地：散骨 + 落下的锤 + 两颗绕头小金星
+function drawSkeletonDown(ctx, cx, feetY, now = 0, still = false) {
   ctx.save()
   ctx.globalAlpha = 0.9
   ctx.fillStyle = '#1a1c2c'
@@ -1756,13 +1765,22 @@ function drawSkeletonDown(ctx, cx, feetY) {
   ctx.fillRect(cx - 2, feetY - 7, 10, 9)
   ctx.fillStyle = '#1a1c2c'
   ctx.fillRect(cx - 2, feetY - 7, 2, 9)
-  ctx.fillStyle = '#ffcd75'
-  ctx.fillRect(cx - 4, feetY - 20, 2, 2)
-  ctx.fillRect(cx - 1, feetY - 22, 2, 2)
+  // 两颗小金星围着头顶绕一小圈；减少动效时停在左右上方
+  const orbit = still ? 0 : (now / 1400) * Math.PI * 2
+  for (let i = 0; i < 2; i++) {
+    const a = orbit + i * Math.PI
+    ctx.fillStyle = '#ffcd75'
+    ctx.fillRect(
+      Math.round(cx + 7 + Math.cos(a) * 5),
+      Math.round(feetY - 22 + Math.sin(a) * 2),
+      2,
+      2,
+    )
+  }
   ctx.restore()
 }
 
-export function drawSkeleton(ctx, sx, sy, pose, now = 0, flash = false) {
+export function drawSkeleton(ctx, sx, sy, pose, now = 0, flash = false, still = false) {
   const cx = (sx + 0.5) * CELL
   const feetY = (sy + 1) * CELL - 3
 
@@ -1773,7 +1791,7 @@ export function drawSkeleton(ctx, sx, sy, pose, now = 0, flash = false) {
   ctx.restore()
 
   if (pose === 'down') {
-    drawSkeletonDown(ctx, cx, feetY)
+    drawSkeletonDown(ctx, cx, feetY, now, still)
     return
   }
   const bob = pose === 'idle' ? Math.round(Math.sin(now / 700)) : 0
@@ -1786,7 +1804,7 @@ export function drawSkeleton(ctx, sx, sy, pose, now = 0, flash = false) {
     ctx.restore()
   }
   drawCharRows(ctx, SKELETON_ROWS, SKELETON_PALETTE, ox, oy)
-  drawSkeletonHammer(ctx, ox, oy, pose)
+  drawSkeletonHammer(ctx, ox, oy, pose, now, still)
   // 偶尔红眼（短暂）
   if (now % 4400 < 700) {
     ctx.fillStyle = '#d9534f'
@@ -2944,6 +2962,7 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
       scene.skeleton.pose,
       now,
       scene.flash === 'skeleton',
+      still,
     )
   }
   if (scene && scene.guest) drawGuest(ctx, scene.guest)
