@@ -279,6 +279,24 @@ h1 {
   z-index: 5;
   white-space: normal;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.bubble-text {
+  min-width: 0;
+}
+
+.bubble-avatar {
+  width: 20px;
+  height: 22px;
+  flex: none;
+  object-fit: cover;
+  image-rendering: pixelated;
+  border: 1px solid #3a2a1c;
+  background: #e8dcc0;
 }
 
 .bubble::after {
@@ -376,7 +394,8 @@ h1 {
   .alarm,
   .gold,
   .gold-delta,
-  .status.business::before {
+  .status.business::before,
+  #ghost.is-bouncing img {
     animation: none !important;
   }
 }
@@ -423,6 +442,28 @@ h1 {
 #ghost img {
   opacity: 0.72;
   filter: drop-shadow(0 5px 3px rgba(0, 0, 0, 0.5));
+}
+
+#ghost.is-bouncing img {
+  animation: ghost-wobble 0.24s ease;
+}
+
+@keyframes ghost-wobble {
+  0% {
+    rotate: 0deg;
+  }
+  25% {
+    rotate: -4deg;
+  }
+  55% {
+    rotate: 3deg;
+  }
+  80% {
+    rotate: -1.5deg;
+  }
+  100% {
+    rotate: 0deg;
+  }
 }
 
 .alarm {
@@ -496,6 +537,43 @@ h1 {
   right: -10px;
   border-right-color: transparent;
   border-left-color: var(--brass);
+}
+
+/* 尖角外伸的深色底边：先垫一枚深色三角，再盖亮铜三角 */
+.coach::after {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: calc(50% + 2px);
+  transform: translateY(-50%);
+  border: 6px solid transparent;
+  border-right-color: #241e16;
+  z-index: -1;
+}
+
+.coach.arrow-right::after {
+  left: auto;
+  right: -10px;
+  border-right-color: transparent;
+  border-left-color: #241e16;
+}
+
+.coach.arrow-down::before {
+  left: 50%;
+  top: auto;
+  bottom: -10px;
+  transform: translateX(-50%);
+  border-right-color: transparent;
+  border-top-color: var(--brass);
+}
+
+.coach.arrow-down::after {
+  left: 50%;
+  top: auto;
+  bottom: -12px;
+  transform: translateX(-50%);
+  border-right-color: transparent;
+  border-top-color: #241e16;
 }
 
 .coach-avatar {

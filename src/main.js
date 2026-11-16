@@ -34,6 +34,7 @@ import { sfx } from './sfx.js'
 
 const canvas = document.getElementById('game')
 const ctx = canvas.getContext('2d')
+const playArea = document.querySelector('.play-area')
 const btnSound = document.getElementById('btn-sound')
 const soundIconEl = document.getElementById('sound-icon')
 const sidebar = document.getElementById('sidebar')
@@ -46,6 +47,8 @@ const spd1El = document.getElementById('spd-1')
 const spd2El = document.getElementById('spd-2')
 const statusEl = document.getElementById('status')
 const bubbleEl = document.getElementById('bubble')
+const bubbleTextEl = document.getElementById('bubble-text')
+const bubbleAvatarEl = document.getElementById('bubble-avatar')
 const coachEl = document.getElementById('coach')
 const coachTextEl = document.getElementById('coach-text')
 const coachAvatarEl = document.getElementById('coach-avatar')
@@ -87,7 +90,7 @@ const MAP_DEFS = {
     crossbow: { x: 12, y: 9 },
     beamLeft: 9,
     trapStop: TRAP_STOP,
-    arena: { x: 18.5, y: 7.6 },
+    arena: { x: 18.5, y: 6.2 },
     stand: { x: 23, y: 3 },
   },
   2: {
@@ -95,7 +98,7 @@ const MAP_DEFS = {
     crossbow: MAP2.crossbow,
     beamLeft: MAP2.beamLeft,
     trapStop: MAP2.trapStop,
-    arena: { x: 20, y: 9.2 },
+    arena: { x: 20, y: 6.8 },
     stand: { x: 23, y: 2 },
     // 地图警报挂到弩机下方的邻边墙面，避开弩、亮线、客人和火把
     alarm: { x: 22.1, y: 10.2 },
@@ -152,7 +155,7 @@ let speed = 1
 let simT = 0
 let lastRealT = null
 let pop = null // 落位回弹：{ type, x, y, dir, key, start, ms }
-let footprintsBase = []
+let footprintsBase = null
 let footprintPreview = null
 let footprintPreviewKey = ''
 let trapUiSig = ''
@@ -188,6 +191,8 @@ let guest = null
 let walker = null
 let footDust = []
 let lastGuestTile = null
+let hoverItem = null
+let invalidFlash = null
 let pending = null
 let drag = null
 let bounce = null
@@ -284,20 +289,34 @@ function applyCursor(grab) {
 
 applyCursor(false)
 
-// 横排桌面：账房外框与画布外框等高对齐；竖排交给 CSS
+// 画布按整数 CSS 像素/格收齐，保持 4:3；横排账房外框与画布等高
 const portraitMedia = window.matchMedia('(max-width: 1120px), (max-aspect-ratio: 1/1)')
-function syncFrameHeights() {
+function syncCanvasSize() {
+  const vw = document.documentElement.clientWidth
+  const vh = document.documentElement.clientHeight
   if (portraitMedia.matches) {
+    const maxW = Math.min(900, Math.min(vh * 0.58, 640) * 4 / 3)
+    const avail = Math.min(vw - 32, maxW)
+    const tile = Math.max(8, Math.floor((avail - 6) / COLS))
+    canvas.style.width = tile * COLS + 'px'
+    canvas.style.height = tile * ROWS + 'px'
+    playArea.style.width = tile * COLS + 6 + 'px'
     sidebar.style.height = ''
-    return
+  } else {
+    const boardH = Math.min(720, vh - 164)
+    const maxW = vw - 480
+    const tile = Math.max(8, Math.floor(Math.min(boardH / ROWS, maxW / COLS)))
+    canvas.style.width = tile * COLS + 'px'
+    canvas.style.height = tile * ROWS + 'px'
+    playArea.style.width = ''
+    sidebar.style.height = Math.round(tile * ROWS + 6) + 'px'
   }
-  const r = canvas.getBoundingClientRect()
-  sidebar.style.height = Math.round(r.height + 6) + 'px'
+  if (mode === 'setup') updateOnboarding()
 }
-window.addEventListener('resize', syncFrameHeights)
-if (portraitMedia.addEventListener) portraitMedia.addEventListener('change', syncFrameHeights)
-else portraitMedia.addListener(syncFrameHeights)
-requestAnimationFrame(syncFrameHeights)
+window.addEventListener('resize', syncCanvasSize)
+if (portraitMedia.addEventListener) portraitMedia.addEventListener('change', syncCanvasSize)
+else portraitMedia.addListener(syncCanvasSize)
+requestAnimationFrame(syncCanvasSize)
 
 // 字体就绪后重画两张底图（木牌字用 Fusion Pixel 12px）；字体打不开也照常开局
 async function refreshMapArt() {
@@ -377,6 +396,7 @@ function setGhost(cx, cy, size) {
 
 function hideGhost() {
   ghost.style.display = 'none'
+  ghost.classList.remove('is-bouncing')
 }
 
 function status(msg, kind) {
@@ -387,8 +407,15 @@ function status(msg, kind) {
 
 function showBubble(text, at = null, tone = null) {
   bubbleAnchor = at
-  bubbleEl.textContent = text
-  bubbleEl.className = 'bubble' + (at ? ' tail-up' : '') + (tone ? ' tone-' + tone : '')
+  bubbleTextEl.textContent = text
+  // 战斗气泡（带 at 锚点）在左上角显示当前说话客人的小头像
+  bubbleAvatarEl.hidden = !at
+  if (at) {
+    bubbleAvatarEl.src = charAvatarDataURL(
+      guest && guest.variant === 'fan' ? 'fan' : 'knight',
+    )
+  }
+  bubbleEl.className = 'bubble' + (tone ? ' tone-' + tone : '')
   bubbleEl.hidden = false
   // 重新触发轻弹动画
   bubbleEl.style.animation = 'none'
@@ -408,15 +435,38 @@ function positionBubble() {
   if (!pos) return
   const parent = bubbleEl.parentElement
   const W = parent ? parent.clientWidth : COLS * 32
+  const H = parent ? parent.clientHeight : ROWS * 32
   const w = bubbleEl.offsetWidth || 200
+  const h = bubbleEl.offsetHeight || 30
   let cxPx = ((pos.x + 0.5) / COLS) * W
   // 水平收进画布内：二单右侧也别被裁掉
   const minX = w / 2 + 4
   const maxX = W - w / 2 - 4
   if (cxPx < minX) cxPx = minX
   if (cxPx > maxX) cxPx = maxX
+
+  const topAnchor = (pos.y / ROWS) * H
+  let below = false
+  let anchorY = topAnchor
+  if (bubbleAnchor) {
+    // 战斗/固定锚点气泡放在锚点下方，避开锤头和角色
+    below = true
+  } else if (topAnchor - h - 8 < 2) {
+    // 普通气泡贴到上沿时翻到人物脚下方
+    below = true
+    anchorY = ((pos.y + 1) / ROWS) * H
+  }
+  if (below && anchorY + 8 + h > H - 2) {
+    if (!bubbleAnchor && topAnchor - h - 8 >= 2) {
+      below = false
+      anchorY = topAnchor
+    } else {
+      anchorY = Math.max(0, H - 8 - h - 2)
+    }
+  }
+  bubbleEl.classList.toggle('tail-up', below)
   bubbleEl.style.left = cxPx + 'px'
-  bubbleEl.style.top = (pos.y / ROWS) * 100 + '%'
+  bubbleEl.style.top = (anchorY / H) * 100 + '%'
 }
 
 function makeLogEntry(entry, animate) {
@@ -570,28 +620,81 @@ btnNext.addEventListener('click', () => {
   status('接下了第二单：机关迷。弩机已上膛，布置好再开门营业。')
 })
 
-// 按真实 planRoute 取客人会踩到的格子（含弩机跨越的三格）
-function routeTiles(g) {
+// 按真实 planRoute 生成脚印序列、事件标记和未经过的盾架
+function buildRoute(g) {
   const plan = planRoute(g, order)
-  const tiles = []
+  const raw = []
+  const markers = []
+  let pickedShield = false
+  let endTile = null
   const push = (p) => {
-    // 只去掉相邻重复格，保留折返与绕行顺序，流动脚印才和真实走法一致
-    const last = tiles[tiles.length - 1]
+    const last = raw[raw.length - 1]
     if (last && last.x === p.x && last.y === p.y) return
-    tiles.push({ x: p.x, y: p.y })
+    raw.push({ x: p.x, y: p.y })
   }
   if (plan) {
     for (const a of plan.actions) {
       if (a.type === 'move') {
         for (const p of a.path) push(p)
+        endTile = a.path[a.path.length - 1]
+      } else if (a.type === 'open') {
+        markers.push({ kind: 'chest', x: a.x, y: a.y })
+      } else if (a.type === 'pickupShield') {
+        markers.push({ kind: 'shield', x: a.x, y: a.y })
+        pickedShield = true
       } else if (a.type === 'trap') {
         if (a.stop) push(a.stop)
-        if (a.beam) push(a.beam)
+        if (a.beam) {
+          push(a.beam)
+          markers.push({ kind: 'trap', x: a.beam.x, y: a.beam.y })
+        }
         if (a.far) push(a.far)
+        if (!pickedShield) {
+          const shieldAt = (t) => {
+            if (!t) return null
+            const item = g.items.get(tileKey(t.x, t.y))
+            return item && item.type === 'shield' && !item.taken ? t : null
+          }
+          const found = shieldAt(a.beam) || shieldAt(a.far)
+          if (found) {
+            markers.push({ kind: 'shield', x: found.x, y: found.y })
+            pickedShield = true
+          }
+        }
       }
     }
+    if (endTile) markers.push({ kind: 'end', x: endTile.x, y: endTile.y })
   }
-  return tiles
+
+  const counts = new Map()
+  for (const t of raw) {
+    const k = tileKey(t.x, t.y)
+    counts.set(k, (counts.get(k) || 0) + 1)
+  }
+  const tiles = raw.map((t, i) => {
+    const k = tileKey(t.x, t.y)
+    let dx = 0
+    let dy = 0
+    if (i > 0) {
+      dx = Math.sign(t.x - raw[i - 1].x)
+      dy = Math.sign(t.y - raw[i - 1].y)
+    } else if (raw.length > 1) {
+      dx = Math.sign(raw[1].x - t.x)
+      dy = Math.sign(raw[1].y - t.y)
+    }
+    // 重复经过的格子按行进方向的左侧分道，去程/回程自然落到两侧
+    const lane = (counts.get(k) || 0) > 1 && (dx || dy) ? 4 : 0
+    return { x: t.x, y: t.y, ox: -dy * lane, oy: dx * lane }
+  })
+
+  const visited = new Set(raw.map((t) => tileKey(t.x, t.y)))
+  const offRouteShields = []
+  for (const item of g.items.values()) {
+    if (item.type === 'shield' && !visited.has(tileKey(item.x, item.y))) {
+      offRouteShields.push({ x: item.x, y: item.y })
+    }
+  }
+  return { tiles, markers, offRouteShields }
 }
 
 function clearFootprintPreview() {
@@ -632,7 +735,7 @@ function previewRouteForDrag(d) {
     sim.items.delete(fk)
     sim.items.set(tileKey(d.target.x, d.target.y), { ...item, x: d.target.x, y: d.target.y })
   }
-  footprintPreview = routeTiles(sim)
+  footprintPreview = buildRoute(sim)
 }
 
 function triggerGoldFx(delta) {
@@ -675,7 +778,7 @@ function updateHUD() {
   updateTrapButton()
   updateOnboarding()
   // 布置期的真实路线脚印；营业后收起
-  footprintsBase = mode === 'setup' ? routeTiles(game) : []
+  footprintsBase = mode === 'setup' ? buildRoute(game) : null
   if (mode !== 'setup') clearFootprintPreview()
 }
 
@@ -723,6 +826,8 @@ function setOrder(n) {
   resetGearSpin()
   footDust = []
   lastGuestTile = null
+  hoverItem = null
+  invalidFlash = null
   clearFootprintPreview()
   pop = null
   skeleton.x = currentMap.skeleton.x
@@ -770,8 +875,33 @@ function setCoach(text, leftPct, topPct, arrowRight = false) {
   coachTextEl.textContent = text
   coachEl.style.left = leftPct + '%'
   coachEl.style.top = topPct + '%'
+  coachEl.classList.remove('arrow-down')
   coachEl.classList.toggle('arrow-right', arrowRight)
   coachEl.hidden = false
+}
+
+// 备齐提示：横排贴画布右边、与开门按钮同高并指右；竖排贴底边、对齐按钮并指下
+function placeDoneCoach() {
+  coachEl.hidden = false
+  coachEl.classList.remove('arrow-right', 'arrow-down')
+  const wrap = canvas.parentElement
+  const wrapRect = wrap.getBoundingClientRect()
+  const btnRect = btnOpen.getBoundingClientRect()
+  const w = coachEl.offsetWidth || 190
+  const h = coachEl.offsetHeight || 40
+  if (portraitMedia.matches) {
+    coachEl.classList.add('arrow-down')
+    const centerX = btnRect.left + btnRect.width / 2 - wrapRect.left
+    const left = Math.max(8, Math.min(wrap.clientWidth - w - 8, centerX - w / 2))
+    coachEl.style.left = left + 'px'
+    coachEl.style.top = wrap.clientHeight - h / 2 - 10 + 'px'
+  } else {
+    coachEl.classList.add('arrow-right')
+    const targetY = btnRect.top + btnRect.height / 2 - wrapRect.top
+    coachEl.style.left = Math.max(8, wrap.clientWidth - w - 8) + 'px'
+    coachEl.style.top =
+      Math.max(h / 2 + 8, Math.min(wrap.clientHeight - h / 2 - 8, targetY)) + 'px'
+  }
 }
 
 function suggestShieldTile(walked) {
@@ -864,7 +994,8 @@ function updateOnboarding() {
   onbStep = 'done'
   guideState = null
   btnOpen.classList.add('ready')
-  setCoach('两件都备好了，点「开门营业」迎客。', 55, 80, true)
+  coachTextEl.textContent = '两件都备好了，点「开门营业」迎客。'
+  placeDoneCoach()
 }
 
 function trySwitchOrder(n) {
@@ -945,6 +1076,8 @@ function startBusiness() {
   setDoor(1, DOOR_OPEN_MS)
   pending = null
   drag = null
+  hoverItem = null
+  invalidFlash = null
   pop = null
   clearFootprintPreview()
   hideGhost()
@@ -997,6 +1130,8 @@ function resetBusiness() {
   setDoor(0, DOOR_CLOSE_MS)
   footDust = []
   lastGuestTile = null
+  hoverItem = null
+  invalidFlash = null
   pop = null
   clearFootprintPreview()
   skeleton.pose = 'idle'
@@ -1391,18 +1526,23 @@ function startDrag(source, type, dir, e) {
   clearFootprintPreview()
   sfx.grab()
   const b = canvasBox()
+  const offsetY = e.pointerType === 'touch' ? 28 : 0
+  hoverItem = null
+  invalidFlash = null
+  ghost.classList.remove('is-bouncing')
   drag = {
     source,
     type,
     dir,
     px: e.clientX,
     py: e.clientY,
+    offsetY,
     cellScreen: b.width / COLS,
     target: null,
     overShop: false,
   }
   ghostImg.src = itemDataURL(type, dir)
-  setGhost(e.clientX, e.clientY, drag.cellScreen)
+  setGhost(e.clientX, e.clientY - offsetY, drag.cellScreen)
   document.body.classList.add('dragging')
   applyCursor(true)
 }
@@ -1418,6 +1558,9 @@ function startBounce(to) {
     dur: BOUNCE_MS,
     size,
   }
+  ghost.classList.remove('is-bouncing')
+  void ghost.offsetWidth
+  ghost.classList.add('is-bouncing')
 }
 
 // 落位回弹：实际放下/挪位/转路牌时，道具轻轻弹一下并带四粒像素灰
@@ -1460,8 +1603,24 @@ window.addEventListener('pointerdown', (e) => {
   }
 })
 
+canvas.addEventListener('pointerleave', () => {
+  hoverItem = null
+})
 window.addEventListener('pointermove', (e) => {
-  if (mode !== 'setup') return
+  if (mode !== 'setup') {
+    hoverItem = null
+    return
+  }
+  if (!pending && !drag) {
+    // 鼠标悬停已放道具：只做视觉提示，不改变布置状态
+    if (e.pointerType === 'touch') {
+      hoverItem = null
+    } else {
+      const ht = tileAt(e.clientX, e.clientY)
+      const hi = ht ? game.items.get(tileKey(ht.x, ht.y)) : null
+      hoverItem = hi ? { x: hi.x, y: hi.y, type: hi.type } : null
+    }
+  }
   if (pending && !drag) {
     if (Math.hypot(e.clientX - pending.startX, e.clientY - pending.startY) <= DRAG_THRESHOLD) {
       return
@@ -1472,13 +1631,18 @@ window.addEventListener('pointermove', (e) => {
       return
     }
     const src = pending.source
-    startDrag(src, item.type, item.dir, { clientX: e.clientX, clientY: e.clientY })
+    startDrag(src, item.type, item.dir, {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      pointerType: e.pointerType,
+    })
   }
   if (!drag) return
 
   drag.px = e.clientX
   drag.py = e.clientY
-  setGhost(drag.px, drag.py, drag.cellScreen)
+  // 幽灵和落点一起上移；回收判断仍用手指真实位置
+  setGhost(drag.px, drag.py - drag.offsetY, drag.cellScreen)
   drag.overShop = inSidebar(drag.px, drag.py)
   const refunding = drag.overShop && drag.source !== 'shop'
   sidebar.classList.toggle('drop-refund', refunding)
@@ -1488,7 +1652,7 @@ window.addEventListener('pointermove', (e) => {
     clearFootprintPreview()
     return
   }
-  const t = tileAt(drag.px, drag.py)
+  const t = tileAt(drag.px, drag.py - drag.offsetY)
   if (!t) {
     drag.target = null
     clearFootprintPreview()
@@ -1519,8 +1683,10 @@ window.addEventListener('pointerup', () => {
   }
   if (!drag) return
 
+  hoverItem = null
   const d = drag
   drag = null
+  invalidFlash = null
   clearFootprintPreview()
   document.body.classList.remove('dragging')
   sidebar.classList.remove('drop-refund')
@@ -1568,6 +1734,14 @@ window.addEventListener('pointerup', () => {
         )
       : 'offmap'
     startBounce(sourceAnchor)
+    if (d.target) {
+      invalidFlash = {
+        x: d.target.x,
+        y: d.target.y,
+        start: performance.now(),
+        ms: 150,
+      }
+    }
     status(
       reason === 'wall'
         ? '弹回：墙上摆不了道具'
@@ -1597,11 +1771,13 @@ window.addEventListener('keydown', (e) => {
   dropHintEl.hidden = true
   applyCursor(false)
   clearFootprintPreview()
+  hoverItem = null
   startBounce(anchor)
   status('取消拖拽')
 })
 window.addEventListener('blur', () => {
   pending = null
+  hoverItem = null
   if (drag) {
     drag = null
     document.body.classList.remove('dragging')
@@ -1692,6 +1868,19 @@ function frame(realT) {
   const dustScene = footDust.length
     ? footDust.map((d) => ({ x: d.x, y: d.y, t: realT - d.start, ms: 220 }))
     : null
+  let invalidScene = null
+  if (invalidFlash) {
+    const el = realT - invalidFlash.start
+    if (el >= invalidFlash.ms) invalidFlash = null
+    else {
+      invalidScene = {
+        x: invalidFlash.x,
+        y: invalidFlash.y,
+        t: el,
+        ms: invalidFlash.ms,
+      }
+    }
+  }
 
   if (!bubbleEl.hidden) positionBubble()
   if (fx) {
@@ -1818,9 +2007,11 @@ function frame(realT) {
     dragging: !!drag && mode === 'setup',
     forbidden: game.reserved,
     footprints:
-      mode === 'setup' && (footprintPreview || footprintsBase.length)
-        ? { tiles: footprintPreview || footprintsBase, preview: !!footprintPreview }
+      mode === 'setup' && (footprintPreview || footprintsBase)
+        ? { ...(footprintPreview || footprintsBase), preview: !!footprintPreview }
         : null,
+    hover: mode === 'setup' ? hoverItem : null,
+    invalid: invalidScene,
     pop: popScene,
     stand: currentMap.stand,
     standBadge: !game.badgeTaken,
@@ -1837,6 +2028,9 @@ function frame(realT) {
             beamLeft: currentMap.beamLeft,
             stopX: currentMap.trapStop.x,
             stopY: currentMap.trapStop.y,
+            warnEdge:
+              crossbow.mode === 'warning' && crossbow.windowOpen && !crossbow.used,
+            warnRemain: trapRemain != null ? trapRemain : 0,
           }
         : null,
   })

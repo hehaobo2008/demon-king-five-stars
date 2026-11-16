@@ -2545,8 +2545,8 @@ function drawFootprints(ctx, data, now) {
     const b = tiles[i]
     const dx = Math.sign(b.x - a.x)
     const dy = Math.sign(b.y - a.y)
-    const px = (b.x + 0.5) * CELL
-    const py = (b.y + 0.72) * CELL
+    const px = (b.x + 0.5) * CELL + (b.ox || 0)
+    const py = (b.y + 0.72) * CELL + (b.oy || 0)
     const ox = dy !== 0 ? (i % 2 ? -3 : 3) : 0
     const oy = dx !== 0 ? (i % 2 ? -3 : 3) : 0
     ctx.globalAlpha = baseAlpha
@@ -2559,11 +2559,84 @@ function drawFootprints(ctx, data, now) {
   const fr = pos - i0
   const A = tiles[i0]
   const B = tiles[i0 + 1]
-  const lx = (A.x + (B.x - A.x) * fr + 0.5) * CELL
-  const ly = (A.y + (B.y - A.y) * fr + 0.5) * CELL
+  const ax = (A.x + 0.5) * CELL + (A.ox || 0)
+  const ay = (A.y + 0.5) * CELL + (A.oy || 0)
+  const bx = (B.x + 0.5) * CELL + (B.ox || 0)
+  const by = (B.y + 0.5) * CELL + (B.oy || 0)
+  const lx = ax + (bx - ax) * fr
+  const ly = ay + (by - ay) * fr
   ctx.globalAlpha = 0.32
   ctx.fillStyle = data.preview ? '#f2d99e' : '#f2e2b8'
   ctx.fillRect(lx - 1, ly - 1, 3, 3)
+  ctx.restore()
+}
+
+// 路线上的真实事件小标记，以及不经过的盾架灰问号
+function drawRouteMarkers(ctx, data, now) {
+  if (!data) return
+  const preview = !!data.preview
+  const drawChest = (x, y) => {
+    const bx = x * CELL + CELL - 8
+    const by = y * CELL + 3
+    ctx.fillStyle = '#2a2117'
+    ctx.fillRect(bx + 2, by + 1, 4, 8)
+    ctx.fillRect(bx, by + 3, 8, 4)
+    ctx.fillStyle = preview ? '#ffe4a8' : '#ffcd75'
+    ctx.fillRect(bx + 3, by + 2, 2, 6)
+    ctx.fillRect(bx + 1, by + 4, 6, 2)
+  }
+  const drawShield = (x, y) => {
+    const bx = x * CELL + CELL - 8
+    const by = y * CELL + 3
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(bx + 1, by, 6, 7)
+    ctx.fillStyle = '#94b0c2'
+    ctx.fillRect(bx + 2, by + 1, 4, 5)
+    ctx.fillStyle = '#3b5dc9'
+    ctx.fillRect(bx + 3, by + 3, 2, 3)
+  }
+  const drawTrap = (x, y) => {
+    const bx = x * CELL + CELL - 8
+    const by = y * CELL + 3
+    ctx.fillStyle = '#2a2117'
+    ctx.fillRect(bx + 3, by, 2, 8)
+    ctx.fillRect(bx + 1, by + 2, 6, 4)
+    ctx.fillStyle = preview ? '#ffb066' : '#ef7d57'
+    ctx.fillRect(bx + 3, by + 1, 2, 6)
+    ctx.fillRect(bx + 2, by + 2, 4, 4)
+    ctx.fillStyle = '#ffcd75'
+    ctx.fillRect(bx + 3, by + 3, 1, 2)
+  }
+  const drawEnd = (x, y) => {
+    const bx = x * CELL + CELL - 8
+    const by = y * CELL + 2
+    ctx.fillStyle = '#2a2117'
+    ctx.fillRect(bx + 1, by, 1, 9)
+    ctx.fillStyle = '#a7f070'
+    ctx.fillRect(bx + 2, by + 1, 5, 4)
+    ctx.fillStyle = '#3f6b34'
+    ctx.fillRect(bx + 2, by + 4, 5, 1)
+  }
+  for (const m of data.markers || []) {
+    if (m.kind === 'chest') drawChest(m.x, m.y)
+    else if (m.kind === 'shield') drawShield(m.x, m.y)
+    else if (m.kind === 'trap') drawTrap(m.x, m.y)
+    else if (m.kind === 'end') drawEnd(m.x, m.y)
+  }
+  // 没有经过的盾架：灰问号提示玩家这趟不会去拿
+  ctx.save()
+  ctx.globalAlpha = 0.7
+  ctx.font = 'bold 11px "Fusion Pixel 12px", "Courier New", monospace'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  for (const s of data.offRouteShields || []) {
+    const qx = s.x * CELL + CELL - 7
+    const qy = s.y * CELL + 8
+    ctx.fillStyle = '#1a1612'
+    ctx.fillText('?', qx + 1, qy + 1)
+    ctx.fillStyle = '#a9a095'
+    ctx.fillText('?', qx, qy)
+  }
   ctx.restore()
 }
 
@@ -2581,6 +2654,100 @@ function drawWalkDust(ctx, dust) {
     ctx.fillRect(cx + 3 + p * 4, feet - 1 - p * 2, 2, 2)
     ctx.fillRect(cx - 1 + p * 2, feet + 2, 2, 1)
   }
+  ctx.restore()
+}
+
+// 布置期鼠标悬停：道具脚下的淡黄铜底光
+function drawHoverGlow(ctx, hover) {
+  const cx = (hover.x + 0.5) * CELL
+  const cy = (hover.y + 0.78) * CELL
+  ctx.save()
+  ctx.translate(cx, cy)
+  ctx.scale(1, 0.5)
+  const g = ctx.createRadialGradient(0, 0, 2, 0, 0, 18)
+  g.addColorStop(0, 'rgba(201, 162, 75, 0.26)')
+  g.addColorStop(0.7, 'rgba(201, 162, 75, 0.1)')
+  g.addColorStop(1, 'rgba(201, 162, 75, 0)')
+  ctx.fillStyle = g
+  ctx.fillRect(-18, -18, 36, 36)
+  ctx.restore()
+}
+
+// 悬停路牌时的小顺时针转向记号
+function drawSignTurnHint(ctx, hover, now) {
+  const cx = hover.x * CELL + CELL - 8
+  const cy = hover.y * CELL + 8
+  const alpha = 0.55 + 0.25 * Math.sin(now / 300)
+  ctx.save()
+  ctx.globalAlpha = alpha * 0.45
+  ctx.strokeStyle = '#24170f'
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  ctx.arc(cx + 1, cy + 1, 4.5, -0.7, 4.2)
+  ctx.stroke()
+  ctx.globalAlpha = alpha
+  ctx.strokeStyle = '#e8c97a'
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.arc(cx, cy, 4.5, -0.7, 4.2)
+  ctx.stroke()
+  // 箭头
+  ctx.fillStyle = '#e8c97a'
+  ctx.beginPath()
+  ctx.moveTo(cx + 4, cy - 5)
+  ctx.lineTo(cx + 8, cy - 4)
+  ctx.lineTo(cx + 4, cy - 1)
+  ctx.closePath()
+  ctx.fill()
+  ctx.restore()
+}
+
+// 非法落点：约 150ms 的小红叉
+function drawInvalidX(ctx, data) {
+  const p = Math.min(1, data.t / data.ms)
+  const cx = (data.x + 0.5) * CELL
+  const cy = (data.y + 0.5) * CELL
+  ctx.save()
+  ctx.globalAlpha = 0.9 * (1 - p)
+  for (let i = 0; i < 4; i++) {
+    const ax = cx - 8 + i * 4
+    const bx = cx + 5 - i * 4
+    const ay = cy - 8 + i * 4
+    ctx.fillStyle = '#3b1518'
+    ctx.fillRect(ax + 1, ay + 1, 3, 3)
+    ctx.fillRect(bx + 1, ay + 1, 3, 3)
+    ctx.fillStyle = '#e05252'
+    ctx.fillRect(ax, ay, 3, 3)
+    ctx.fillRect(bx, ay, 3, 3)
+  }
+  ctx.restore()
+}
+
+// 弩机真实预警：画布边缘暗橙红内光，越接近零点呼吸越快
+function drawWarningEdge(ctx, now, remain, still) {
+  const urgency = 1 - Math.max(0, Math.min(1, remain / 4000))
+  const period = 320 - urgency * 230
+  const pulse = still ? 0.5 : 0.5 + 0.5 * Math.sin(now / period)
+  const alpha = 0.14 + 0.16 * pulse
+  const w = COLS * CELL
+  const h = ROWS * CELL
+  ctx.save()
+  const g = ctx.createRadialGradient(
+    w / 2,
+    h / 2,
+    Math.min(w, h) * 0.3,
+    w / 2,
+    h / 2,
+    Math.hypot(w, h) * 0.56,
+  )
+  g.addColorStop(0, 'rgba(120, 28, 18, 0)')
+  g.addColorStop(0.7, `rgba(140, 36, 22, ${alpha * 0.35})`)
+  g.addColorStop(1, `rgba(110, 24, 16, ${alpha})`)
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, w, h)
+  ctx.strokeStyle = `rgba(230, 90, 50, ${alpha * 0.75})`
+  ctx.lineWidth = 2
+  ctx.strokeRect(1, 1, w - 2, h - 2)
   ctx.restore()
 }
 
@@ -2621,6 +2788,7 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   if (scene && scene.guide) drawGuide(ctx, scene.guide, now)
   if (scene && scene.dragging && scene.forbidden) drawForbidden(ctx, scene.forbidden)
   if (scene && scene.footprints) drawFootprints(ctx, scene.footprints, now)
+  if (scene && scene.hover) drawHoverGlow(ctx, scene.hover)
   for (const [key, item] of game.items) {
     if (key === hiddenKey) continue
     if (scene && scene.pop && scene.pop.key === key) continue
@@ -2660,6 +2828,10 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
     } else if (item.type === 'chest' && !item.opened) {
       drawChestGlint(ctx, item, now)
     }
+  }
+  if (scene && scene.footprints) drawRouteMarkers(ctx, scene.footprints, now)
+  if (scene && scene.hover && scene.hover.type === 'sign') {
+    drawSignTurnHint(ctx, scene.hover, now)
   }
 
   // 徽章展示台（墙面原位陈列）
@@ -2720,6 +2892,9 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
     scene && scene.door,
     still,
   )
+  if (scene && scene.crossbow && scene.crossbow.warnEdge) {
+    drawWarningEdge(ctx, now, scene.crossbow.warnRemain, still)
+  }
   if (highlight) {
     if (highlight.type && highlight.valid) {
       // 合法落点：格里先显示半透明道具
@@ -2738,4 +2913,5 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
     }
     drawCornerBrackets(ctx, highlight.x, highlight.y, highlight.valid, now)
   }
+  if (scene && scene.invalid) drawInvalidX(ctx, scene.invalid)
 }
