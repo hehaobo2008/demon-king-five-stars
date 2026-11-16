@@ -72,21 +72,34 @@ export function planRouteArchive(game) {
     return best
   }
 
-  const nextArchivePath = () => {
+  // 默认只取一份：优先取“已开近门”对应的档案，否则取最近的一份。
+  // 第二份只在路牌真的把人带到它旁边时才取，空摆不会自动拿齐。
+  const pickPrimary = () => {
+    for (const d of ARCHIVE.doors) {
+      if (!doorOpen[d.id]) continue
+      const a = archives.find((x) => x.id === d.archive)
+      if (!a) continue
+      if (doorPath(a) || standPath(a)) return a
+    }
     let best = null
-    let target = null
+    let len = Infinity
     for (const a of archives) {
-      if (taken.has(a.key)) continue
-      const back = standPath(a)
-      const viaDoor = doorPath(a)
-      let p = back
-      if (viaDoor && (!back || viaDoor.length <= back.length + 10)) p = viaDoor
-      if (p && (!best || p.length < best.length)) {
-        best = p
-        target = a
+      const p = standPath(a)
+      if (p && p.length < len) {
+        best = a
+        len = p.length
       }
     }
-    return target ? { archive: target, path: best } : null
+    return best
+  }
+
+  let primary = pickPrimary()
+  let secondary = primary ? archives.find((a) => a.id !== primary.id) : null
+  let secondaryRequested = false
+
+  const primaryPath = () => {
+    if (!primary || taken.has(primary.key)) return null
+    return doorPath(primary) || standPath(primary)
   }
 
   const walkPath = (path) => {
@@ -126,7 +139,7 @@ export function planRouteArchive(game) {
 
   actions.push({
     type: 'bubble',
-    text: '我是抄书人，想把两间档案都翻一翻。',
+    text: '我是抄书人，先取一份档案，再看路引。',
     wait: 1200,
   })
   const spawnItem = game.items.get(tileKey(ARCHIVE.spawn.x, ARCHIVE.spawn.y))
@@ -145,15 +158,18 @@ export function planRouteArchive(game) {
   while (guard++ < 150) {
     if (cur.x === ARCHIVE.challengeStop.x && cur.y === ARCHIVE.challengeStop.y) break
 
-    const near = archives.find(
-      (a) =>
-        !taken.has(a.key) &&
-        Math.abs(a.x - cur.x) + Math.abs(a.y - cur.y) === 1,
-    )
+    const adjacent = (a) =>
+      a && !taken.has(a.key) && Math.abs(a.x - cur.x) + Math.abs(a.y - cur.y) === 1
+    let near = null
+    if (adjacent(primary)) near = primary
+    else if (secondaryRequested && adjacent(secondary)) near = secondary
     if (near) {
       taken.add(near.key)
       actions.push({ type: 'archive', site: near.id, name: near.name, x: near.x, y: near.y })
       actions.push({ type: 'bubble', text: `${near.name}的档案，收下。`, wait: 850 })
+      if (near === primary) {
+        primary = null
+      }
       continue
     }
 
@@ -171,6 +187,8 @@ export function planRouteArchive(game) {
               signRedirects++
               if (signRedirects >= 8) signsIgnored = true
               walkPath(seg)
+              // 路牌被实际跟随后，客人愿意绕去第二间；没放牌不会多拿
+              secondaryRequested = true
               continue
             }
           }
@@ -178,27 +196,23 @@ export function planRouteArchive(game) {
       }
     }
 
-    const target = nextArchivePath()
-    let path
-    if (target) path = target.path
-    else path = bfsWalkable(cur, ARCHIVE.challengeStop, canWalk)
-    if (!path) {
-      if (target) {
-        // 这一份暂时到不了，标记后继续找另一份或挑战房
-        taken.add(target.archive.key)
-        continue
+    let path = primaryPath()
+    if (!path) primary = null
+    if (
+      !path &&
+      secondaryRequested &&
+      secondary &&
+      !taken.has(secondary.key)
+    ) {
+      path = doorPath(secondary) || standPath(secondary)
+      if (!path) {
+        taken.add(secondary.key)
+        secondary = null
       }
-      return null
     }
-    if (path.length <= 1) {
-      if (target && !taken.has(target.archive.key)) {
-        const a = target.archive
-        taken.add(a.key)
-        actions.push({ type: 'archive', site: a.id, name: a.name, x: a.x, y: a.y })
-        continue
-      }
-      break
-    }
+    if (!path) path = bfsWalkable(cur, ARCHIVE.challengeStop, canWalk)
+    if (!path) return null
+    if (path.length <= 1) break
     walkPath([path[0], path[1]])
   }
 

@@ -331,5 +331,14 @@ export function buildGrid5() {
       if (ARCHIVE_ROWS[y][x] !== '#') grid[y][x] = 'library'
     }
   }
+  // 草图校订：西室/东室两侧各补两格墙，让近门与后门分开
+  for (const [x, y] of [
+    [7, 8],
+    [7, 9],
+    [16, 8],
+    [16, 9],
+  ]) {
+    grid[y][x] = 'wall'
+  }
   return grid
 }

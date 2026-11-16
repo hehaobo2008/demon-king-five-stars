@@ -396,7 +396,7 @@ const ORDER_INFO = {
   5: {
     title: '今日预约 · 抄书人',
     quote:
-      '「我是档案库的抄书人，想拿<em class="kw">勇者徽章</em>。红门黄门的<em class="kw">压板</em>对上就能抄近；档案至少取一份，两间都翻更好。」',
+      '「我是档案库的抄书人，想拿<em class="kw">勇者徽章</em>。默认先抄一份；<em class="kw">路牌</em>把我从后门引到另一间，就两份都抄。红黄<em class="kw">近门</em>开了、我真穿过去，也认。」',
   },
 }
 const GUEST_VARIANT = { 1: 'knight', 2: 'fan', 3: 'trader', 4: 'fan', 5: 'trader' }
@@ -1413,7 +1413,7 @@ function setOrder(n) {
   tab5.classList.toggle('active', order === 5)
   status(
     order === 5
-      ? '重块压红/黄压板开对应门；路牌可引客人走开启的近门或后门。'
+      ? '空摆只取一份；路牌可从后门引到第二间；重块开近门后要真穿过去。'
       : order === 4
         ? '桥板拖到标出的桥位；客人先看水尺，再跨桥或带盾挡锤。'
         : order === 3
@@ -1562,7 +1562,11 @@ function updateOnboarding() {
       setCoach('去挑战房的路被隔栅封死了，先挪开再开门。', 37, 55)
     } else {
       guideState = { room: null, tile: { x: 4, y: 8 } }
-      setCoach('重块压红/黄压板开对应门；路牌可引客人走开启的近门或后门。', 34, 58)
+      setCoach(
+        '空摆只取一份；路牌从后门引到另一间会多取；开近门并实际穿过也五星。',
+        33,
+        58,
+      )
     }
     return
   }
