@@ -249,9 +249,136 @@ function buildArchiveReview(log) {
   return { status: 'rated', stars, events, eventKinds, comment, missing }
 }
 
+
+// ===== 正篇第四图：钟摆工坊 =====
+// 徽章 3 星；取到任一零件 4 星；本局没被钟摆打到 5 星。
+function buildPendulumReview(log) {
+  const kinds = new Set(log.map((e) => e.kind))
+  const parts = log.filter((e) => e.kind === 'part')
+  const hasBadge = kinds.has('badge')
+  const hasPart = parts.length > 0
+  const hitByPendulum = kinds.has('pendulumHit')
+  const stopped = kinds.has('pendulumStop')
+  const events = []
+  const eventKinds = []
+  const push = (kind, text) => {
+    if (events.length >= 4) return
+    events.push(text)
+    eventKinds.push(kind)
+  }
+  if (hasBadge) push('badge', '拿到了勇者徽章')
+  const shown = new Set()
+  for (const e of parts) {
+    const site = e.site || e.name || '零件'
+    if (shown.has(site)) continue
+    shown.add(site)
+    push('part', `取到了${e.name || '零件'}`)
+    if (shown.size >= 2) break
+  }
+  if (stopped) push('pendulumStop', '及时止住了一次钟摆')
+  if (hitByPendulum) push('pendulumHit', '被钟摆扫到了')
+  if (kinds.has('block')) push('block', '挡住了守卫的大锤')
+  else if (kinds.has('hit')) push('hit', '挨了守卫一锤')
+  if (events.length < 4 && kinds.has('shield')) push('shield', '在路边捡到了盾牌')
+
+  if (!hasBadge) {
+    return {
+      status: 'incomplete',
+      stars: 0,
+      events,
+      eventKinds,
+      comment: '',
+      missing: ['预约未完成：没拿到勇者徽章'],
+    }
+  }
+
+  let stars = 3
+  if (hasPart) stars += 1
+  if (!hitByPendulum) stars += 1
+
+  const missing = []
+  if (!hasPart) missing.push('第四颗星：去上层或下层零件点取一件零件')
+  if (hitByPendulum) {
+    missing.push('第五颗星：被钟摆打到了；需及时止摆，或改走没有钟摆的南道')
+  }
+
+  let comment
+  if (stars === 5) {
+    comment = stopped
+      ? '零件到手，钟摆也被我及时停住，这一趟没白跑。'
+      : '零件到手，钟摆没碰到我；干净南道绕得值。'
+  } else if (hasPart) {
+    comment = '零件是捡到了，可钟摆那一下结结实实，止摆或绕路还差一步。'
+  } else if (!hitByPendulum) {
+    comment = '钟摆是躲过去了，可两处零件都没捡，工坊白逛。'
+  } else {
+    comment = '零件没捡着，钟摆也没躲过，这工坊得重新走。'
+  }
+
+  return { status: 'rated', stars, events, eventKinds, comment, missing }
+}
+
+// ===== 正篇第五图：苔火巡廊 =====
+// 徽章 3 星；取到苔火样本 4 星；本局没被巡卫撞见 5 星。
+function buildMossReview(log) {
+  const kinds = new Set(log.map((e) => e.kind))
+  const hasBadge = kinds.has('badge')
+  const hasMoss = kinds.has('moss')
+  const patrol = kinds.has('patrol')
+  const events = []
+  const eventKinds = []
+  const push = (kind, text) => {
+    if (events.length >= 4) return
+    events.push(text)
+    eventKinds.push(kind)
+  }
+  if (hasBadge) push('badge', '拿到了勇者徽章')
+  if (hasMoss) push('moss', '取到了苔火样本')
+  if (patrol) push('patrol', '被内院巡卫撞见')
+  if (kinds.has('block')) push('block', '挡住了守卫的大锤')
+  else if (kinds.has('hit')) push('hit', '挨了守卫一锤')
+  if (events.length < 4 && kinds.has('shield')) push('shield', '在路边捡到了盾牌')
+
+  if (!hasBadge) {
+    return {
+      status: 'incomplete',
+      stars: 0,
+      events,
+      eventKinds,
+      comment: '',
+      missing: ['预约未完成：没拿到勇者徽章'],
+    }
+  }
+
+  let stars = 3
+  if (hasMoss) stars += 1
+  if (!patrol) stars += 1
+
+  const missing = []
+  if (!hasMoss) missing.push('第四颗星：去内院取一份苔火样本')
+  if (patrol) {
+    missing.push('第五颗星：被巡卫撞见；用古铃把巡卫引到另一侧，或走外廊绕开')
+  }
+
+  let comment
+  if (stars === 5) {
+    comment = hasMoss
+      ? '样本到手，巡卫被铃声引去了另一边，这趟内院走得安稳。'
+      : '外廊绕得干净，巡卫始终没撞上，可惜没进内院取样本。'
+  } else if (hasMoss) {
+    comment = '苔火样本是取到了，可内院巡卫也撞了个正着。'
+  } else {
+    comment = '样本没取着，还被巡卫撞见，内院这回进得不值。'
+  }
+
+  return { status: 'rated', stars, events, eventKinds, comment, missing }
+}
+
 export function buildReview(log, order = 1) {
   if (order === 4) return buildTideReview(log)
   if (order === 5) return buildArchiveReview(log)
+  if (order === 6) return buildPendulumReview(log)
+  if (order === 7) return buildMossReview(log)
   if (order === 3) return buildMarketReview(log)
   const kinds = new Set(log.map((e) => e.kind))
   const hasBadge = kinds.has('badge')

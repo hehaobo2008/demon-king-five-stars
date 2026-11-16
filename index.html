@@ -72,6 +72,8 @@
               <button id="tab-order3" class="tab" hidden>回声集市</button>
               <button id="tab-order4" class="tab" hidden>潮汐蓄水厅</button>
               <button id="tab-order5" class="tab" hidden>双锁档案库</button>
+              <button id="tab-order6" class="tab" hidden>钟摆工坊</button>
+              <button id="tab-order7" class="tab" hidden>苔火巡廊</button>
             </div>
             <div id="five-star-cert" class="five-star-cert" role="status" aria-label="五星魔王认证" hidden>
               <span class="cert-stars" aria-hidden="true">★★★★★</span>
@@ -96,6 +98,10 @@
                 <button id="btn-trap" class="btn trap" disabled hidden>
                   <span id="trap-label" class="trap-label">弩机待命 · 客人靠近可拉闸</span>
                   <span id="trap-timer-fill" class="trap-timer-fill" aria-hidden="true"></span>
+                </button>
+                <button id="btn-swing" class="btn trap swing" disabled hidden>
+                  <span id="swing-label" class="trap-label">钟摆待命 · 全局一次止摆</span>
+                  <span id="swing-timer-fill" class="trap-timer-fill" aria-hidden="true"></span>
                 </button>
               </div>
             </section>
@@ -152,6 +158,15 @@
                 <div class="card-info">
                   <div class="card-name">重块</div>
                   <div class="card-use">压住压板，开对应颜色的门</div>
+                </div>
+                <div class="card-price"><span class="coin"></span><span class="price"></span></div>
+              </div>
+
+              <div class="card" data-type="bell" title="按住拖到标出的古铃位" hidden>
+                <img alt="古铃" draggable="false" />
+                <div class="card-info">
+                  <div class="card-name">古铃</div>
+                  <div class="card-use">挂在铃位，把巡卫引去一侧</div>
                 </div>
                 <div class="card-price"><span class="coin"></span><span class="price"></span></div>
               </div>

@@ -5,6 +5,8 @@ import {
   ARCHIVE,
   MARKET,
   MAP2,
+  MOSS,
+  PENDULUM,
   ROOMS,
   SKELETON,
   TIDE,
@@ -14,6 +16,8 @@ import {
   buildGrid3,
   buildGrid4,
   buildGrid5,
+  buildGrid6,
+  buildGrid7,
 } from './map.js'
 import {
   ITEMS,
@@ -81,6 +85,7 @@ const chestCardSealEl = chestCardEl.querySelector('.card-seal')
 const barrierCardEl = document.querySelector('.card[data-type="barrier"]')
 const bridgeCardEl = document.querySelector('.card[data-type="bridge"]')
 const weightCardEl = document.querySelector('.card[data-type="weight"]')
+const bellCardEl = document.querySelector('.card[data-type="bell"]')
 const avatarFrameEl = document.getElementById('avatar-frame')
 const dropHintEl = document.getElementById('drop-hint')
 const btnOpen = document.getElementById('btn-open')
@@ -89,6 +94,9 @@ const btnTrap = document.getElementById('btn-trap')
 const trapSlotEl = document.querySelector('.trap-slot')
 const trapLabelEl = document.getElementById('trap-label')
 const trapTimerFillEl = document.getElementById('trap-timer-fill')
+const btnSwing = document.getElementById('btn-swing')
+const swingLabelEl = document.getElementById('swing-label')
+const swingTimerFillEl = document.getElementById('swing-timer-fill')
 const btnNext = document.getElementById('btn-next')
 const orderTabs = document.getElementById('order-tabs')
 const tab1 = document.getElementById('tab-order1')
@@ -96,6 +104,8 @@ const tab2 = document.getElementById('tab-order2')
 const tab3 = document.getElementById('tab-order3')
 const tab4 = document.getElementById('tab-order4')
 const tab5 = document.getElementById('tab-order5')
+const tab6 = document.getElementById('tab-order6')
+const tab7 = document.getElementById('tab-order7')
 const galleryTitleEl = document.getElementById('gallery-title')
 const certEl = document.getElementById('five-star-cert')
 const guestTitleEl = document.getElementById('guest-title')
@@ -158,6 +168,16 @@ const MAP_DEFS = {
     arena: ARCHIVE.arena,
     stand: ARCHIVE.stand,
   },
+  6: {
+    skeleton: PENDULUM.skeleton,
+    arena: PENDULUM.arena,
+    stand: PENDULUM.stand,
+  },
+  7: {
+    skeleton: MOSS.skeleton,
+    arena: MOSS.arena,
+    stand: MOSS.stand,
+  },
 }
 const games = {
   1: createGame(buildGrid(), [SKELETON]),
@@ -168,6 +188,11 @@ const games = {
     ARCHIVE.skeleton,
     ...ARCHIVE.archives.map((a) => ({ x: a.x, y: a.y })),
   ]),
+  6: createGame(buildGrid6(), [PENDULUM.skeleton]),
+  7: createGame(buildGrid7(), [
+    MOSS.skeleton,
+    { x: MOSS.sample.x, y: MOSS.sample.y },
+  ]),
 }
 let game = games[1]
 const bases = {
@@ -176,6 +201,8 @@ const bases = {
   3: makeBaseMap(3),
   4: makeBaseMap(4),
   5: makeBaseMap(5),
+  6: makeBaseMap(6),
+  7: makeBaseMap(7),
 }
 let base = bases[1]
 let currentMap = MAP_DEFS[1]
@@ -186,6 +213,8 @@ const shownGold = {
   3: games[3].gold,
   4: games[4].gold,
   5: games[5].gold,
+  6: games[6].gold,
+  7: games[7].gold,
 }
 let goldFxTimer = 0
 
@@ -199,6 +228,8 @@ window.__ui = () => ({
   thirdUnlocked,
   fourthUnlocked,
   fifthUnlocked,
+  sixthUnlocked,
+  seventhUnlocked,
   speed,
   simT: Math.round(simT),
   trapMode: crossbow.mode,
@@ -231,6 +262,8 @@ let secondUnlocked = false
 let thirdUnlocked = false
 let fourthUnlocked = false
 let fifthUnlocked = false
+let sixthUnlocked = false
+let seventhUnlocked = false
 // 营业时钟：simT 按倍速推进（走路/台词/演出），弩机预警仍用真实毫秒
 let speed = 1
 let simT = 0
@@ -240,6 +273,10 @@ let footprintsBase = null
 let footprintPreview = null
 let footprintPreviewKey = ''
 let trapUiSig = ''
+let swingUiSig = ''
+let swingUsed = false
+let swingWarn = null
+let swingStopped = new Set() // { id, at, startReal, ms, pressed }
 let logShownOrder = 0
 let logShownCount = 0
 let reviewStampPlayed = false
@@ -289,6 +326,8 @@ function readBestStars() {
     3: readOrderBestStars(3),
     4: readOrderBestStars(4),
     5: readOrderBestStars(5),
+    6: readOrderBestStars(6),
+    7: readOrderBestStars(7),
   }
 }
 
@@ -316,6 +355,8 @@ function mergeBestFromStorage() {
     3: Math.max(bestStars[3], stored[3]),
     4: Math.max(bestStars[4], stored[4]),
     5: Math.max(bestStars[5], stored[5]),
+    6: Math.max(bestStars[6], stored[6]),
+    7: Math.max(bestStars[7], stored[7]),
   }
 }
 
@@ -346,18 +387,17 @@ window.addEventListener('storage', (e) => {
     e.key !== orderBestKey(2) &&
     e.key !== orderBestKey(3) &&
     e.key !== orderBestKey(4) &&
-    e.key !== orderBestKey(5)
+    e.key !== orderBestKey(5) &&
+    e.key !== orderBestKey(6) &&
+    e.key !== orderBestKey(7)
   ) {
     return
   }
-  const before = `${bestStars[1]}|${bestStars[2]}|${bestStars[3]}|${bestStars[4]}|${bestStars[5]}`
+  const sig = () =>
+    `${bestStars[1]}|${bestStars[2]}|${bestStars[3]}|${bestStars[4]}|${bestStars[5]}|${bestStars[6]}|${bestStars[7]}`
+  const before = sig()
   mergeBestFromStorage()
-  if (
-    `${bestStars[1]}|${bestStars[2]}|${bestStars[3]}|${bestStars[4]}|${bestStars[5]}` !==
-    before
-  ) {
-    updateBestUI()
-  }
+  if (sig() !== before) updateBestUI()
 })
 let doorOpen = 0
 let doorTween = null
@@ -398,14 +438,34 @@ const ORDER_INFO = {
     quote:
       '「我是档案库的抄书人，想拿<em class="kw">勇者徽章</em>。默认先抄一份；<em class="kw">路牌</em>把我从后门引到另一间，就两份都抄。红黄<em class="kw">近门</em>开了、我真穿过去，也认。」',
   },
+  6: {
+    title: '今日预约 · 钟摆工',
+    quote:
+      '「我是钟摆工坊的工匠，想拿<em class="kw">勇者徽章</em>。我要一件<em class="kw">零件</em>；钟摆只停一次，得在它扫下来前拉闸，或者干脆走干净南道。」',
+  },
+  7: {
+    title: '今日预约 · 采苔人',
+    quote:
+      '「我是来采<em class="kw">苔火样本</em>的，也想拿勇者徽章。内院有巡卫；把<em class="kw">古铃</em>挂到一侧能引开他，走外廊则碰不着他。」',
+  },
 }
-const GUEST_VARIANT = { 1: 'knight', 2: 'fan', 3: 'trader', 4: 'fan', 5: 'trader' }
+const GUEST_VARIANT = {
+  1: 'knight',
+  2: 'fan',
+  3: 'trader',
+  4: 'fan',
+  5: 'trader',
+  6: 'fan',
+  7: 'trader',
+}
 const REVIEW_META = {
   1: { title: '新手剑士的评价单', sign: '新手剑士' },
   2: { title: '机关迷的评价单', sign: '机关迷' },
   3: { title: '淘货客的评价单', sign: '淘货客' },
   4: { title: '潮汐工的评价单', sign: '潮汐工' },
   5: { title: '抄书人的评价单', sign: '抄书人' },
+  6: { title: '钟摆工的评价单', sign: '钟摆工' },
+  7: { title: '采苔人的评价单', sign: '采苔人' },
 }
 let guest = null
 let walker = null
@@ -493,6 +553,17 @@ const CARD_USE_COPY = {
     sign: '放在岔口，给客人指一段路',
     barrier: '占一格挡路，改客人走法',
     weight: '压上红/黄压板，开对应门',
+  },
+  6: {
+    shield: '摆在客人经过的路上，捡起挡锤',
+    sign: '放在岔口，给客人指一段路',
+    barrier: '占一格挡路，改客人走法',
+  },
+  7: {
+    shield: '摆在客人经过的路上，捡起挡锤',
+    sign: '放在岔口，给客人指一段路',
+    barrier: '占一格挡路，改客人走法',
+    bell: '挂上铃位，把巡卫引去一侧',
   },
 }
 
@@ -594,7 +665,7 @@ async function refreshMapArt() {
       await Promise.race([
         document.fonts.load(
           '12px "Fusion Pixel 12px"',
-          '五星好评入口通道侧室挑战房补给廊弩廊训练房军械库回声集市西铺草料东铺陶器潮汐蓄水厅西岸东岸双锁档案库西档案间东档案间红门黄门',
+          '五星好评入口通道侧室挑战房补给廊弩廊训练房军械库回声集市西铺草料东铺陶器潮汐蓄水厅西岸东岸双锁档案库西档案间东档案间红门黄门钟摆工坊上层钟摆南道苔火巡廊内院外廊铃位苔火样本',
         ),
         new Promise((_, reject) => setTimeout(() => reject(new Error('font-timeout')), 1500)),
       ])
@@ -608,6 +679,8 @@ async function refreshMapArt() {
     bases[3] = makeBaseMap(3)
     bases[4] = makeBaseMap(4)
     bases[5] = makeBaseMap(5)
+    bases[6] = makeBaseMap(6)
+    bases[7] = makeBaseMap(7)
     base = bases[order]
   } catch (e) {
     /* 重绘失败保留原底图 */
@@ -783,6 +856,18 @@ function updateLogProgress() {
                 },
                 { done: kinds.has('badge'), label: '徽章' },
               ]
+            : order === 6
+              ? [
+                  { done: kinds.has('part'), label: '零件' },
+                  { done: !kinds.has('pendulumHit'), label: '没被钟摆打到' },
+                  { done: kinds.has('badge'), label: '徽章' },
+                ]
+              : order === 7
+                ? [
+                    { done: kinds.has('moss'), label: '苔火样本' },
+                    { done: !kinds.has('patrol'), label: '避开巡卫' },
+                    { done: kinds.has('badge'), label: '徽章' },
+                  ]
         : [
             { done: kinds.has('safe') || kinds.has('supply'), label: '安全通行或绕路' },
             { done: kinds.has('block'), label: '挡锤' },
@@ -894,6 +979,8 @@ function updateBestUI() {
     [tab3, '回声集市', bestStars[3]],
     [tab4, '潮汐蓄水厅', bestStars[4]],
     [tab5, '双锁档案库', bestStars[5]],
+    [tab6, '钟摆工坊', bestStars[6]],
+    [tab7, '苔火巡廊', bestStars[7]],
   ]
   for (const [el, base, best] of tabs) {
     el.textContent = base
@@ -1009,7 +1096,11 @@ function showReview() {
   reviewEvents.textContent = ''
   r.events.forEach((text, i) => {
     const kind = r.eventKinds ? r.eventKinds[i] : ''
-    const setback = kind === 'hit' || kind === 'shot'
+    const setback =
+      kind === 'hit' ||
+      kind === 'shot' ||
+      kind === 'pendulumHit' ||
+      kind === 'patrol'
     const li = document.createElement('li')
     li.className = setback ? 'is-setback' : 'is-done'
     li.textContent = text
@@ -1032,10 +1123,20 @@ function showReview() {
   // 首单四星接二单；之后每单三星起依次接下一单，第五单收尾
   const canNext =
     (order === 1 && r.status === 'rated' && r.stars >= 4) ||
-    (order >= 2 && order <= 4 && r.status === 'rated' && r.stars >= 3)
+    (order >= 2 && order <= 6 && r.status === 'rated' && r.stars >= 3)
   btnNext.hidden = !canNext
   btnNext.textContent =
-    order === 2 ? '接第三单' : order === 3 ? '接第四单' : order === 4 ? '接第五单' : '接下一单'
+    order === 2
+      ? '接第三单'
+      : order === 3
+        ? '接第四单'
+        : order === 4
+          ? '接第五单'
+          : order === 5
+            ? '接第六单'
+            : order === 6
+              ? '接第七单'
+              : '接下一单'
 
   reviewCard.hidden = false
   // 羊皮票从上方 16px 落下，约 0.28s
@@ -1118,6 +1219,22 @@ btnNext.addEventListener('click', () => {
     fifthUnlocked = true
     setOrder(5)
     status('接下了双锁档案库。重块压对压板，两扇门和后门都看清再开门。')
+    return
+  }
+  if (order === 5) {
+    hideReview()
+    resetBusiness()
+    sixthUnlocked = true
+    setOrder(6)
+    status('接下了钟摆工坊。两条钟摆捷径、干净南道，止摆只有一次。')
+    return
+  }
+  if (order === 6) {
+    hideReview()
+    resetBusiness()
+    seventhUnlocked = true
+    setOrder(7)
+    status('接下了苔火巡廊。外廊可避开巡卫；古铃能把他引去一侧。')
   }
 })
 
@@ -1300,6 +1417,17 @@ function specialPlaceReason(type, x, y, ignoreKey = null) {
   if (order === 5 && type === 'weight') {
     if (!ARCHIVE.plates.some((p) => p.x === x && p.y === y)) return 'weight-plate'
   }
+  if (order === 6) {
+    if (PENDULUM.parts.some((p) => p.x === x && p.y === y)) return 'part-spot'
+  }
+  if (order === 7) {
+    const slot = MOSS.bells.some((b) => b.x === x && b.y === y)
+    if (type === 'bell') {
+      if (!slot) return 'bell-slot'
+      return base
+    }
+    if (slot) return 'bell-slot'
+  }
   return base
 }
 
@@ -1311,11 +1439,17 @@ function updateHUD() {
   goldEl.textContent = game.gold
   const chestLocked = order === 2
   const visible =
-    order >= 4
-      ? { shield: true, sign: true, barrier: true, [order === 4 ? 'bridge' : 'weight']: true }
-      : order === 3
-        ? { chest: true, shield: true, sign: true, barrier: true }
-        : { chest: true, shield: true, sign: true }
+    order === 7
+      ? { shield: true, sign: true, barrier: true, bell: true }
+      : order === 6
+        ? { shield: true, sign: true, barrier: true }
+        : order === 5
+          ? { shield: true, sign: true, barrier: true, weight: true }
+          : order === 4
+            ? { shield: true, sign: true, barrier: true, bridge: true }
+            : order === 3
+              ? { chest: true, shield: true, sign: true, barrier: true }
+              : { chest: true, shield: true, sign: true }
   for (const el of cardEls) el.hidden = !visible[el.dataset.type]
   updateCardCopy()
   for (const el of cardEls) {
@@ -1334,6 +1468,7 @@ function updateHUD() {
     : '按住拖到地图空地砖'
   btnOpen.disabled = mode !== 'setup'
   updateTrapButton()
+  updateSwingButton()
   updateOnboarding()
   // 布置期的真实路线脚印；营业后收起
   footprintsBase = mode === 'setup' ? buildRoute(game) : null
@@ -1375,6 +1510,30 @@ function updateTrapButton() {
   trapLabelEl.textContent = label
 }
 
+function updateSwingButton() {
+  btnSwing.hidden = order !== 6
+  if (order !== 6) {
+    btnSwing.classList.remove('armed', 'timing', 'standby')
+    btnSwing.disabled = true
+    swingTimerFillEl.style.transform = 'scaleX(0)'
+    return
+  }
+  const warning = mode === 'business' && !!swingWarn
+  const armed = warning && !swingUsed && !swingWarn.pressed
+  btnSwing.disabled = !armed
+  btnSwing.classList.toggle('armed', armed)
+  btnSwing.classList.toggle('timing', armed)
+  btnSwing.classList.toggle('standby', mode === 'setup')
+  if (!armed) swingTimerFillEl.style.transform = 'scaleX(0)'
+  let label = '钟摆待命 · 全局一次止摆'
+  if (mode === 'business') {
+    if (swingUsed) label = '止摆已用'
+    else if (warning) label = '止摆停住钟摆'
+    else label = '钟摆待命 · 走过才预警'
+  }
+  swingLabelEl.textContent = label
+}
+
 function setOrder(n) {
   if (mode !== 'setup') return
   order = n
@@ -1406,13 +1565,21 @@ function setOrder(n) {
   tab3.hidden = !thirdUnlocked
   tab4.hidden = !fourthUnlocked
   tab5.hidden = !fifthUnlocked
+  tab6.hidden = !sixthUnlocked
+  tab7.hidden = !seventhUnlocked
   tab1.classList.toggle('active', order === 1)
   tab2.classList.toggle('active', order === 2)
   tab3.classList.toggle('active', order === 3)
   tab4.classList.toggle('active', order === 4)
   tab5.classList.toggle('active', order === 5)
+  tab6.classList.toggle('active', order === 6)
+  tab7.classList.toggle('active', order === 7)
   status(
-    order === 5
+    order === 7
+      ? '外廊可避开巡卫；古铃能把巡卫引到一侧，样本在内院。'
+      : order === 6
+        ? '两条钟摆捷径、干净南道和中间检修道；全局只有一次止摆。'
+        : order === 5
       ? '空摆只取一份；路牌可从后门引到第二间；重块开近门后要真穿过去。'
       : order === 4
         ? '桥板拖到标出的桥位；客人先看水尺，再跨桥或带盾挡锤。'
@@ -1570,6 +1737,28 @@ function updateOnboarding() {
     }
     return
   }
+  if (order === 6) {
+    onbStep = 'route'
+    if (!planRoute(game, 6)) {
+      guideState = null
+      setCoach('隔栅封死了去挑战房的路，先挪开再开门。', 37, 55)
+    } else {
+      guideState = { room: null, tile: { x: 11, y: 7 } }
+      setCoach('两条钟摆捷径、干净南道；钟摆只停一次，走过才会预警。', 35, 58)
+    }
+    return
+  }
+  if (order === 7) {
+    onbStep = 'route'
+    if (!planRoute(game, 7)) {
+      guideState = null
+      setCoach('隔栅封死了去挑战房的路，先挪开再开门。', 37, 55)
+    } else {
+      guideState = { room: null, tile: { x: MOSS.sample.x, y: MOSS.sample.y } }
+      setCoach('外廊避开巡卫；要取样本，先挂古铃把巡卫引到另一侧。', 34, 58)
+    }
+    return
+  }
   if (onboardingRetired) {
     coachEl.hidden = true
     guideState = null
@@ -1632,6 +1821,8 @@ function trySwitchOrder(n) {
   if (n === 3 && !thirdUnlocked) return
   if (n === 4 && !fourthUnlocked) return
   if (n === 5 && !fifthUnlocked) return
+  if (n === 6 && !sixthUnlocked) return
+  if (n === 7 && !seventhUnlocked) return
   setOrder(n)
 }
 
@@ -1640,6 +1831,8 @@ tab2.addEventListener('click', () => trySwitchOrder(2))
 tab3.addEventListener('click', () => trySwitchOrder(3))
 tab4.addEventListener('click', () => trySwitchOrder(4))
 tab5.addEventListener('click', () => trySwitchOrder(5))
+tab6.addEventListener('click', () => trySwitchOrder(6))
+tab7.addEventListener('click', () => trySwitchOrder(7))
 
 // 营业倍速：随时可切，走动中的时钟不重置也不跳步
 spd1El.addEventListener('click', () => setSpeed(1))
@@ -1661,6 +1854,15 @@ btnTrap.addEventListener('click', () => {
   crossbow.used = true
   crossbow.pressed = true
   updateTrapButton()
+})
+
+// 钟摆止摆：只在实际预警窗口内、全局一次
+btnSwing.addEventListener('click', () => {
+  if (order !== 6 || mode !== 'business' || swingUsed || !swingWarn) return
+  if (performance.now() - swingWarn.startReal >= swingWarn.ms) return
+  swingUsed = true
+  swingWarn.pressed = true
+  updateSwingButton()
 })
 
 // ---------- 营业 / 重新布置 ----------
@@ -1702,18 +1904,25 @@ function startBusiness() {
   const plan = planRoute(game, order)
   if (!plan) {
     status(
-      order === 4
-        ? '桥位和干路都走不通，或隔栅封住了必经路，先调整再开门。'
-        : order === 5
-          ? '隔栅把去挑战房的路封死了，先挪开或收回一格再开门。'
-          : order === 3
-            ? '隔栅封死了去挑战房的路，先挪开或收回一格再开门。'
-            : '客人找不到去挑战房的路',
+      order === 6
+        ? '隔栅把工坊的路封死了，先挪开或收回一格再开门。'
+        : order === 7
+          ? '隔栅把巡廊的路封死了，先挪开或收回一格再开门。'
+          : order === 4
+            ? '桥位和干路都走不通，或隔栅封住了必经路，先调整再开门。'
+            : order === 5
+              ? '隔栅把去挑战房的路封死了，先挪开或收回一格再开门。'
+              : order === 3
+                ? '隔栅封死了去挑战房的路，先挪开或收回一格再开门。'
+                : '客人找不到去挑战房的路',
       'fail',
     )
     return
   }
   runHasTrap = plan.actions.some((a) => a.type === 'trap')
+  swingUsed = false
+  swingWarn = null
+  swingStopped = new Set()
   setDoor(1, DOOR_OPEN_MS)
   pending = null
   drag = null
@@ -1789,9 +1998,16 @@ function resetBusiness() {
   alarmEl.hidden = true
   btnTrap.classList.remove('timing')
   trapTimerFillEl.style.transform = 'scaleX(0)'
+  swingUsed = false
+  swingWarn = null
+  swingStopped = new Set()
+  btnSwing.classList.remove('armed', 'timing', 'standby')
+  swingTimerFillEl.style.transform = 'scaleX(0)'
   runHasTrap = true
   game.badgeTaken = false
   game.takenArchives.clear()
+  game.takenParts.clear()
+  game.takenMoss = false
   restoreItems(game)
   game.log.length = 0
   updateLogUI()
@@ -1923,6 +2139,35 @@ function stepWalker(t, realT) {
       advanceWalker(t)
       continue
     }
+    if (a.type === 'part') {
+      game.takenParts.add(a.site)
+      addLog(game, 'part', { site: a.site, label: `取到${a.name}` })
+      updateLogUI()
+      sfx.chest()
+      startGuestGesture('chest', 520, t)
+      spark = { x: a.x, y: a.y, start: t, ms: 520 }
+      advanceWalker(t)
+      continue
+    }
+    if (a.type === 'moss') {
+      game.takenMoss = true
+      addLog(game, 'moss', { label: '取到苔火样本' })
+      updateLogUI()
+      sfx.chest()
+      startGuestGesture('chest', 520, t)
+      spark = { x: a.x, y: a.y, start: t, ms: 520 }
+      advanceWalker(t)
+      continue
+    }
+    if (a.type === 'patrol') {
+      addLog(game, 'patrol', { label: '被巡卫撞见' })
+      updateLogUI()
+      showBubble('巡卫发现我了！', a.at || null, 'hurt')
+      status('内院巡卫撞见了客人', 'fail')
+      sfx.warn()
+      advanceWalker(t)
+      continue
+    }
     if (a.type === 'pickupShield') {
       // 原子拾盾：真拾到才停一拍并说台词；已被机关阶段拿走的则静默跳过
       if (!a.started) {
@@ -2006,6 +2251,64 @@ function stepWalker(t, realT) {
         continue
       }
       return
+    }
+    if (a.type === 'pendulum') {
+      const SWING_MS = 2400
+      if (swingStopped.has(a.id)) {
+        advanceWalker(t)
+        continue
+      }
+      if (!a.started) {
+        a.started = true
+        a.phase = 'warn'
+        a.phaseStart = t
+        swingWarn = {
+          id: a.id,
+          at: a.at,
+          startReal: realT,
+          ms: SWING_MS,
+          pressed: false,
+        }
+        updateSwingButton()
+        hideBubble()
+        status('钟摆预警！2.4 秒内点「止摆」')
+        sfx.warn()
+      }
+      if (a.phase === 'warn') {
+        if (swingWarn && swingWarn.pressed) {
+          addLog(game, 'pendulumStop')
+          updateLogUI()
+          swingStopped.add(swingWarn.id)
+          sfx.block()
+          status('钟摆停住了')
+          a.phase = 'done'
+          a.phaseStart = t
+          swingWarn = null
+          updateSwingButton()
+        } else if (swingWarn && realT - swingWarn.startReal >= swingWarn.ms) {
+          addLog(game, 'pendulumHit')
+          updateLogUI()
+          fx = { kind: 'hit', at: { x: guest.x, y: guest.y }, start: t, ms: 350 }
+          stagger = { start: t, ms: 420 }
+          sfx.hit()
+          showBubble('钟摆扫过来了！', null, 'hurt')
+          status('没来得及止摆，客人被钟摆扫到', 'fail')
+          a.phase = 'done'
+          a.phaseStart = t
+          swingWarn = null
+          updateSwingButton()
+        }
+        return
+      }
+      if (a.phase === 'done') {
+        if (t - a.phaseStart >= 480) {
+          advanceWalker(t)
+          continue
+        }
+        return
+      }
+      advanceWalker(t)
+      continue
     }
     if (a.type === 'trap') {
       // 机械弩：预警四秒 → 暂停后先跨过亮线再记平安；错过则先步入亮线格、沿亮线中箭
@@ -2433,7 +2736,11 @@ window.addEventListener('pointerup', () => {
                 ? '弹回：这段桥位已经搭了桥板'
                 : reason === 'weight-plate'
                   ? '弹回：重块只能压在红/黄压板上'
-                  : '弹回：没落在地图上',
+                  : reason === 'bell-slot'
+                    ? '弹回：古铃只能挂在标出的两处铃位'
+                    : reason === 'part-spot'
+                      ? '弹回：零件点是固定目标'
+                      : '弹回：没落在地图上',
       'fail',
     )
   }
@@ -2587,18 +2894,45 @@ function frame(realT) {
   // 二单警报：挂在邻边墙面，像素沙漏 + 真实剩余秒数（倍速不影响四秒）
   const trapRemain =
     order === 2 && crossbow.windowOpen ? Math.max(0, 4000 - (realT - crossbow.warnStart)) : null
-  if (trapRemain != null && crossbow.mode === 'warning') {
+  const swingRemain =
+    order === 6 && swingWarn
+      ? Math.max(0, swingWarn.ms - (realT - swingWarn.startReal))
+      : null
+  const showTrapAlarm = trapRemain != null && crossbow.mode === 'warning'
+  const showSwingAlarm = order === 6 && swingRemain != null
+  if (showTrapAlarm || showSwingAlarm) {
     alarmEl.hidden = false
-    alarmTextEl.textContent = `弩机预警 ${(trapRemain / 1000).toFixed(1)}s`
-    const anchor =
-      currentMap.alarm || { x: currentMap.crossbow.x + 2.5, y: currentMap.crossbow.y + 1.8 }
-    alarmEl.style.left = (anchor.x / COLS) * 100 + '%'
-    alarmEl.style.top = (anchor.y / ROWS) * 100 + '%'
+    if (showSwingAlarm) {
+      alarmTextEl.textContent = `钟摆预警 ${(swingRemain / 1000).toFixed(1)}s`
+      const anchor = swingWarn.at
+      alarmEl.style.left = (anchor.x / COLS) * 100 + '%'
+      alarmEl.style.top = (anchor.y / ROWS) * 100 + '%'
+    } else {
+      alarmTextEl.textContent = `弩机预警 ${(trapRemain / 1000).toFixed(1)}s`
+      const anchor =
+        currentMap.alarm || { x: currentMap.crossbow.x + 2.5, y: currentMap.crossbow.y + 1.8 }
+      alarmEl.style.left = (anchor.x / COLS) * 100 + '%'
+      alarmEl.style.top = (anchor.y / ROWS) * 100 + '%'
+    }
   } else if (!alarmEl.hidden) {
     alarmEl.hidden = true
   }
   // 进度条嵌在拉闸按钮下沿：满到空；收起时只动透明度与 transform，按钮高度不变
   trapTimerFillEl.style.transform = `scaleX(${trapRemain != null ? trapRemain / 4000 : 0})`
+  if (order === 6) {
+    swingTimerFillEl.style.transform = `scaleX(${
+      swingRemain != null && !swingUsed ? swingRemain / swingWarn.ms : 0
+    })`
+    const swingSig = `${mode}|${order}|${swingUsed}|${!!swingWarn}`
+    if (swingSig !== swingUiSig) {
+      swingUiSig = swingSig
+      updateSwingButton()
+    }
+    if (swingRemain != null && !swingUsed) {
+      const label = `止摆停住钟摆 · ${(swingRemain / 1000).toFixed(1)}s`
+      if (swingLabelEl.textContent !== label) swingLabelEl.textContent = label
+    }
+  }
   // 弩机按钮随状态换文案（待命 / 拉闸 / 已暂停 / 已了结）
   const trapSig = `${mode}|${order}|${secondUnlocked}|${runHasTrap}|${crossbow.mode}|${crossbow.windowOpen}|${crossbow.used}`
   if (trapSig !== trapUiSig) {
@@ -2673,6 +3007,29 @@ function frame(realT) {
           }),
         )
       : null
+  let mossPatrol = null
+  if (order === 7) {
+    const westBell = game.items.get(tileKey(MOSS.bells[0].x, MOSS.bells[0].y))
+    const eastBell = game.items.get(tileKey(MOSS.bells[1].x, MOSS.bells[1].y))
+    const west = !!(westBell && westBell.type === 'bell')
+    const east = !!(eastBell && eastBell.type === 'bell')
+    const side = west && !east ? 'north' : east && !west ? 'south' : 'center'
+    const loop = MOSS.loops[side]
+    const legMs = 850
+    const frac = (realT / legMs) % loop.length
+    const i0 = Math.floor(frac)
+    const i1 = (i0 + 1) % loop.length
+    const f = frac - i0
+    const A = loop[i0]
+    const B = loop[i1]
+    mossPatrol = {
+      side,
+      pos: reducedMotion
+        ? { x: loop[0].x, y: loop[0].y }
+        : { x: A.x + (B.x - A.x) * f, y: A.y + (B.y - A.y) * f },
+      zone: mode === 'setup' ? MOSS.threat[side] : null,
+    }
+  }
   // 整帧清理，防止位移时画布边缘残留上一帧条纹
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   ctx.save()
@@ -2716,6 +3073,18 @@ function frame(realT) {
     bridges: tideBridges,
     doors: archiveDoors,
     archives: order === 5 ? game.takenArchives : null,
+    pendulums:
+      order === 6
+        ? {
+            list: PENDULUM.pendulums,
+            activeId: swingWarn ? swingWarn.id : null,
+            warning: !!swingWarn,
+            stopped: swingStopped,
+          }
+        : null,
+    parts: order === 6 ? game.takenParts : null,
+    patrol: mossPatrol,
+    moss: order === 7 ? { taken: game.takenMoss } : null,
     stand: currentMap.stand,
     standBadge: !game.badgeTaken,
     badgeFly: badgeFlyScene,
@@ -2743,7 +3112,9 @@ function frame(realT) {
 
 // 用已存历史星恢复进度：后一关到过三星即可依次接下一单；
 // 无存储时全为 0，照旧从首单流程解锁
-if (bestStars[4] >= 3 || bestStars[5] > 0) fifthUnlocked = true
+if (bestStars[6] >= 3 || bestStars[7] > 0) seventhUnlocked = true
+if (bestStars[5] >= 3 || bestStars[6] > 0 || seventhUnlocked) sixthUnlocked = true
+if (bestStars[4] >= 3 || bestStars[5] > 0 || sixthUnlocked) fifthUnlocked = true
 if (bestStars[3] >= 3 || bestStars[4] > 0 || fifthUnlocked) fourthUnlocked = true
 if (bestStars[2] >= 3 || bestStars[3] > 0 || fourthUnlocked) thirdUnlocked = true
 if (bestStars[1] >= 4 || bestStars[2] > 0 || thirdUnlocked) secondUnlocked = true
@@ -2761,6 +3132,8 @@ ledgerDividerEl.hidden = secondUnlocked
 tab3.hidden = !thirdUnlocked
 tab4.hidden = !fourthUnlocked
 tab5.hidden = !fifthUnlocked
+tab6.hidden = !sixthUnlocked
+tab7.hidden = !seventhUnlocked
 updateHUD()
 updateLogUI()
 requestAnimationFrame(frame)

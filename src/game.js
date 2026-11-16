@@ -8,6 +8,7 @@ export const ITEMS = {
   barrier: { name: '隔栅', price: 15 },
   bridge: { name: '桥板', price: 25 },
   weight: { name: '重块', price: 20 },
+  bell: { name: '古铃', price: 15 },
 }
 
 export const START_GOLD = 100
@@ -28,6 +29,11 @@ export const EVENT_LABELS = {
   archive: '取到档案',
   redDoor: '穿过红门',
   yellowDoor: '穿过黄门',
+  part: '取到零件',
+  moss: '取到苔火样本',
+  patrol: '被巡卫撞见',
+  pendulumHit: '被钟摆打到',
+  pendulumStop: '及时止摆',
 }
 
 export const tileKey = (x, y) => x + ',' + y
@@ -41,6 +47,8 @@ export function createGame(grid, reserved = []) {
     reserved,
     badgeTaken: false,
     takenArchives: new Set(),
+    takenParts: new Set(),
+    takenMoss: false,
   }
 }
 

@@ -342,3 +342,144 @@ export function buildGrid5() {
   }
   return grid
 }
+
+// ===== 正篇第四图：钟摆工坊 =====
+const PENDULUM_ROWS = [
+  '########################',
+  '########################',
+  '########################',
+  '####........H..o....####',
+  '####.#...##########.####',
+  '####.#...##########....#',
+  '#....###.##########....#',
+  '#..........H.........A.#',
+  '#.E..##########.###....#',
+  '#....##########.###....#',
+  '#....#########....#.####',
+  '####.#########....#.####',
+  '####........##....#.####',
+  '#.........o.###.###.####',
+  '#...................####',
+  '#....###################',
+  '#....###################',
+  '########################',
+]
+
+export const PENDULUM = {
+  spawn: { x: 2, y: 8 },
+  challengeStop: { x: 21, y: 7 },
+  skeleton: { x: 22, y: 7 },
+  stand: { x: 23, y: 7 },
+  arena: { x: 19, y: 7 },
+  parts: [
+    { id: 'top', x: 15, y: 3, name: '上层零件' },
+    { id: 'bottom', x: 10, y: 13, name: '下层零件' },
+  ],
+  pendulums: [
+    { id: 'top', x: 12, y: 3, name: '上层钟摆' },
+    { id: 'mid', x: 11, y: 7, name: '中道钟摆' },
+  ],
+}
+
+export function buildGrid6() {
+  const grid = Array.from({ length: ROWS }, () => Array(COLS).fill('wall'))
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (PENDULUM_ROWS[y][x] !== '#') grid[y][x] = 'workshop'
+    }
+  }
+  return grid
+}
+
+// ===== 正篇第五图：苔火巡廊 =====
+const MOSS_ROWS = [
+  '########################',
+  '########################',
+  '########################',
+  '###....................#',
+  '###.######.#######...A.#',
+  '###..B.###.#######.....#',
+  '###........P...........#',
+  '###.###.#......#.###.###',
+  '###.....#......#.....###',
+  '###.###.#...o..#.###.###',
+  '###.###.#......#.###.###',
+  '###.##............B..###',
+  '###.##..#####.###....###',
+  '#.......#####.######.###',
+  '#....................###',
+  '#.E...##################',
+  '#.....##################',
+  '########################',
+]
+
+function mossZone(x1, y1, x2, y2) {
+  const out = new Set()
+  for (let y = y1; y <= y2; y++) for (let x = x1; x <= x2; x++) out.add(x + ',' + y)
+  return out
+}
+
+const mossCenterThreat = new Set([
+  ...mossZone(9, 6, 14, 6),
+  ...mossZone(9, 7, 14, 10),
+  ...mossZone(9, 11, 14, 11),
+])
+const mossNorthThreat = new Set([
+  ...mossZone(6, 5, 8, 6),
+  ...mossZone(9, 6, 14, 6),
+  ...mossZone(9, 7, 14, 9),
+])
+const mossSouthThreat = new Set([
+  ...mossZone(9, 9, 14, 10),
+  ...mossZone(9, 11, 19, 11),
+  ...mossZone(17, 12, 20, 12),
+])
+
+export const MOSS = {
+  spawn: { x: 2, y: 15 },
+  challengeStop: { x: 21, y: 4 },
+  skeleton: { x: 22, y: 4 },
+  stand: { x: 23, y: 4 },
+  arena: { x: 19, y: 4.5 },
+  sample: { x: 12, y: 9, name: '苔火样本' },
+  patrolStart: { x: 11, y: 6 },
+  bells: [
+    { id: 'west', x: 5, y: 5, name: '西铃' },
+    { id: 'east', x: 18, y: 11, name: '东铃' },
+  ],
+  loops: {
+    center: [
+      { x: 10, y: 7 },
+      { x: 13, y: 7 },
+      { x: 13, y: 10 },
+      { x: 10, y: 10 },
+    ],
+    north: [
+      { x: 6, y: 5 },
+      { x: 8, y: 5 },
+      { x: 8, y: 6 },
+      { x: 6, y: 6 },
+    ],
+    south: [
+      { x: 17, y: 11 },
+      { x: 19, y: 11 },
+      { x: 19, y: 12 },
+      { x: 17, y: 12 },
+    ],
+  },
+  threat: {
+    center: mossCenterThreat,
+    north: mossNorthThreat,
+    south: mossSouthThreat,
+  },
+}
+
+export function buildGrid7() {
+  const grid = Array.from({ length: ROWS }, () => Array(COLS).fill('wall'))
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (MOSS_ROWS[y][x] !== '#') grid[y][x] = 'moss'
+    }
+  }
+  return grid
+}

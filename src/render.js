@@ -5,12 +5,16 @@ import {
   SCALE,
   MARKET,
   ARCHIVE,
+  MOSS,
+  PENDULUM,
   TIDE,
   buildGrid,
   buildGrid2,
   buildGrid3,
   buildGrid4,
   buildGrid5,
+  buildGrid6,
+  buildGrid7,
 } from './map.js'
 
 const CELL = TILE * SCALE
@@ -34,6 +38,8 @@ const FLOORS = {
   tideEast: { base: '#665444', light: '#726050', dark: '#594a3b' }, // 潮汐东岸
   tideCross: { base: '#565b66', light: '#616774', dark: '#4a4f59' }, // 南北干路
   library: { base: '#4a3d32', light: '#56483b', dark: '#3e332a' }, // 档案库木廊
+  workshop: { base: '#5d5044', light: '#6a5b4d', dark: '#4e4338' }, // 工坊铁石
+  moss: { base: '#44523f', light: '#4f5f48', dark: '#394534' }, // 苔火绿石
 }
 
 const WOOD_ZONES = new Set([
@@ -88,6 +94,21 @@ export const TORCHES_BY_ORDER = {
     { x: 3, y: 4 }, // 西岸
     { x: 21, y: 3 }, // 东岸挑战房外
   ],
+  6: [
+    { x: 3, y: 4 },
+    { x: 20, y: 4 },
+    { x: 3, y: 9 },
+    { x: 20, y: 10 },
+    { x: 10, y: 11 },
+    { x: 13, y: 12 },
+  ],
+  7: [
+    { x: 3, y: 3 },
+    { x: 20, y: 3 },
+    { x: 3, y: 8 },
+    { x: 21, y: 13 },
+    { x: 12, y: 3 },
+  ],
   5: [
     { x: 3, y: 3 }, // 外圈西北
     { x: 9, y: 3 }, // 北廊
@@ -118,6 +139,14 @@ export const LAMPS_BY_ORDER = {
   5: [
     { x: 7, y: 6 }, // 内圈
     { x: 20, y: 8 }, // 东廊
+  ],
+  6: [
+    { x: 7, y: 7 },
+    { x: 14, y: 13 },
+  ],
+  7: [
+    { x: 7, y: 7 },
+    { x: 20, y: 9 },
   ],
 }
 
@@ -1019,6 +1048,28 @@ function drawBarrierItem(ctx, ox, oy) {
   ctx.fillRect(ox + 23, oy + 21, 1, 1)
 }
 
+// 古铃卡片/拖拽图标：木架 + 黄铜铃
+function drawBellItem(ctx, ox, oy) {
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(ox + 6, oy + 5, 2, 13)
+  ctx.fillStyle = '#6d4a2f'
+  ctx.fillRect(ox + 7, oy + 6, 1, 12)
+  ctx.fillStyle = '#c9a24b'
+  ctx.fillRect(ox + 4, oy + 4, 9, 2)
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(ox + 8, oy + 10, 8, 8)
+  ctx.fillStyle = '#c9a24b'
+  ctx.fillRect(ox + 9, oy + 10, 6, 7)
+  ctx.fillStyle = '#e8c97a'
+  ctx.fillRect(ox + 10, oy + 10, 2, 2)
+  ctx.fillStyle = '#8a6a2b'
+  ctx.fillRect(ox + 9, oy + 16, 6, 1)
+  ctx.fillStyle = '#a34a3a'
+  ctx.fillRect(ox + 11, oy + 18, 2, 2)
+  ctx.fillStyle = '#e8d8b0'
+  ctx.fillRect(ox + 11, oy + 8, 1, 2)
+}
+
 // 桥板卡片/拖拽图标：一段带栏杆的木桥
 function drawBridgeItem(ctx, ox, oy) {
   ctx.fillStyle = '#1a1c2c'
@@ -1096,6 +1147,10 @@ export function drawItem(ctx, type, ox, oy, dir = 0, opened = false, taken = fal
   }
   if (type === 'weight') {
     drawWeightItem(ctx, ox, oy)
+    return
+  }
+  if (type === 'bell') {
+    drawBellItem(ctx, ox, oy)
     return
   }
 }
@@ -1983,7 +2038,7 @@ export function drawSkeleton(ctx, sx, sy, pose, now = 0, flash = false, still = 
     drawSkeletonDown(ctx, cx, feetY, now, still)
     return
   }
-  const bob = pose === 'idle' ? Math.round(Math.sin(now / 700)) : 0
+  const bob = pose === 'idle' && !still ? Math.round(Math.sin(now / 700)) : 0
   const ox = cx - 12
   const oy = feetY - CHAR_H * CHAR_PX + bob
   if (flash) {
@@ -2054,6 +2109,8 @@ export function makeBaseMap(order = 1) {
   if (order === 3) return makeMarketBase()
   if (order === 4) return makeTideBase()
   if (order === 5) return makeArchiveBase()
+  if (order === 6) return makeWorkshopBase()
+  if (order === 7) return makeMossBase()
   const c = document.createElement('canvas')
   c.width = COLS * CELL
   c.height = ROWS * CELL
@@ -2731,6 +2788,278 @@ export function drawArchiveBooks(ctx, taken) {
   }
 }
 
+// ===== 正篇第四图：钟摆工坊底图 =====
+function drawPendulumFrame(ctx, p) {
+  const x = p.x * 8
+  const y = p.y * 8
+  rect(ctx, x + 1, y + 1, 6, 1, '#3d3730')
+  rect(ctx, x + 2, y + 1, 1, 2, '#94b0c2')
+  rect(ctx, x + 5, y + 1, 1, 2, '#94b0c2')
+  rect(ctx, x + 1, y + 6, 6, 1, '#241f19')
+  rect(ctx, x + 2, y + 5, 4, 1, '#8a6a2b')
+}
+
+function drawWorkshopPartBase(ctx, part) {
+  const x = part.x * 8
+  const y = part.y * 8
+  rect(ctx, x + 2, y + 5, 5, 2, '#2a2117')
+  rect(ctx, x + 2, y + 5, 5, 1, '#8a6a2b')
+}
+
+function makeWorkshopBase() {
+  const c = document.createElement('canvas')
+  c.width = COLS * CELL
+  c.height = ROWS * CELL
+  const ctx = c.getContext('2d')
+  const grid = buildGrid6()
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (grid[y][x] !== 'wall') drawFloorTile(ctx, grid, x, y, grid[y][x])
+    }
+  }
+
+  drawWelcomeMat(ctx, PENDULUM.spawn.x, PENDULUM.spawn.y)
+  for (const p of PENDULUM.pendulums) drawPendulumFrame(ctx, p)
+  for (const p of PENDULUM.parts) drawWorkshopPartBase(ctx, p)
+
+  // 中央检修换道平台
+  rect(ctx, 10 * 8, 11 * 8, 4 * 8, 1, '#3d3730')
+  rect(ctx, 10 * 8 + 2, 11 * 8, 3 * 8, 1, '#8a6a2b')
+
+  drawCarpetBase(ctx, 19 * 8, 6 * 8, 4 * 8, 3 * 8)
+  drawDemonCrest(ctx, 21 * 8, 7 * 8 + 8)
+  drawGuardPedestal(ctx, PENDULUM.skeleton.x, PENDULUM.skeleton.y)
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (grid[y][x] === 'wall') drawWallTile(ctx, grid, x, y)
+    }
+  }
+
+  drawBadgeStand(ctx, PENDULUM.stand.x, PENDULUM.stand.y)
+  for (const l of LAMPS_BY_ORDER[6]) drawLamp(ctx, l.x, l.y)
+  for (const t of TORCHES_BY_ORDER[6]) {
+    const mode =
+      t.y + 1 < ROWS && grid[t.y + 1][t.x] !== 'wall' ? 'bracket' : 'brazier'
+    drawTorch(ctx, t.x, t.y, mode)
+  }
+
+  drawVignette(ctx)
+  drawWallLabels(ctx, [
+    { text: '钟摆工坊', x: 12, y: 2.4 },
+    { text: '上层钟摆', x: 9.5, y: 4.6 },
+    { text: '南道', x: 7.5, y: 13.4 },
+    { text: '挑战房', x: 21.5, y: 5.4 },
+  ])
+  return c
+}
+
+// ===== 正篇第五图：苔火巡廊底图 =====
+function drawMossLoop(ctx, loop, color) {
+  ctx.save()
+  ctx.globalAlpha = 0.18
+  ctx.strokeStyle = color
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  loop.forEach((p, i) => {
+    const x = (p.x + 0.5) * CELL
+    const y = (p.y + 0.5) * CELL
+    if (i === 0) ctx.moveTo(x, y)
+    else ctx.lineTo(x, y)
+  })
+  ctx.closePath()
+  ctx.stroke()
+  ctx.restore()
+}
+
+function drawMossBellStand(ctx, b) {
+  const x = b.x * 8
+  const y = b.y * 8
+  rect(ctx, x + 2, y + 4, 4, 1, '#3a2a18')
+  rect(ctx, x + 3, y + 1, 2, 3, '#6d4a2f')
+  rect(ctx, x + 3, y + 1, 2, 1, '#c9a24b')
+  rect(ctx, x + 4, y + 3, 1, 1, '#e8c97a')
+}
+
+function drawMossSampleBase(ctx, s) {
+  const x = s.x * 8
+  const y = s.y * 8
+  rect(ctx, x + 2, y + 4, 5, 3, '#2a2117')
+  rect(ctx, x + 2, y + 4, 5, 1, '#4d7a55')
+  rect(ctx, x + 3, y + 5, 3, 1, '#7fbf6f')
+}
+
+function makeMossBase() {
+  const c = document.createElement('canvas')
+  c.width = COLS * CELL
+  c.height = ROWS * CELL
+  const ctx = c.getContext('2d')
+  const grid = buildGrid7()
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (grid[y][x] !== 'wall') drawFloorTile(ctx, grid, x, y, grid[y][x])
+    }
+  }
+
+  drawWelcomeMat(ctx, MOSS.spawn.x, MOSS.spawn.y)
+  drawMossLoop(ctx, MOSS.loops.center, '#7fbf6f')
+  drawMossLoop(ctx, MOSS.loops.north, '#c9a24b')
+  drawMossLoop(ctx, MOSS.loops.south, '#a34a3a')
+  for (const b of MOSS.bells) drawMossBellStand(ctx, b)
+  drawMossSampleBase(ctx, MOSS.sample)
+
+  drawCarpetBase(ctx, 19 * 8, 3 * 8, 4 * 8, 3 * 8)
+  drawDemonCrest(ctx, 21 * 8, 4 * 8 + 8)
+  drawGuardPedestal(ctx, MOSS.skeleton.x, MOSS.skeleton.y)
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (grid[y][x] === 'wall') drawWallTile(ctx, grid, x, y)
+    }
+  }
+
+  drawBadgeStand(ctx, MOSS.stand.x, MOSS.stand.y)
+  for (const l of LAMPS_BY_ORDER[7]) drawLamp(ctx, l.x, l.y)
+  for (const t of TORCHES_BY_ORDER[7]) {
+    const mode =
+      t.y + 1 < ROWS && grid[t.y + 1][t.x] !== 'wall' ? 'bracket' : 'brazier'
+    drawTorch(ctx, t.x, t.y, mode)
+  }
+
+  drawVignette(ctx)
+  drawWallLabels(ctx, [
+    { text: '苔火巡廊', x: 11, y: 2.4 },
+    { text: '内院', x: 12, y: 12.5 },
+    { text: '外廊', x: 4, y: 13.5 },
+    { text: '挑战房', x: 21.5, y: 2.4 },
+  ])
+  ctx.save()
+  ctx.font = '9px "Fusion Pixel 12px", "Courier New", monospace'
+  ctx.textAlign = 'center'
+  ctx.fillStyle = '#c9a24b'
+  ctx.fillText('铃位', 5 * 8 * U, 4.2 * 8 * U)
+  ctx.fillText('铃位', 18 * 8 * U, 10.2 * 8 * U)
+  ctx.restore()
+  return c
+}
+
+// 工坊动态：钟摆、零件
+export function drawWorkshopParts(ctx, taken) {
+  for (const p of PENDULUM.parts) {
+    const x = p.x * 8
+    const y = p.y * 8
+    if (taken && taken.has(p.id)) continue
+    rect(ctx, x + 3, y + 3, 3, 2, '#c9a24b')
+    rect(ctx, x + 2, y + 4, 5, 1, '#8a6a2b')
+    rect(ctx, x + 3, y + 2, 1, 1, '#ffcd75')
+    rect(ctx, x + 4, y + 5, 1, 1, '#566c86')
+  }
+}
+
+export function drawPendulums(ctx, data, now, still = false) {
+  if (!data) return
+  for (let i = 0; i < data.list.length; i++) {
+    const p = data.list[i]
+    const px = (p.x + 0.5) * CELL
+    const py = p.y * CELL + 6
+    const stopped = data.stopped && data.stopped.has(p.id)
+    const angle = stopped || still ? 0 : Math.sin(now / 420 + i * 2.1) * 0.82
+    const len = 18
+    const bx = px + Math.sin(angle) * len
+    const by = py + Math.cos(angle) * len
+    // 摆杆
+    ctx.save()
+    ctx.strokeStyle = '#2a2117'
+    ctx.lineWidth = 3
+    ctx.beginPath()
+    ctx.moveTo(px, py)
+    ctx.lineTo(bx, by)
+    ctx.stroke()
+    ctx.strokeStyle = stopped ? '#566c86' : '#94b0c2'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(px, py)
+    ctx.lineTo(bx, by)
+    ctx.stroke()
+    // 摆锤
+    const warn = data.activeId === p.id && data.warning && !stopped
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(bx - 5, by - 5, 10, 10)
+    ctx.fillStyle = stopped ? '#566c86' : warn ? '#d95757' : '#94b0c2'
+    ctx.fillRect(bx - 4, by - 4, 8, 8)
+    ctx.fillStyle = '#e8e0cf'
+    ctx.fillRect(bx - 2, by - 2, 2, 2)
+    if (warn) {
+      ctx.globalAlpha = 0.45 + 0.3 * Math.sin(now / 90)
+      ctx.strokeStyle = '#ff5a36'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.arc(bx, by, 11, 0, Math.PI * 2)
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
+}
+
+// 巡廊动态：巡逻骨卫与苔火样本
+function drawPatrolZone(ctx, zone) {
+  if (!zone) return
+  ctx.save()
+  ctx.globalAlpha = 0.12
+  ctx.fillStyle = '#a34a3a'
+  for (const k of zone) {
+    const [x, y] = k.split(',').map(Number)
+    ctx.fillRect(x * CELL + 2, y * CELL + 2, CELL - 4, CELL - 4)
+  }
+  ctx.globalAlpha = 0.45
+  ctx.fillStyle = '#c96a52'
+  for (const k of zone) {
+    const [x, y] = k.split(',').map(Number)
+    ctx.fillRect(x * CELL + 3, y * CELL + 3, 3, 1)
+    ctx.fillRect(x * CELL + 3, y * CELL + 3, 1, 3)
+  }
+  ctx.restore()
+}
+
+export function drawMossPatrol(ctx, patrol, now, still = false) {
+  if (!patrol) return
+  const p = patrol.pos
+  ctx.save()
+  ctx.globalAlpha = 0.2
+  ctx.fillStyle = '#7fbf6f'
+  ctx.beginPath()
+  ctx.arc((p.x + 0.5) * CELL, (p.y + 0.7) * CELL, 13, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+  drawSkeleton(ctx, p.x, p.y, 'idle', now, false, still)
+}
+
+export function drawMossSample(ctx, data, now, still = false) {
+  if (!data) return
+  const s = MOSS.sample
+  const x = s.x * 8
+  const y = s.y * 8
+  if (data.taken) {
+    rect(ctx, x + 3, y + 2, 2, 1, '#3a2a18')
+    return
+  }
+  const pulse = still ? 0.7 : 0.6 + 0.3 * Math.sin(now / 360)
+  ctx.save()
+  ctx.globalAlpha = pulse
+  ctx.fillStyle = '#7fbf6f'
+  ctx.fillRect(x + 2, y + 1, 2, 2)
+  ctx.fillRect(x + 5, y + 2, 2, 2)
+  ctx.fillRect(x + 3, y + 2, 1, 1)
+  ctx.fillStyle = '#a7f070'
+  ctx.fillRect(x + 4, y + 1, 1, 1)
+  ctx.globalAlpha = 0.25
+  ctx.fillStyle = '#a7f070'
+  ctx.fillRect(x + 1, y + 3, 6, 1)
+  ctx.restore()
+}
+
 // 机械弩：底座 + 横扫当前地图通道的射线；cb: { mode, boltT, x, y, beamLeft, stopX }
 function drawCrossbow(ctx, cb, now) {
   const cx = (cb.x + 0.5) * CELL
@@ -3241,6 +3570,11 @@ LOG_ICON_ART.yellowDoor = {
   ],
 }
 LOG_ICON_ART.shot = LOG_ICON_ART.hit
+LOG_ICON_ART.pendulumHit = LOG_ICON_ART.hit
+LOG_ICON_ART.patrol = LOG_ICON_ART.hit
+LOG_ICON_ART.part = LOG_ICON_ART.chest
+LOG_ICON_ART.moss = LOG_ICON_ART.supply
+LOG_ICON_ART.pendulumStop = LOG_ICON_ART.safe
 
 const logIconCache = new Map()
 
@@ -3608,6 +3942,7 @@ function drawCornerBrackets(ctx, x, y, valid, now) {
 export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene = null) {
   ctx.drawImage(base, 0, 0)
   if (scene && scene.bridges) drawTideBridges(ctx, scene.bridges)
+  if (scene && scene.patrol && scene.patrol.zone) drawPatrolZone(ctx, scene.patrol.zone)
   const now = performance.now()
   const still = !!(scene && scene.still)
   if (scene && scene.door) drawDoor(ctx, scene.door)
@@ -3676,6 +4011,10 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   }
   if (scene && scene.doors) drawArchiveDoors(ctx, scene.doors)
   if (scene && scene.archives) drawArchiveBooks(ctx, scene.archives)
+  if (scene && scene.parts) drawWorkshopParts(ctx, scene.parts)
+  if (scene && scene.pendulums) drawPendulums(ctx, scene.pendulums, now, still)
+  if (scene && scene.patrol) drawMossPatrol(ctx, scene.patrol, now, still)
+  if (scene && scene.moss) drawMossSample(ctx, scene.moss, now, still)
   if (scene && scene.dust) drawWalkDust(ctx, scene.dust)
   if (scene && scene.skeleton) {
     drawSkeleton(
