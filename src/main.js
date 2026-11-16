@@ -28,6 +28,7 @@ import {
   logIconDataURL,
   speakerDataURL,
   TORCHES_BY_ORDER,
+  LAMPS_BY_ORDER,
 } from './render.js'
 import { sfx } from './sfx.js'
 
@@ -158,6 +159,11 @@ let trapUiSig = ''
 let logShownOrder = 0
 let logShownCount = 0
 let reviewStampPlayed = false
+let doorOpen = 0
+let doorTween = null
+let gearSpinStart = performance.now()
+let gearFreezePhase = null
+let lastGearPhase = 0
 const crossbow = {
   mode: 'idle',
   used: false,
@@ -710,6 +716,9 @@ function setOrder(n) {
   window.__game = game
   setSpeed(1)
   clearGoldFx()
+  doorOpen = 0
+  doorTween = null
+  resetGearSpin()
   clearFootprintPreview()
   pop = null
   skeleton.x = currentMap.skeleton.x
@@ -879,12 +888,47 @@ btnTrap.addEventListener('click', () => {
     updateTrapButton()
     return
   }
+  if (gearFreezePhase == null && order === 2) {
+    gearFreezePhase = lastGearPhase
+  }
   crossbow.used = true
   crossbow.pressed = true
   updateTrapButton()
 })
 
 // ---------- 营业 / 重新布置 ----------
+
+const DOOR_OPEN_MS = 520
+const DOOR_CLOSE_MS = 380
+
+function setDoor(target, duration) {
+  if (order !== 1) {
+    doorOpen = 0
+    doorTween = null
+    return
+  }
+  if (reducedMotion) {
+    doorOpen = target
+    doorTween = null
+    return
+  }
+  if (!doorTween && doorOpen === target) return
+  doorTween = {
+    from: doorOpen,
+    to: target,
+    start: performance.now(),
+    ms: duration,
+  }
+}
+
+function resetGearSpin() {
+  gearSpinStart = performance.now()
+  gearFreezePhase = null
+}
+
+function currentGearPhase(now) {
+  return Math.floor((now - gearSpinStart) / 600) % 8
+}
 
 function startBusiness() {
   if (mode !== 'setup') return
@@ -894,6 +938,7 @@ function startBusiness() {
     return
   }
   runHasTrap = plan.actions.some((a) => a.type === 'trap')
+  setDoor(1, DOOR_OPEN_MS)
   pending = null
   drag = null
   pop = null
@@ -942,6 +987,8 @@ function resetBusiness() {
   mode = 'setup'
   setSpeed(1)
   clearGoldFx()
+  resetGearSpin()
+  setDoor(0, DOOR_CLOSE_MS)
   pop = null
   clearFootprintPreview()
   skeleton.pose = 'idle'
@@ -1556,6 +1603,30 @@ function frame(realT) {
   const t = simT
   if (!reducedMotion) drawCoinFrame(coinCtx, Math.floor(realT / 140) % 4)
 
+  // 首单铁门：真实时间缓动；减少动效时 setDoor 已直接落位
+  if (doorTween && reducedMotion) {
+    doorOpen = doorTween.to
+    doorTween = null
+  }
+  if (doorTween) {
+    const p = Math.min(1, Math.max(0, (realT - doorTween.start) / doorTween.ms))
+    const e = p * p * (3 - 2 * p)
+    doorOpen = doorTween.from + (doorTween.to - doorTween.from) * e
+    if (p >= 1) {
+      doorOpen = doorTween.to
+      doorTween = null
+    }
+  }
+  const gearPhase =
+    order === 2
+      ? reducedMotion
+        ? 0
+        : gearFreezePhase != null
+          ? gearFreezePhase
+          : currentGearPhase(realT)
+      : null
+  if (gearPhase != null) lastGearPhase = gearPhase
+
   if (bounce) {
     const k = Math.min(1, (realT - bounce.t0) / bounce.dur)
     const ease = 1 - Math.pow(1 - k, 3)
@@ -1684,6 +1755,10 @@ function frame(realT) {
     fx,
     guide: guideState,
     torches: TORCHES_BY_ORDER[order],
+    lamps: LAMPS_BY_ORDER[order],
+    still: reducedMotion,
+    door: order === 1 ? { open: doorOpen } : null,
+    gearPhase,
     dragging: !!drag && mode === 'setup',
     forbidden: game.reserved,
     footprints:
