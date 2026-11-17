@@ -40,6 +40,7 @@ import { planRoute, WALK } from './walk.js'
 import {
   planNightFull,
   planNightPreview,
+  planNightGuest,
   nightBlockedGuests,
   nightGuestName,
 } from './night-route.js'
@@ -97,6 +98,7 @@ const barrierCardEl = document.querySelector('.card[data-type="barrier"]')
 const bridgeCardEl = document.querySelector('.card[data-type="bridge"]')
 const weightCardEl = document.querySelector('.card[data-type="weight"]')
 const bellCardEl = document.querySelector('.card[data-type="bell"]')
+const shopEl = document.querySelector('.shop')
 const avatarFrameEl = document.getElementById('avatar-frame')
 const dropHintEl = document.getElementById('drop-hint')
 const btnOpen = document.getElementById('btn-open')
@@ -110,7 +112,10 @@ const swingLabelEl = document.getElementById('swing-label')
 const swingTimerFillEl = document.getElementById('swing-timer-fill')
 const btnNext = document.getElementById('btn-next')
 const orderTabs = document.getElementById('order-tabs')
+const galleryBarEl = document.getElementById('gallery-bar')
 const galleryToggleEl = document.getElementById('gallery-toggle')
+const galleryPrevBtn = document.getElementById('gallery-prev')
+const galleryNextBtn = document.getElementById('gallery-next')
 const galleryCurrentEl = document.getElementById('gallery-current')
 const galleryCurrentBestEl = document.getElementById('gallery-current-best')
 const tab1 = document.getElementById('tab-order1')
@@ -125,7 +130,11 @@ const nightPreviewEl = document.getElementById('night-preview')
 const nightWestBtn = document.getElementById('night-west')
 const nightEastBtn = document.getElementById('night-east')
 const nightPreviewNoteEl = document.getElementById('night-preview-note')
+const nightWestAvatarEl = document.getElementById('night-west-avatar')
+const nightEastAvatarEl = document.getElementById('night-east-avatar')
 const certEl = document.getElementById('five-star-cert')
+const certStarsEl = document.getElementById('cert-stars')
+const certLabelEl = document.getElementById('cert-label')
 const guestTitleEl = document.getElementById('guest-title')
 const guestReserveEl = document.querySelector('.guest-reserve')
 const guestQuoteEl = document.getElementById('guest-quote')
@@ -335,6 +344,8 @@ let swingWarn = null
 let swingStopped = new Map() // id -> { angle, start }：止摆时冻结在当时的角度
 let logShownOrder = 0
 let logShownCount = 0
+let progressOrder = 0
+let progressDone = [false, false, false]
 let galleryOpen = false
 let reviewStampPlayed = false
 let reviewTimers = []
@@ -604,11 +615,17 @@ const DRAG_THRESHOLD = 5
 // 侧栏卡片：图标与价格以 ITEMS 为唯一来源
 const cardEls = [...document.querySelectorAll('.card')]
 const cardUseEls = {}
+const cardCountEls = {}
 for (const el of cardEls) {
   const type = el.dataset.type
   el.querySelector('img').src = itemDataURL(type)
   el.querySelector('.price').textContent = ITEMS[type].price
   cardUseEls[type] = el.querySelector('.card-use')
+  const count = document.createElement('span')
+  count.className = 'card-count'
+  count.hidden = true
+  el.appendChild(count)
+  cardCountEls[type] = count
 }
 
 const CARD_USE_COPY = {
@@ -699,6 +716,7 @@ function applyGuestTheme() {
   bubbleEl.style.setProperty('--bubble-bg', theme.bubbleBg)
   bubbleEl.style.setProperty('--bubble-border', theme.bubbleBorder)
   bubbleEl.style.setProperty('--bubble-ink', theme.bubbleInk)
+  bubbleEl.style.setProperty('--bubble-avatar-bg', theme.avatarBg)
 }
 
 function nightBlockedMessage(blocked) {
@@ -713,13 +731,13 @@ function updateNightPreviewUI() {
   nightWestBtn.classList.toggle('active', nightPreviewGuest === 1)
   nightEastBtn.classList.toggle('active', nightPreviewGuest === 2)
   if (nightPreviewGuest === 1) {
-    nightPreviewNoteEl.textContent = '先看西门：路旁宝箱会开，他踩到的盾也会带走。'
+    nightPreviewNoteEl.textContent = '两路同屏：西门暖金为主路线；东门冰蓝作对照。'
     return
   }
   const preview = planNightPreview(game, 2)
   if (preview.first) {
     nightPreviewNoteEl.textContent =
-      `后看东门：按第一场用剩的库存算（已开箱 ${preview.first.openedChests.length}、拿走盾 ${preview.first.takenShields.length}）。`
+      `两路同屏：东门冰蓝为主路线；按西门用剩库存算（已开箱 ${preview.first.openedChests.length}、拿走盾 ${preview.first.takenShields.length}）。`
   } else {
     nightPreviewNoteEl.textContent = '西门寻宝客被隔栅堵住了，先让西门走通。'
   }
@@ -736,6 +754,8 @@ tagTurnIconEl.src = turnIconDataURL()
 
 // 预约头像（随订单切换）
 guestAvatarEl.src = charAvatarDataURL('knight')
+nightWestAvatarEl.src = charAvatarDataURL('nightWest')
+nightEastAvatarEl.src = charAvatarDataURL('nightEast')
 coachAvatarEl.src = stewardAvatarDataURL()
 
 // 本地像素金币、警报沙漏、记录等待图标与喇叭
@@ -901,8 +921,13 @@ function hideGhost() {
 
 function status(msg, kind) {
   const cls = kind || (mode === 'business' ? 'business' : 'place')
+  const changed = statusEl.textContent !== msg
   statusEl.className = 'status ' + cls
   statusEl.textContent = msg
+  if (changed) {
+    void statusEl.offsetWidth
+    statusEl.classList.add('bump')
+  }
 }
 
 function showBubble(text, at = null, tone = null) {
@@ -1060,11 +1085,24 @@ function updateLogProgress() {
             { done: kinds.has('block'), label: '挡锤' },
             { done: kinds.has('badge'), label: '徽章' },
           ]
+  if (progressOrder !== order || game.log.length === 0) {
+    progressOrder = order
+    progressDone = slots.map((s) => s.done)
+  }
   logStarEls.forEach((el, i) => {
     const slot = slots[i]
+    const justDone = slot.done && !progressDone[i]
     el.textContent = slot.done ? '★' : '☆'
     el.classList.toggle('on', slot.done)
     el.title = slot.label + (slot.done ? '：已发生' : '：未发生')
+    if (justDone) {
+      el.classList.remove('pop')
+      void el.offsetWidth
+      el.classList.add('pop')
+    } else if (!slot.done) {
+      el.classList.remove('pop')
+    }
+    progressDone[i] = slot.done
   })
   const summary = slots
     .map((s) => `${s.label}${s.done ? '已发生' : '未发生'}`)
@@ -1078,6 +1116,13 @@ function updateLogProgress() {
 
 function makeLogEntry(entry, animate) {
   const li = document.createElement('li')
+  if (entry.kind === 'nightSwitch') {
+    li.className = 'log-divider' + (animate ? ' is-new' : '')
+    const text = document.createElement('span')
+    text.textContent = entry.label
+    li.appendChild(text)
+    return li
+  }
   li.className = 'log-entry' + (animate ? ' is-new' : '')
   const iconUrl = logIconDataURL(entry.kind)
   if (iconUrl) {
@@ -1169,6 +1214,16 @@ const TAB_NAMES = {
   7: '苔火巡廊',
   8: '夜场总店',
 }
+const TAB_LABELS = {
+  1: '01 首单 · 剑士',
+  2: '02 二单 · 机关迷',
+  3: '03 回声集市',
+  4: '04 潮汐蓄水厅',
+  5: '05 双锁档案库',
+  6: '06 钟摆工坊',
+  7: '07 苔火巡廊',
+  8: '08 夜场总店',
+}
 
 function updateGalleryCurrent() {
   const name = TAB_NAMES[order] || TAB_NAMES[1]
@@ -1182,12 +1237,28 @@ function updateGalleryCurrent() {
   )
 }
 
+function unlockedOrders() {
+  const out = [1]
+  if (secondUnlocked) out.push(2)
+  if (thirdUnlocked) out.push(3)
+  if (fourthUnlocked) out.push(4)
+  if (fifthUnlocked) out.push(5)
+  if (sixthUnlocked) out.push(6)
+  if (seventhUnlocked) out.push(7)
+  if (eighthUnlocked) out.push(8)
+  return out
+}
+
 function syncGallery() {
-  galleryToggleEl.hidden = !secondUnlocked
+  galleryBarEl.hidden = !secondUnlocked
   if (!secondUnlocked) galleryOpen = false
   orderTabs.hidden = !secondUnlocked || !galleryOpen
   galleryToggleEl.setAttribute('aria-expanded', galleryOpen ? 'true' : 'false')
   galleryToggleEl.classList.toggle('open', galleryOpen)
+  const unlocked = unlockedOrders()
+  const idx = unlocked.indexOf(order)
+  galleryPrevBtn.disabled = idx <= 0
+  galleryNextBtn.disabled = idx < 0 || idx >= unlocked.length - 1
   updateGalleryCurrent()
 }
 
@@ -1196,17 +1267,26 @@ function setGalleryOpen(open) {
   syncGallery()
 }
 
+function stepGallery(dir) {
+  const unlocked = unlockedOrders()
+  const idx = unlocked.indexOf(order)
+  const target = unlocked[idx + dir]
+  if (!target || !unlocked.includes(target)) return
+  setGalleryOpen(false)
+  trySwitchOrder(target)
+}
+
 // 页签显示各单历史最高星；两单都五星时点亮认证
 function updateBestUI() {
   const tabs = [
-    [tab1, TAB_NAMES[1], bestStars[1]],
-    [tab2, TAB_NAMES[2], bestStars[2]],
-    [tab3, TAB_NAMES[3], bestStars[3]],
-    [tab4, TAB_NAMES[4], bestStars[4]],
-    [tab5, TAB_NAMES[5], bestStars[5]],
-    [tab6, TAB_NAMES[6], bestStars[6]],
-    [tab7, TAB_NAMES[7], bestStars[7]],
-    [tab8, TAB_NAMES[8], bestStars[8]],
+    [tab1, TAB_LABELS[1], bestStars[1]],
+    [tab2, TAB_LABELS[2], bestStars[2]],
+    [tab3, TAB_LABELS[3], bestStars[3]],
+    [tab4, TAB_LABELS[4], bestStars[4]],
+    [tab5, TAB_LABELS[5], bestStars[5]],
+    [tab6, TAB_LABELS[6], bestStars[6]],
+    [tab7, TAB_LABELS[7], bestStars[7]],
+    [tab8, TAB_LABELS[8], bestStars[8]],
   ]
   for (const [el, base, best] of tabs) {
     el.textContent = base
@@ -1221,7 +1301,20 @@ function updateBestUI() {
       best > 0 ? `${base}，历史最高 ${best} 星` : `${base}，暂无历史星级`,
     )
   }
-  certEl.hidden = !(bestStars[1] === 5 && bestStars[2] === 5)
+  const apprentice = bestStars[1] === 5 && bestStars[2] === 5
+  const legend = [1, 2, 3, 4, 5, 6, 7, 8].every((n) => bestStars[n] === 5)
+  certEl.hidden = !(apprentice || legend)
+  certEl.classList.toggle('legend', legend)
+  if (apprentice || legend) {
+    certStarsEl.textContent = legend ? '★★★★★★★★' : '★★★★★'
+    certLabelEl.textContent = legend
+      ? '传奇满星大魔王 · 全店制霸'
+      : '见习五星魔王'
+    certEl.setAttribute(
+      'aria-label',
+      legend ? '传奇满星大魔王，全店制霸' : '见习五星魔王',
+    )
+  }
   updateGalleryCurrent()
 }
 
@@ -1628,6 +1721,62 @@ function buildRoute(g, guestOverride = null) {
   return { tiles, markers, offRouteShields }
 }
 
+function nightContestedShields(g) {
+  const west = planNightGuest(g, 1)
+  const eastFull = planNightGuest(g, 2)
+  if (!west || !eastFull) return []
+  const westPicked = new Set(
+    west.actions
+      .filter((a) => a.type === 'pickupShield')
+      .map((a) => tileKey(a.x, a.y)),
+  )
+  const seen = new Set()
+  const out = []
+  for (const a of eastFull.actions) {
+    if (a.type !== 'pickupShield') continue
+    const key = tileKey(a.x, a.y)
+    if (!westPicked.has(key) || seen.has(key)) continue
+    seen.add(key)
+    out.push({ x: a.x, y: a.y })
+  }
+  return out
+}
+
+function buildNightLayers(g, preview) {
+  const west = buildRoute(g, 1)
+  const east = buildRoute(g, 2)
+  const selected = nightPreviewGuest
+  const layers = [
+    {
+      ...west,
+      color: '#e8c97a',
+      hiColor: '#ffe4a8',
+      alpha: selected === 1 ? 1 : 0.4,
+      selected: selected === 1,
+      preview,
+    },
+    {
+      ...east,
+      color: '#8fd0e8',
+      hiColor: '#d8f4ff',
+      alpha: selected === 2 ? 1 : 0.4,
+      selected: selected === 2,
+      preview,
+    },
+  ]
+  layers.sort((a, b) => (a.selected ? 1 : 0) - (b.selected ? 1 : 0))
+  return {
+    layers,
+    contestedShields: nightContestedShields(g),
+    preview,
+  }
+}
+
+function buildFootprints(g, preview = false) {
+  if (order === 8) return buildNightLayers(g, preview)
+  return buildRoute(g)
+}
+
 function clearFootprintPreview() {
   footprintPreview = null
   footprintPreviewKey = ''
@@ -1666,7 +1815,7 @@ function previewRouteForDrag(d) {
     sim.items.delete(fk)
     sim.items.set(tileKey(d.target.x, d.target.y), { ...item, x: d.target.x, y: d.target.y })
   }
-  footprintPreview = buildRoute(sim)
+  footprintPreview = buildFootprints(sim, true)
 }
 
 function triggerGoldFx(delta) {
@@ -1759,16 +1908,39 @@ function updateHUD() {
               : { chest: true, shield: true, sign: true }
   for (const el of cardEls) el.hidden = !visible[el.dataset.type]
   updateCardCopy()
+  const counts = {}
+  for (const item of game.items.values()) {
+    counts[item.type] = (counts[item.type] || 0) + 1
+  }
+  let shownCards = 0
   for (const el of cardEls) {
+    const type = el.dataset.type
+    if (!el.hidden) shownCards++
     const locked = chestLocked && el === chestCardEl
+    const poor = mode === 'setup' && game.gold < ITEMS[type].price
     el.classList.toggle('locked', locked)
     el.dataset.locked = locked ? '1' : '0'
     el.setAttribute('aria-disabled', locked ? 'true' : 'false')
     el.classList.toggle(
       'disabled',
-      !locked && (mode !== 'setup' || game.gold < ITEMS[el.dataset.type].price),
+      !locked && (mode !== 'setup' || game.gold < ITEMS[type].price),
     )
+    el.classList.toggle('unaffordable', !locked && poor)
+    const countEl = cardCountEls[type]
+    const count = counts[type] || 0
+    if (countEl) {
+      countEl.hidden = false
+      countEl.textContent = `场上 ${count}`
+      countEl.classList.toggle('zero', count === 0)
+    }
   }
+  shopEl.classList.toggle('compact-cards', shownCards >= 4)
+  btnReset.textContent =
+    mode === 'business'
+      ? '重新布置（保留摆法）'
+      : game.items.size > 0
+        ? '全收重摆'
+        : '重新布置'
   chestCardSealEl.hidden = !chestLocked
   chestCardEl.title = chestLocked
     ? '机关迷不翻宝箱，本单不可购买'
@@ -1779,7 +1951,7 @@ function updateHUD() {
   updateNightPreviewUI()
   updateOnboarding()
   // 布置期的真实路线脚印；营业后收起
-  footprintsBase = mode === 'setup' ? buildRoute(game) : null
+  footprintsBase = mode === 'setup' ? buildFootprints(game) : null
   if (mode !== 'setup') clearFootprintPreview()
 }
 
@@ -2173,6 +2345,8 @@ galleryToggleEl.addEventListener('click', () => {
   if (!secondUnlocked) return
   setGalleryOpen(!galleryOpen)
 })
+galleryPrevBtn.addEventListener('click', () => stepGallery(-1))
+galleryNextBtn.addEventListener('click', () => stepGallery(1))
 
 tab1.addEventListener('click', () => trySwitchOrder(1))
 tab2.addEventListener('click', () => trySwitchOrder(2))
@@ -2266,6 +2440,7 @@ function currentGearPhase(now) {
 
 function startBusiness() {
   if (mode !== 'setup') return
+  setGalleryOpen(false)
   let plan
   if (order === 8) {
     const full = planNightFull(game)
@@ -2363,6 +2538,29 @@ function startBusiness() {
   updateHUD()
 }
 
+function collectAllPlaced() {
+  if (mode !== 'setup') return
+  if (!game.items.size) {
+    status('场上没有可收回的道具')
+    return
+  }
+  let total = 0
+  for (const item of game.items.values()) {
+    total += ITEMS[item.type] ? ITEMS[item.type].price : 0
+  }
+  game.items.clear()
+  game.gold += total
+  game.badgeTaken = false
+  game.takenArchives.clear()
+  game.takenParts.clear()
+  game.takenMoss = false
+  setGalleryOpen(false)
+  sfx.refund()
+  status(`已收回场上全部道具，返还 ${total} 金币。`)
+  updateLogUI()
+  updateHUD()
+}
+
 function resetBusiness() {
   walker = null
   guest = null
@@ -2426,7 +2624,13 @@ function resetBusiness() {
 }
 
 btnOpen.addEventListener('click', startBusiness)
-btnReset.addEventListener('click', resetBusiness)
+btnReset.addEventListener('click', () => {
+  if (mode === 'setup' && game.items.size > 0) {
+    collectAllPlaced()
+    return
+  }
+  resetBusiness()
+})
 
 // ---------- 行走播放器 ----------
 
@@ -3001,6 +3205,7 @@ function stepWalker(t, realT) {
 // ---------- 拖拽（仅 setup 模式可用） ----------
 
 function startDrag(source, type, dir, e) {
+  setGalleryOpen(false)
   pending = null
   bounce = null
   pop = null
@@ -3056,6 +3261,9 @@ function lockHint() {
 
 window.addEventListener('pointerdown', (e) => {
   if (e.target.closest && e.target.closest('button')) return
+  if (e.target === canvas || (e.target.closest && e.target.closest('.card'))) {
+    setGalleryOpen(false)
+  }
   if (mode !== 'setup') {
     if (e.target.closest && e.target.closest('.card')) lockHint()
     else if (e.target === canvas) lockHint()
@@ -3648,6 +3856,7 @@ function frame(realT) {
       zone: mode === 'setup' ? mossThreatZone(side) : null,
     }
   }
+  const footprintData = mode === 'setup' ? footprintPreview || footprintsBase : null
   // 整帧清理，防止位移时画布边缘残留上一帧条纹
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   ctx.save()
@@ -3691,9 +3900,8 @@ function frame(realT) {
     dragging: !!drag && mode === 'setup',
     forbidden: game.reserved,
     footprints:
-      mode === 'setup' && (footprintPreview || footprintsBase)
-        ? { ...(footprintPreview || footprintsBase), preview: !!footprintPreview }
-        : null,
+      footprintData ? { ...footprintData, preview: !!footprintPreview } : null,
+    contestedShields: footprintData ? footprintData.contestedShields || null : null,
     hover: mode === 'setup' ? hoverItem : null,
     invalid: invalidScene,
     pop: popScene,

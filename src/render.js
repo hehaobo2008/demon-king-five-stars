@@ -4441,12 +4441,13 @@ export function hourglassDataURL() {
 }
 
 // 布置期路线脚印（很淡，流动点缓慢前进）
-function drawFootprints(ctx, data, now) {
+function drawFootprints(ctx, data, now, still = false) {
   const tiles = data.tiles
   if (!tiles || tiles.length < 2) return
+  const weight = data.alpha == null ? 1 : data.alpha
   ctx.save()
-  const baseAlpha = data.preview ? 0.22 : 0.13
-  ctx.fillStyle = data.preview ? '#e6c98a' : '#cfd3da'
+  const baseAlpha = (data.preview ? 0.22 : 0.13) * weight
+  ctx.fillStyle = data.color || (data.preview ? '#e6c98a' : '#cfd3da')
   for (let i = 1; i < tiles.length; i++) {
     const a = tiles[i - 1]
     const b = tiles[i]
@@ -4459,23 +4460,53 @@ function drawFootprints(ctx, data, now) {
     ctx.globalAlpha = baseAlpha
     ctx.fillRect(px + ox - 1, py + oy - 2, 2, 3)
   }
-  const n = tiles.length - 1
-  const p = (now / 3800) % 1
-  const pos = p * n
-  const i0 = Math.min(n - 1, Math.floor(pos))
-  const fr = pos - i0
-  const A = tiles[i0]
-  const B = tiles[i0 + 1]
-  const ax = (A.x + 0.5) * CELL + (A.ox || 0)
-  const ay = (A.y + 0.5) * CELL + (A.oy || 0)
-  const bx = (B.x + 0.5) * CELL + (B.ox || 0)
-  const by = (B.y + 0.5) * CELL + (B.oy || 0)
-  const lx = ax + (bx - ax) * fr
-  const ly = ay + (by - ay) * fr
-  ctx.globalAlpha = 0.32
-  ctx.fillStyle = data.preview ? '#f2d99e' : '#f2e2b8'
-  ctx.fillRect(lx - 1, ly - 1, 3, 3)
+  if (data.selected !== false && !still) {
+    const n = tiles.length - 1
+    const p = (now / 3800) % 1
+    const pos = p * n
+    const i0 = Math.min(n - 1, Math.floor(pos))
+    const fr = pos - i0
+    const A = tiles[i0]
+    const B = tiles[i0 + 1]
+    const ax = (A.x + 0.5) * CELL + (A.ox || 0)
+    const ay = (A.y + 0.5) * CELL + (A.oy || 0)
+    const bx = (B.x + 0.5) * CELL + (B.ox || 0)
+    const by = (B.y + 0.5) * CELL + (B.oy || 0)
+    const lx = ax + (bx - ax) * fr
+    const ly = ay + (by - ay) * fr
+    ctx.globalAlpha = 0.32 * weight
+    ctx.fillStyle = data.hiColor || (data.preview ? '#f2d99e' : '#f2e2b8')
+    ctx.fillRect(lx - 1, ly - 1, 3, 3)
+  }
   ctx.restore()
+}
+
+// 西门会用掉、东门原本会捡的同一面盾：亮一只小手
+function drawContestedHands(ctx, hands, now, still = false) {
+  if (!hands || !hands.length) return
+  for (const h of hands) {
+    const bx = h.x * CELL + CELL - 11
+    const by = h.y * CELL + 2
+    const pulse = still ? 0.8 : 0.68 + 0.25 * Math.sin(now / 260)
+    ctx.save()
+    ctx.globalAlpha = pulse
+    const g = ctx.createRadialGradient(bx + 4, by + 5, 1, bx + 4, by + 5, 13)
+    g.addColorStop(0, 'rgba(255, 228, 168, 0.4)')
+    g.addColorStop(1, 'rgba(255, 228, 168, 0)')
+    ctx.fillStyle = g
+    ctx.fillRect(bx - 9, by - 8, 26, 26)
+    ctx.fillStyle = '#1a1410'
+    ctx.fillRect(bx + 1, by + 2, 7, 7)
+    ctx.fillRect(bx + 2, by - 1, 2, 4)
+    ctx.fillRect(bx + 5, by - 2, 2, 5)
+    ctx.fillStyle = '#ffe4a8'
+    ctx.fillRect(bx + 2, by + 3, 5, 5)
+    ctx.fillRect(bx + 3, by, 1, 3)
+    ctx.fillRect(bx + 6, by - 1, 1, 4)
+    ctx.fillStyle = '#fff3c0'
+    ctx.fillRect(bx + 2, by + 3, 2, 1)
+    ctx.restore()
+  }
 }
 
 // 路线上的真实事件小标记，以及不经过的盾架灰问号
@@ -4791,7 +4822,14 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   if (scene && scene.crossbow) drawCrossbow(ctx, scene.crossbow, now)
   if (scene && scene.guide) drawGuide(ctx, scene.guide, now)
   if (scene && scene.dragging && scene.forbidden) drawForbidden(ctx, scene.forbidden)
-  if (scene && scene.footprints) drawFootprints(ctx, scene.footprints, now)
+  if (scene && scene.footprints) {
+    const f = scene.footprints
+    if (f.layers) {
+      for (const layer of f.layers) drawFootprints(ctx, layer, now, still)
+    } else {
+      drawFootprints(ctx, f, now, still)
+    }
+  }
   if (scene && scene.hover) drawHoverGlow(ctx, scene.hover)
   for (const [key, item] of game.items) {
     if (key === hiddenKey) continue
@@ -4848,7 +4886,20 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
     )
     if (visibleBells.length) drawMossBells(ctx, visibleBells, now, still)
   }
-  if (scene && scene.footprints) drawRouteMarkers(ctx, scene.footprints, now)
+  if (scene && scene.footprints) {
+    const f = scene.footprints
+    if (f.layers) {
+      const selected = f.layers.find((layer) => layer.selected)
+      if (selected) {
+        drawRouteMarkers(ctx, { ...selected, preview: !!f.preview || !!selected.preview }, now)
+      }
+    } else {
+      drawRouteMarkers(ctx, f, now)
+    }
+  }
+  if (scene && scene.contestedShields) {
+    drawContestedHands(ctx, scene.contestedShields, now, still)
+  }
   if (scene && scene.hover && scene.hover.type === 'sign') {
     drawSignTurnHint(ctx, scene.hover, now)
   }
