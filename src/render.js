@@ -4445,8 +4445,11 @@ function drawFootprints(ctx, data, now, still = false) {
   const tiles = data.tiles
   if (!tiles || tiles.length < 2) return
   const weight = data.alpha == null ? 1 : data.alpha
+  const strong = !!data.strong
   ctx.save()
-  const baseAlpha = (data.preview ? 0.22 : 0.13) * weight
+  const baseAlpha = data.ghost
+    ? 0.1
+    : (data.preview ? (strong ? 0.42 : 0.22) : strong ? 0.26 : 0.13) * weight
   ctx.fillStyle = data.color || (data.preview ? '#e6c98a' : '#cfd3da')
   for (let i = 1; i < tiles.length; i++) {
     const a = tiles[i - 1]
@@ -4474,7 +4477,7 @@ function drawFootprints(ctx, data, now, still = false) {
     const by = (B.y + 0.5) * CELL + (B.oy || 0)
     const lx = ax + (bx - ax) * fr
     const ly = ay + (by - ay) * fr
-    ctx.globalAlpha = 0.32 * weight
+    ctx.globalAlpha = (strong ? (data.preview ? 0.55 : 0.4) : 0.32) * weight
     ctx.fillStyle = data.hiColor || (data.preview ? '#f2d99e' : '#f2e2b8')
     ctx.fillRect(lx - 1, ly - 1, 3, 3)
   }

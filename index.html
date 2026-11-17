@@ -94,23 +94,23 @@
 
           <div class="ledger-main">
             <section class="guest-reserve">
-              <div id="night-preview" class="night-preview" hidden>
-                <span class="night-preview-label">主路线</span>
-                <button id="night-west" class="night-tab west active" type="button">
-                  <img id="night-west-avatar" class="night-tab-avatar" alt="" />
-                  <span>西门 · 寻宝客</span>
-                </button>
-                <button id="night-east" class="night-tab east" type="button">
-                  <img id="night-east-avatar" class="night-tab-avatar" alt="" />
-                  <span>东门 · 护卫客</span>
-                </button>
-                <span id="night-preview-note" class="night-preview-note"></span>
-              </div>
               <span class="avatar-frame knight" id="avatar-frame">
                 <img id="guest-avatar" class="guest-avatar" alt="预约客人头像" />
               </span>
               <div class="guest-info">
-                <div class="guest-title" id="guest-title">今日预约 · 新手剑士</div>
+                <div class="guest-head">
+                  <div class="guest-title" id="guest-title">今日预约 · 新手剑士</div>
+                  <div id="night-preview" class="night-preview" hidden title="亮的一路是主路线；另一路按西门用剩的库存计算">
+                    <button id="night-west" class="night-tab west active" type="button" title="预览西门 · 寻宝客主路线">
+                      <img id="night-west-avatar" class="night-tab-avatar" alt="" />
+                      <span>西门</span>
+                    </button>
+                    <button id="night-east" class="night-tab east" type="button" title="预览东门 · 护卫客主路线">
+                      <img id="night-east-avatar" class="night-tab-avatar" alt="" />
+                      <span>东门</span>
+                    </button>
+                  </div>
+                </div>
                 <p class="guest-quote" id="guest-quote"><img id="guest-quote-mark" class="guest-quote-mark" alt="" /><span id="guest-quote-text">「我是新手剑士，想拿到<em class="kw">勇者徽章</em>。侧室的<em class="kw">宝箱</em>我要开，守卫那一锤我也想<em class="kw">挡</em>。」</span></p>
               </div>
               <div class="btn-row">
@@ -201,7 +201,7 @@
             </section>
           </div>
 
-          <p id="status" class="status place">把道具拖到空地砖上摆放</p>
+          <p id="status" class="status place"><span id="status-text">把道具拖到空地砖上摆放</span></p>
 
           <section class="run-log">
             <div class="run-log-title">

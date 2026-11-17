@@ -82,6 +82,7 @@ const spd2El = document.getElementById('spd-2')
 const spdBoltEl = document.getElementById('spd-bolt')
 const ledgerDividerEl = document.getElementById('ledger-divider')
 const statusEl = document.getElementById('status')
+const statusTextEl = document.getElementById('status-text')
 const bubbleEl = document.getElementById('bubble')
 const bubbleTextEl = document.getElementById('bubble-text')
 const bubbleAvatarEl = document.getElementById('bubble-avatar')
@@ -129,7 +130,6 @@ const tab8 = document.getElementById('tab-order8')
 const nightPreviewEl = document.getElementById('night-preview')
 const nightWestBtn = document.getElementById('night-west')
 const nightEastBtn = document.getElementById('night-east')
-const nightPreviewNoteEl = document.getElementById('night-preview-note')
 const nightWestAvatarEl = document.getElementById('night-west-avatar')
 const nightEastAvatarEl = document.getElementById('night-east-avatar')
 const certEl = document.getElementById('five-star-cert')
@@ -728,19 +728,11 @@ function updateNightPreviewUI() {
   const show = order === 8 && mode === 'setup'
   nightPreviewEl.hidden = !show
   if (!show) return
-  nightWestBtn.classList.toggle('active', nightPreviewGuest === 1)
-  nightEastBtn.classList.toggle('active', nightPreviewGuest === 2)
-  if (nightPreviewGuest === 1) {
-    nightPreviewNoteEl.textContent = '两路同屏：西门暖金为主路线；东门冰蓝作对照。'
-    return
-  }
-  const preview = planNightPreview(game, 2)
-  if (preview.first) {
-    nightPreviewNoteEl.textContent =
-      `两路同屏：东门冰蓝为主路线；按西门用剩库存算（已开箱 ${preview.first.openedChests.length}、拿走盾 ${preview.first.takenShields.length}）。`
-  } else {
-    nightPreviewNoteEl.textContent = '西门寻宝客被隔栅堵住了，先让西门走通。'
-  }
+  const west = nightPreviewGuest === 1
+  nightWestBtn.classList.toggle('active', west)
+  nightEastBtn.classList.toggle('active', !west)
+  nightWestBtn.setAttribute('aria-pressed', west ? 'true' : 'false')
+  nightEastBtn.setAttribute('aria-pressed', west ? 'false' : 'true')
 }
 // 卡片小金币用顶部旋转金币的静态第一帧
 const staticCoinURL = coinFrameDataURL(0)
@@ -921,12 +913,13 @@ function hideGhost() {
 
 function status(msg, kind) {
   const cls = kind || (mode === 'business' ? 'business' : 'place')
-  const changed = statusEl.textContent !== msg
+  const changed = statusTextEl.textContent !== msg
   statusEl.className = 'status ' + cls
-  statusEl.textContent = msg
+  statusTextEl.textContent = msg
+  statusTextEl.classList.remove('bump')
   if (changed) {
-    void statusEl.offsetWidth
-    statusEl.classList.add('bump')
+    void statusTextEl.offsetWidth
+    statusTextEl.classList.add('bump')
   }
 }
 
@@ -1751,7 +1744,9 @@ function buildNightLayers(g, preview) {
       ...west,
       color: '#e8c97a',
       hiColor: '#ffe4a8',
-      alpha: selected === 1 ? 1 : 0.4,
+      alpha: 1,
+      strong: selected === 1,
+      ghost: selected !== 1,
       selected: selected === 1,
       preview,
     },
@@ -1759,7 +1754,9 @@ function buildNightLayers(g, preview) {
       ...east,
       color: '#8fd0e8',
       hiColor: '#d8f4ff',
-      alpha: selected === 2 ? 1 : 0.4,
+      alpha: 1,
+      strong: selected === 2,
+      ghost: selected !== 2,
       selected: selected === 2,
       preview,
     },
@@ -1930,7 +1927,7 @@ function updateHUD() {
     const count = counts[type] || 0
     if (countEl) {
       countEl.hidden = false
-      countEl.textContent = `场上 ${count}`
+      countEl.textContent = String(count)
       countEl.classList.toggle('zero', count === 0)
     }
   }
@@ -1939,8 +1936,12 @@ function updateHUD() {
     mode === 'business'
       ? '重新布置（保留摆法）'
       : game.items.size > 0
-        ? '全收重摆'
+        ? '全收重摆（退还全部金币）'
         : '重新布置'
+  btnReset.classList.toggle(
+    'collect-all',
+    mode === 'setup' && game.items.size > 0,
+  )
   chestCardSealEl.hidden = !chestLocked
   chestCardEl.title = chestLocked
     ? '机关迷不翻宝箱，本单不可购买'
@@ -3175,7 +3176,7 @@ function stepWalker(t, realT) {
         spark = null
         footDust = []
         lastGuestTile = { x: nextGuest.spawn.x, y: nextGuest.spawn.y }
-        addLog(game, 'nightSwitch', { guest: 2, label: '换场：东门护卫客入场' })
+        addLog(game, 'nightSwitch', { guest: 2, label: '夜场下半场 · 东门入场' })
         updateLogUI()
         sfx.sign()
         status('夜场换边：东门护卫客从东门入场。上一场用掉的道具今晚不再补。')
