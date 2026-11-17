@@ -19,7 +19,7 @@
       <div class="play-area">
         <div class="canvas-wrap frame">
           <canvas id="game" width="768" height="576" aria-label="魔王的地牢地图"></canvas>
-          <div id="night-curtain" class="night-curtain" hidden>夜场下半场 · 东门护卫客入场</div>
+          <div id="night-curtain" class="night-curtain" hidden><span class="night-curtain-plaque">夜场下半场 · 东门护卫客入场</span></div>
           <div id="bubble" class="bubble" hidden>
             <img id="bubble-avatar" class="bubble-avatar" alt="" hidden />
             <span id="bubble-text" class="bubble-text"></span>
@@ -38,7 +38,10 @@
               <div class="review-panel">
                 <div class="receipt-binding" aria-hidden="true"><span></span><span></span></div>
                 <div class="review-head">
-                  <div class="review-title" id="review-title">新手剑士的评价单</div>
+                  <div class="review-title-block">
+                    <div class="review-title" id="review-title">新手剑士的评价单</div>
+                    <span id="review-new-record" class="review-new-record" hidden>NEW · 新纪录</span>
+                  </div>
                   <div id="review-seal" class="review-seal">五星神店</div>
                 </div>
                 <div id="review-stars" class="review-stars" role="img" aria-label="星级"></div>
@@ -201,7 +204,7 @@
             </section>
           </div>
 
-          <p id="status" class="status place"><span id="status-text">把道具拖到空地砖上摆放</span></p>
+          <p id="status" class="status place"><span id="status-text" class="status-text">把道具拖到空地砖上摆放</span></p>
 
           <section class="run-log">
             <div class="run-log-title">

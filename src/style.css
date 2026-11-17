@@ -361,12 +361,24 @@ h1 {
   justify-content: center;
   background: rgba(8, 6, 14, 0.82);
   color: #e8c97a;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.4;
   letter-spacing: 1px;
   text-shadow: 2px 2px 0 #24170e, 0 0 8px rgba(232, 201, 122, 0.35);
   pointer-events: none;
   opacity: 0;
+}
+
+/* 短木牌底：盖住地图下方的「主厅」木牌，字仍保持清晰 */
+.night-curtain-plaque {
+  display: inline-block;
+  padding: 8px 14px;
+  background: linear-gradient(#3a2a17, #241a10);
+  border: 2px solid #8a6a3b;
+  box-shadow:
+    inset 0 0 0 1px rgba(232, 201, 122, 0.18),
+    3px 3px 0 rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
 }
 
 .night-curtain.show {
@@ -2053,15 +2065,33 @@ h1 {
   border-bottom: 1px dashed rgba(122, 90, 45, 0.45);
 }
 
-.review-title {
+.review-title-block {
   flex: 1;
+  min-width: 0;
+}
+
+.review-title {
   font-size: 14px;
   letter-spacing: 2px;
   color: #3a2a18;
   padding-top: 5px;
 }
 
+.review-new-record {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 6px;
+  font-size: 9.5px;
+  letter-spacing: 1px;
+  color: #4a2f12;
+  background: linear-gradient(#ffe4a8, #e8c97a);
+  border: 1px solid #8a6a3b;
+  box-shadow: 1px 1px 0 rgba(122, 90, 45, 0.35);
+  transform: rotate(-2deg);
+}
+
 .review-seal {
+  position: relative;
   flex: none;
   width: 62px;
   height: 62px;
@@ -2081,6 +2111,71 @@ h1 {
   transform: rotate(-7deg);
   opacity: 0.9;
   box-shadow: inset 0 0 0 1px rgba(150, 58, 48, 0.25);
+}
+
+/* 四字红章：2×2 田字格 + 浅十字线 */
+.seal-grid {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.seal-grid > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11.5px;
+  line-height: 1;
+}
+
+.review-seal:not(.void)::before,
+.review-seal:not(.void)::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  background: rgba(150, 58, 48, 0.22);
+  pointer-events: none;
+}
+
+.review-seal:not(.void)::before {
+  left: 8px;
+  right: 8px;
+  top: 50%;
+  height: 1px;
+}
+
+.review-seal:not(.void)::after {
+  top: 8px;
+  bottom: 8px;
+  left: 50%;
+  width: 1px;
+}
+
+.seal-wear {
+  position: absolute;
+  z-index: 3;
+  background: #ecd9b6;
+  pointer-events: none;
+}
+
+.wear-a {
+  left: -2px;
+  top: 17px;
+  width: 5px;
+  height: 7px;
+  transform: rotate(8deg);
+}
+
+.wear-b {
+  right: 8px;
+  bottom: -3px;
+  width: 9px;
+  height: 4px;
+  transform: rotate(-5deg);
 }
 
 .review-seal.void {

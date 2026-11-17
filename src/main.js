@@ -56,6 +56,7 @@ import {
   coinFrameDataURL,
   hourglassDataURL,
   logIconDataURL,
+  lastPendulumAngle,
   speakerDataURL,
   quoteMarkDataURL,
   turnIconDataURL,
@@ -149,6 +150,7 @@ const reviewCard = document.getElementById('review-card')
 const reviewReceiptEl = reviewCard.querySelector('.receipt')
 const reviewTitle = document.getElementById('review-title')
 const reviewSealEl = document.getElementById('review-seal')
+const reviewNewRecordEl = document.getElementById('review-new-record')
 const reviewStars = document.getElementById('review-stars')
 const reviewEvents = document.getElementById('review-events')
 const reviewComment = document.getElementById('review-comment')
@@ -569,6 +571,8 @@ let pending = null
 let drag = null
 let bounce = null
 let bubbleAnchor = null
+let bracketTrail = []
+let signTurns = new Map()
 
 // 首单上手引导（首单真的拿过五星后才收起）
 let onboardingRetired = false
@@ -596,6 +600,7 @@ let stagger = null
 let runHasTrap = true
 let badgeFly = null
 let spark = null
+let hitStop = null
 let entryGlow = null
 let bridgeSplash = null
 let lastBridgeRow = null
@@ -1365,17 +1370,33 @@ function recordBestStars(review) {
 function showReview() {
   clearReviewTimers()
   const r = buildReview(game.log, order)
+  if (guest) guest.fiveStar = r.status === 'rated' && r.stars === 5
   // 首单真的拿过五星后才收起上手引导；3/4 星回来仍按现状提示
   if (order === 1 && r.status === 'rated' && r.stars === 5) onboardingRetired = true
   const meta = REVIEW_META[order] || REVIEW_META[1]
   reviewTitle.textContent = meta.title
+  // 先并入另一页面的存档，再判断是否真的刷新本关最高星
+  mergeBestFromStorage()
+  const priorBest = Math.max(bestStars[order] || 0, readOrderBestStars(order))
+  reviewNewRecordEl.hidden = !(
+    r.status === 'rated' && r.stars > priorBest
+  )
 
   // 右上角真实星级印章：先留空，最后一颗星落稳后再盖
   const sealText = { 5: '五星神店', 4: '瑕不掩瑜', 3: '差强人意' }[r.stars]
   reviewSealEl.className =
     'review-seal' + (r.status === 'incomplete' ? ' void' : '') + ' pending'
-  reviewSealEl.innerHTML =
-    r.status === 'incomplete' ? '预约<br>未完成' : sealText || '尚未评星'
+  if (r.status === 'incomplete') {
+    reviewSealEl.innerHTML = '预约<br>未完成'
+  } else {
+    const chars = (sealText || '尚未评星').split('')
+    reviewSealEl.innerHTML =
+      '<span class="seal-wear wear-a" aria-hidden="true"></span>' +
+      '<span class="seal-wear wear-b" aria-hidden="true"></span>' +
+      '<span class="seal-grid" aria-hidden="true">' +
+      chars.map((c) => `<span>${c}</span>`).join('') +
+      '</span>'
+  }
 
   // 五颗独立星块：每 140ms 落一颗，每颗落墨约 200ms
   const DROP_MS = 280
@@ -1486,6 +1507,7 @@ function showReview() {
 
 function hideReview() {
   reviewCard.hidden = true
+  if (guest) guest.fiveStar = false
   // 提前关票或重开：取消还没落下的星声与盖章
   clearReviewTimers()
   reviewReceiptEl.classList.remove('is-dropping')
@@ -2034,6 +2056,8 @@ function setOrder(n) {
   invalidFlash = null
   clearFootprintPreview()
   hideNightCurtain()
+  bracketTrail = []
+  signTurns.clear()
   pop = null
   skeleton.pose = 'idle'
   if (n === 8) {
@@ -2402,6 +2426,7 @@ btnSwing.addEventListener('click', () => {
   if (performance.now() - swingWarn.startReal >= swingWarn.ms) return
   swingUsed = true
   swingWarn.pressed = true
+  swingWarn.stopAngle = reducedMotion ? 0 : lastPendulumAngle(swingWarn.id) ?? 0
   updateSwingButton()
 })
 
@@ -2484,6 +2509,9 @@ function startBusiness() {
   swingStopped = new Map()
   bridgeSplash = null
   lastBridgeRow = null
+  hitStop = null
+  bracketTrail = []
+  signTurns.clear()
   doorMotes = null
   lastDoorTileKey = null
   const entry = order >= 2 ? orderEntryTile(order) : null
@@ -2595,6 +2623,9 @@ function resetBusiness() {
   entryGlow = null
   bridgeSplash = null
   lastBridgeRow = null
+  hitStop = null
+  bracketTrail = []
+  signTurns.clear()
   doorMotes = null
   lastDoorTileKey = null
   reviewStampPlayed = false
@@ -2868,7 +2899,10 @@ function stepWalker(t, realT) {
           sfx.block()
         }
         if (a.kind === 'hit') sfx.hit()
-        if (a.kind === 'slash') startGuestGesture('slash', a.ms, t)
+        if (a.kind === 'slash') {
+          startGuestGesture('slash', a.ms, t)
+          if (!reducedMotion) hitStop = { until: realT + 60 }
+        }
       }
       if (t - walker.actionStart >= a.ms) {
         fx = null
@@ -2919,11 +2953,10 @@ function stepWalker(t, realT) {
         if (swingWarn && swingWarn.pressed) {
           addLog(game, 'pendulumStop')
           updateLogUI()
-          const pIndex = PENDULUM.pendulums.findIndex((p) => p.id === swingWarn.id)
-          const stopAngle = reducedMotion || pIndex < 0
-            ? 0
-            : Math.sin(performance.now() / 420 + pIndex * 2.1) * 0.82
-          swingStopped.set(swingWarn.id, { angle: stopAngle, start: performance.now() })
+          swingStopped.set(swingWarn.id, {
+            angle: swingWarn.stopAngle || 0,
+            start: performance.now(),
+          })
           sfx.block()
           status('钟摆停住了')
           a.phase = 'done'
@@ -3207,6 +3240,7 @@ function stepWalker(t, realT) {
 
 function startDrag(source, type, dir, e) {
   setGalleryOpen(false)
+  bracketTrail = []
   pending = null
   bounce = null
   pop = null
@@ -3333,6 +3367,10 @@ window.addEventListener('pointermove', (e) => {
   }
   if (!drag) return
 
+  const prevValid =
+    drag.target && drag.target.valid
+      ? { x: drag.target.x, y: drag.target.y }
+      : null
   drag.px = e.clientX
   drag.py = e.clientY
   // 幽灵和落点一起上移；回收判断仍用手指真实位置
@@ -3353,11 +3391,21 @@ window.addEventListener('pointermove', (e) => {
     return
   }
   const ignore = drag.source === 'shop' ? null : tileKey(drag.source.x, drag.source.y)
-  drag.target = {
-    x: t.x,
-    y: t.y,
-    valid: specialPlaceReason(drag.type, t.x, t.y, ignore) === 'ok',
+  const valid = specialPlaceReason(drag.type, t.x, t.y, ignore) === 'ok'
+  if (
+    !reducedMotion &&
+    prevValid &&
+    valid &&
+    (prevValid.x !== t.x || prevValid.y !== t.y)
+  ) {
+    bracketTrail.push({
+      x: prevValid.x,
+      y: prevValid.y,
+      start: performance.now(),
+      ms: 120,
+    })
   }
+  drag.target = { x: t.x, y: t.y, valid }
   // 合法候选格：先看拟放后的真实路线；不合法则退回当前场布的路线
   if (drag.target.valid) previewRouteForDrag(drag)
   else clearFootprintPreview()
@@ -3371,8 +3419,29 @@ window.addEventListener('pointerup', () => {
     pending = null
     const item = game.items.get(tileKey(p.source.x, p.source.y))
     if (item && item.type === 'sign') {
+      const key = tileKey(item.x, item.y)
+      const nowPerf = performance.now()
+      let from = item.dir
+      let target = item.dir + 1
+      const prevTurn = signTurns.get(key)
+      if (prevTurn) {
+        // 起点取中途正在画的角度；终点沿上一次的目标继续累计，
+        // 避免第三下连点后落到「插值角度 + 90」而突然跳回真实方向。
+        const ep = Math.min(1, (nowPerf - prevTurn.start) / prevTurn.ms)
+        from = prevTurn.from + (prevTurn.to - prevTurn.from) * ep
+        target = prevTurn.to + 1
+      }
       const dir = rotateItem(game, item.x, item.y)
-      setPop('sign', item.x, item.y, dir)
+      if (reducedMotion) {
+        signTurns.delete(key)
+      } else {
+        signTurns.set(key, {
+          from,
+          to: target,
+          start: nowPerf,
+          ms: 120,
+        })
+      }
       sfx.sign()
       status(`路牌顺时针转了 90°，现在朝${DIR_NAMES[dir]}`)
       updateHUD()
@@ -3384,6 +3453,7 @@ window.addEventListener('pointerup', () => {
   hoverItem = null
   const d = drag
   drag = null
+  bracketTrail = []
   invalidFlash = null
   clearFootprintPreview()
   document.body.classList.remove('dragging')
@@ -3502,8 +3572,13 @@ window.addEventListener('blur', () => {
 function frame(realT) {
   // 营业模拟时钟：按 1×/2× 推进；切换时 dt 连续累加，不跳步不断拍
   if (lastRealT == null) lastRealT = realT
-  const dt = Math.min(200, Math.max(0, realT - lastRealT))
+  let dt = Math.min(200, Math.max(0, realT - lastRealT))
   lastRealT = realT
+  // 斩击反击的 60ms 微顿只冻结演出时钟；真实毫秒机关计时照旧
+  if (hitStop) {
+    if (realT >= hitStop.until) hitStop = null
+    else dt = 0
+  }
   simT += dt * speed
   const t = simT
   if (!reducedMotion) drawCoinFrame(coinCtx, Math.floor(realT / 140) % 4)
@@ -3613,6 +3688,22 @@ function frame(realT) {
         start: bridgeSplash.start,
         ms: bridgeSplash.ms,
       }
+  }
+  if (bracketTrail.length) {
+    bracketTrail = bracketTrail.filter((b) => realT - b.start < b.ms)
+  }
+  let signTurnScene = null
+  if (signTurns.size) {
+    signTurnScene = {}
+    for (const [key, turn] of signTurns) {
+      const el = realT - turn.start
+      if (el >= turn.ms) {
+        signTurns.delete(key)
+      } else {
+        const p = el / turn.ms
+        signTurnScene[key] = turn.from + (turn.to - turn.from) * p
+      }
+    }
   }
   let doorMotesScene = null
   if (doorMotes) {
@@ -3877,6 +3968,7 @@ function frame(realT) {
           blocking,
           flash: flash === 'guest',
           gesture: guestGestureScene,
+          still: reducedMotion,
           hideBadge: !!badgeFlyScene, // 飞行期间只画飞的那枚，落地后才显示头顶徽章
         }
       : null,
@@ -3902,6 +3994,16 @@ function frame(realT) {
     forbidden: game.reserved,
     footprints:
       footprintData ? { ...footprintData, preview: !!footprintPreview } : null,
+    bracketTrail:
+      bracketTrail.length > 0
+        ? bracketTrail.map((b) => ({
+            x: b.x,
+            y: b.y,
+            t: realT - b.start,
+            ms: b.ms,
+          }))
+        : null,
+    signTurns: signTurnScene,
     contestedShields: footprintData ? footprintData.contestedShields || null : null,
     hover: mode === 'setup' ? hoverItem : null,
     invalid: invalidScene,

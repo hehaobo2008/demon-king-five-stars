@@ -2187,6 +2187,22 @@ export function drawGuest(ctx, guest) {
     drawHeroBadge(ctx, cx, feetY - 42 + bob, 0.8, { twinkle: true, phase })
     ctx.restore()
   }
+
+  if (guest.fiveStar) {
+    const tnow = performance.now()
+    const pts = [
+      [-11, -52],
+      [0, -58],
+      [11, -51],
+    ]
+    for (let i = 0; i < pts.length; i++) {
+      const [dx, dy] = pts[i]
+      const bob = guest.still
+        ? 0
+        : Math.round(Math.sin(tnow / 520 + i * 2.1) * 1.5)
+      drawStarMote(ctx, cx + dx, feetY + dy + bob, 0.92)
+    }
+  }
 }
 
 function drawSkeletonHammer(ctx, ox, oy, pose, now = 0, still = false) {
@@ -2294,7 +2310,7 @@ export function drawSkeleton(ctx, sx, sy, pose, now = 0, flash = false, still = 
 }
 
 // fx: { kind: 'strike'|'block'|'hit'|'slash', at: {x,y}, t, ms } —— 像素帧与小方颗粒
-function drawFx(ctx, fx) {
+function drawFx(ctx, fx, still = false) {
   const p = Math.min(1, fx.t / fx.ms)
   const cx = (fx.at.x + 0.5) * CELL
   const cy = (fx.at.y + 0.5) * CELL
@@ -2325,6 +2341,23 @@ function drawFx(ctx, fx) {
     ctx.fillStyle = '#f4f4f4'
     for (let i = 0; i < 5; i++) {
       ctx.fillRect(cx - 18 + i * 8, cy + 14 - i * 7, 4, 4)
+    }
+    // 三粒米白骨片；减少动效时定格在固定小弧上
+    const chips = [
+      [-12, -6, 2],
+      [9, -9, 1],
+      [-4, 8, 2],
+    ]
+    ctx.fillStyle = '#e8e0cf'
+    for (let i = 0; i < chips.length; i++) {
+      const [dx, dy, s] = chips[i]
+      const drift = still ? 0 : p * (6 + i * 2)
+      ctx.fillRect(
+        Math.round(cx + dx - p * 3),
+        Math.round(cy + dy - drift),
+        s === 2 ? 2 : 1,
+        s === 2 ? 2 : 1,
+      )
     }
   }
   ctx.restore()
@@ -3498,6 +3531,13 @@ export function drawWorkshopParts(ctx, taken) {
   }
 }
 
+const PENDULUM_ANGLE_CACHE = new Map()
+
+// 给主循环取「屏幕上最后画出的摆角」，止摆时不再用下一帧的新时间重算
+export function lastPendulumAngle(id) {
+  return PENDULUM_ANGLE_CACHE.has(id) ? PENDULUM_ANGLE_CACHE.get(id) : null
+}
+
 function drawPixelChain(ctx, ax, ay, bx, by) {
   const links = 5
   for (let i = 1; i <= links; i++) {
@@ -3527,6 +3567,7 @@ export function drawPendulums(ctx, data, now, still = false) {
           : null
     const stopped = !!rawStop
     const angle = stopped ? rawStop.angle || 0 : still ? 0 : Math.sin(now / 420 + i * 2.1) * 0.82
+    if (!stopped) PENDULUM_ANGLE_CACHE.set(p.id, angle)
     const len = 18
     const bx = px + Math.sin(angle) * len
     const by = py + Math.cos(angle) * len
@@ -3560,11 +3601,26 @@ export function drawPendulums(ctx, data, now, still = false) {
     ctx.fillRect(bx - 4, by - 4, 8, 8)
     ctx.fillStyle = '#e8e0cf'
     ctx.fillRect(bx - 2, by - 2, 2, 2)
+    // 有弧度的像素月牙刃：外弧暗描边 + 内侧亮银
+    const crescent = [
+      [3, -6],
+      [5, -4],
+      [7, -1],
+      [7, 2],
+      [5, 5],
+      [2, 7],
+      [-1, 8],
+    ]
+    ctx.fillStyle = '#1a1c2c'
+    for (const [dx, dy] of crescent) ctx.fillRect(bx + dx - 1, by + dy - 1, 3, 2)
     ctx.fillStyle = '#f4f4f4'
-    ctx.fillRect(bx - 4, by + 4, 8, 1)
-    ctx.fillRect(bx + 4, by - 3, 1, 7)
+    for (const [dx, dy] of crescent) ctx.fillRect(bx + dx, by + dy, 2, 1)
     ctx.fillStyle = '#94b0c2'
-    ctx.fillRect(bx - 3, by + 5, 6, 1)
+    for (const [dx, dy] of crescent.slice(1, 5)) {
+      ctx.fillRect(bx + dx - 1, by + dy + 1, 1, 1)
+    }
+    ctx.fillStyle = '#fff3c0'
+    ctx.fillRect(bx + 5, by - 4, 1, 1)
 
     // 止摆：小锁挂在顶轴，火花只在刚停住的一小段时间里闪
     if (stopped) {
@@ -4513,7 +4569,7 @@ function drawContestedHands(ctx, hands, now, still = false) {
 }
 
 // 路线上的真实事件小标记，以及不经过的盾架灰问号
-function drawRouteMarkers(ctx, data, now) {
+function drawRouteMarkers(ctx, data, now, still = false) {
   if (!data) return
   const preview = !!data.preview
   const drawChest = (x, y) => {
@@ -4559,16 +4615,20 @@ function drawRouteMarkers(ctx, data, now) {
     ctx.fillRect(bx + 2, by + 4, 5, 1)
   }
   const drawGauge = (x, y) => {
-    const bx = x * CELL + CELL - 8
-    const by = y * CELL + 2
+    // 小水滴
+    const bx = x * CELL + CELL - 9
+    const by = y * CELL + 1
     ctx.fillStyle = '#1a1c2c'
-    ctx.fillRect(bx + 2, by, 3, 9)
+    ctx.fillRect(bx + 4, by, 2, 1)
+    ctx.fillRect(bx + 3, by + 1, 4, 2)
+    ctx.fillRect(bx + 2, by + 3, 6, 4)
+    ctx.fillRect(bx + 3, by + 7, 4, 2)
     ctx.fillStyle = preview ? '#d8f4ee' : '#8fd0d4'
-    ctx.fillRect(bx + 3, by + 1, 1, 7)
-    ctx.fillStyle = '#ffcd75'
-    ctx.fillRect(bx + 3, by + 2, 3, 1)
-    ctx.fillRect(bx + 3, by + 4, 2, 1)
-    ctx.fillRect(bx + 3, by + 6, 3, 1)
+    ctx.fillRect(bx + 4, by + 1, 2, 1)
+    ctx.fillRect(bx + 3, by + 2, 4, 2)
+    ctx.fillRect(bx + 3, by + 4, 4, 3)
+    ctx.fillStyle = '#f4ffff'
+    ctx.fillRect(bx + 3, by + 3, 1, 2)
   }
   const drawBridge = (x, y) => {
     const bx = x * CELL + CELL - 11
@@ -4607,16 +4667,25 @@ function drawRouteMarkers(ctx, data, now) {
     ctx.fillRect(bx + 5, by + 4, 1, 1)
   }
   const drawPart = (x, y) => {
-    const bx = x * CELL + CELL - 9
-    const by = y * CELL + 3
+    // 小齿轮：四向齿 + 圆盘 + 轴孔
+    const bx = x * CELL + CELL - 10
+    const by = y * CELL + 2
     ctx.fillStyle = '#1a1c2c'
-    ctx.fillRect(bx, by, 8, 7)
+    ctx.fillRect(bx + 3, by, 4, 2)
+    ctx.fillRect(bx + 3, by + 8, 4, 2)
+    ctx.fillRect(bx, by + 3, 2, 4)
+    ctx.fillRect(bx + 8, by + 3, 2, 4)
+    ctx.fillRect(bx + 1, by + 1, 8, 8)
     ctx.fillStyle = preview ? '#ffe4a8' : '#c9a24b'
-    ctx.fillRect(bx + 1, by + 1, 6, 5)
+    ctx.fillRect(bx + 4, by, 2, 2)
+    ctx.fillRect(bx + 4, by + 8, 2, 1)
+    ctx.fillRect(bx, by + 4, 2, 2)
+    ctx.fillRect(bx + 8, by + 4, 2, 2)
+    ctx.fillRect(bx + 2, by + 2, 6, 6)
     ctx.fillStyle = '#3a2a18'
-    ctx.fillRect(bx + 3, by + 2, 2, 3)
+    ctx.fillRect(bx + 4, by + 4, 2, 2)
     ctx.fillStyle = '#fff3c0'
-    ctx.fillRect(bx + 1, by + 1, 2, 1)
+    ctx.fillRect(bx + 2, by + 2, 2, 1)
   }
   const drawMoss = (x, y) => {
     const bx = x * CELL + CELL - 8
@@ -4636,9 +4705,13 @@ function drawRouteMarkers(ctx, data, now) {
     ctx.fillStyle = '#1a1410'
     ctx.fillRect(bx + 1, by + 1, 2, 5)
     ctx.fillRect(bx + 1, by + 8, 2, 2)
+    const pulse = still ? 1 : 0.68 + 0.32 * Math.sin(now / 260)
+    ctx.save()
+    ctx.globalAlpha = pulse
     ctx.fillStyle = preview ? '#ff8a6a' : '#ef5a4a'
     ctx.fillRect(bx, by, 2, 5)
     ctx.fillRect(bx, by + 7, 2, 2)
+    ctx.restore()
   }
   for (const m of data.markers || []) {
     if (m.kind === 'chest') drawChest(m.x, m.y)
@@ -4782,6 +4855,32 @@ function drawWarningEdge(ctx, now, remain, still) {
   ctx.restore()
 }
 
+// 拖过合法空格后，上一格留 120ms 的淡角标
+function drawBracketTrail(ctx, trail, still = false) {
+  if (!trail) return
+  for (const b of trail) {
+    const p = still ? 0.45 : Math.min(1, Math.max(0, b.t / b.ms))
+    const alpha = 0.34 * (1 - p)
+    if (alpha <= 0.01) continue
+    const px = b.x * CELL
+    const py = b.y * CELL
+    const L = 7
+    const T = 1
+    ctx.save()
+    ctx.globalAlpha = alpha
+    ctx.fillStyle = '#a7f070'
+    ctx.fillRect(px + 3, py + 3, L, T)
+    ctx.fillRect(px + 3, py + 3, T, L)
+    ctx.fillRect(px + CELL - 3 - L, py + 3, L, T)
+    ctx.fillRect(px + CELL - 3 - T, py + 3, T, L)
+    ctx.fillRect(px + 3, py + CELL - 3 - T, L, T)
+    ctx.fillRect(px + 3, py + CELL - 3 - L, T, L)
+    ctx.fillRect(px + CELL - 3 - L, py + CELL - 3 - T, L, T)
+    ctx.fillRect(px + CELL - 3 - T, py + CELL - 3 - L, T, L)
+    ctx.restore()
+  }
+}
+
 // 呼吸四角标：绿=可放 / 红=不可放
 function drawCornerBrackets(ctx, x, y, valid, now) {
   const px = x * CELL
@@ -4846,7 +4945,14 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
       continue
     }
     if (scene && scene.pop && scene.pop.key === key) continue
-    drawItem(ctx, item.type, item.x * CELL, item.y * CELL, item.dir, item.opened, item.taken)
+    const visDir =
+      item.type === 'sign' &&
+      scene &&
+      scene.signTurns &&
+      scene.signTurns[key] != null
+        ? scene.signTurns[key]
+        : item.dir
+    drawItem(ctx, item.type, item.x * CELL, item.y * CELL, visDir, item.opened, item.taken)
   }
   // 落位回弹 + 四粒像素灰
   if (scene && scene.pop) {
@@ -4894,10 +5000,10 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
     if (f.layers) {
       const selected = f.layers.find((layer) => layer.selected)
       if (selected) {
-        drawRouteMarkers(ctx, { ...selected, preview: !!f.preview || !!selected.preview }, now)
+        drawRouteMarkers(ctx, { ...selected, preview: !!f.preview || !!selected.preview }, now, still)
       }
     } else {
-      drawRouteMarkers(ctx, f, now)
+      drawRouteMarkers(ctx, f, now, still)
     }
   }
   if (scene && scene.contestedShields) {
@@ -4966,7 +5072,7 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
     for (const pg of scene.pastGuests) drawGuest(ctx, pg)
   }
   if (scene && scene.guest) drawGuest(ctx, scene.guest)
-  if (scene && scene.fx) drawFx(ctx, scene.fx)
+  if (scene && scene.fx) drawFx(ctx, scene.fx, still)
   // 开箱：三粒沿不同抛物线散开的星芒
   if (scene && scene.spark) {
     const p = Math.min(1, scene.spark.t / scene.spark.ms)
@@ -5007,6 +5113,9 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   if (scene && scene.entryGlow) drawEntryGlow(ctx, scene.entryGlow, still)
   if (scene && scene.crossbow && scene.crossbow.warnEdge) {
     drawWarningEdge(ctx, now, scene.crossbow.warnRemain, still)
+  }
+  if (scene && scene.bracketTrail) {
+    drawBracketTrail(ctx, scene.bracketTrail, still)
   }
   if (highlight) {
     if (highlight.type && highlight.valid) {
