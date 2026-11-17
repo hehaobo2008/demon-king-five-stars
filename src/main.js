@@ -90,6 +90,7 @@ const coachAvatarEl = document.getElementById('coach-avatar')
 const alarmEl = document.getElementById('alarm')
 const alarmIconEl = document.getElementById('alarm-icon')
 const alarmTextEl = document.getElementById('alarm-text')
+const nightCurtainEl = document.getElementById('night-curtain')
 const chestCardEl = document.querySelector('.card[data-type="chest"]')
 const chestCardSealEl = chestCardEl.querySelector('.card-seal')
 const barrierCardEl = document.querySelector('.card[data-type="barrier"]')
@@ -126,6 +127,7 @@ const nightEastBtn = document.getElementById('night-east')
 const nightPreviewNoteEl = document.getElementById('night-preview-note')
 const certEl = document.getElementById('five-star-cert')
 const guestTitleEl = document.getElementById('guest-title')
+const guestReserveEl = document.querySelector('.guest-reserve')
 const guestQuoteEl = document.getElementById('guest-quote')
 const guestQuoteTextEl = document.getElementById('guest-quote-text')
 const guestQuoteMarkEl = document.getElementById('guest-quote-mark')
@@ -317,6 +319,7 @@ let nightGuest = 1
 let nightPreviewGuest = 1
 let nightBadges = { 1: false, 2: false }
 let nightGuardPoses = { 1: 'idle', 2: 'idle' }
+let nightPastGuest = null
 // 营业时钟：simT 按倍速推进（走路/台词/演出），弩机预警仍用真实毫秒
 let speed = 1
 let simT = 0
@@ -329,12 +332,13 @@ let trapUiSig = ''
 let swingUiSig = ''
 let swingUsed = false
 let swingWarn = null
-let swingStopped = new Set() // { id, at, startReal, ms, pressed }
+let swingStopped = new Map() // id -> { angle, start }：止摆时冻结在当时的角度
 let logShownOrder = 0
 let logShownCount = 0
 let galleryOpen = false
 let reviewStampPlayed = false
 let reviewTimers = []
+let nightCurtainTimer = 0
 
 // 历史最高星与五星认证：本地存储不可用时只保留本次会话
 // 旧版把两单合在一个 JSON 键里；新版每单一个键，两个页面各写各的，读取时取高
@@ -514,11 +518,25 @@ const GUEST_VARIANT = {
   1: 'knight',
   2: 'fan',
   3: 'trader',
-  4: 'fan',
-  5: 'trader',
-  6: 'fan',
-  7: 'trader',
-  8: 'trader',
+  4: 'tide',
+  5: 'scribe',
+  6: 'pendulum',
+  7: 'moss',
+  8: 'nightWest',
+}
+const GUEST_THEMES = {
+  1: { accent: '#3b5dc9', title: '#2c3f74', keyword: '#2f4a9a', avatarBg: '#2e4a7a', bubbleBg: '#edf1fa', bubbleBorder: '#3b5dc9', bubbleInk: '#1a2440' },
+  2: { accent: '#a8762c', title: '#7a541d', keyword: '#8a5a18', avatarBg: '#6a4a22', bubbleBg: '#f7efdc', bubbleBorder: '#8a6a2b', bubbleInk: '#3a2a12' },
+  3: { accent: '#4f6a3a', title: '#3d512b', keyword: '#4a6b34', avatarBg: '#3e5c3a', bubbleBg: '#eff5e8', bubbleBorder: '#4f6a3a', bubbleInk: '#23301e' },
+  4: { accent: '#2f7f86', title: '#25636a', keyword: '#2f7f86', avatarBg: '#23545c', bubbleBg: '#e8f5f5', bubbleBorder: '#2f7f86', bubbleInk: '#16343a' },
+  5: { accent: '#7a3f4a', title: '#5f2f38', keyword: '#7a3f4a', avatarBg: '#5a2f35', bubbleBg: '#f7ecee', bubbleBorder: '#7a3f4a', bubbleInk: '#3a1e24' },
+  6: { accent: '#596c7a', title: '#455562', keyword: '#8a6a2b', avatarBg: '#4b4a52', bubbleBg: '#eef1f2', bubbleBorder: '#596c7a', bubbleInk: '#263038' },
+  7: { accent: '#7a9a2f', title: '#586f24', keyword: '#5f7f32', avatarBg: '#33502f', bubbleBg: '#f2f7e6', bubbleBorder: '#7a9a2f', bubbleInk: '#2b3518' },
+  8: { accent: '#6d4a6e', title: '#553a58', keyword: '#7a4a6e', avatarBg: '#3e3048', bubbleBg: '#f3ecf5', bubbleBorder: '#6d4a6e', bubbleInk: '#2e2132' },
+}
+const NIGHT_GUEST_THEMES = {
+  1: GUEST_THEMES[8],
+  2: { accent: '#6b3f3f', title: '#4e2d2d', keyword: '#8a6a2b', avatarBg: '#4a2a2a', bubbleBg: '#f2e9e7', bubbleBorder: '#6b3f3f', bubbleInk: '#321e1e' },
 }
 const REVIEW_META = {
   1: { title: '新手剑士的评价单', sign: '新手剑士' },
@@ -666,6 +684,21 @@ function setNightGuestUI(index) {
   guestQuoteTextEl.innerHTML = g.quote
   guestAvatarEl.src = charAvatarDataURL(g.variant)
   avatarFrameEl.className = 'avatar-frame ' + g.variant
+  applyGuestTheme()
+}
+
+function applyGuestTheme() {
+  const theme =
+    order === 8 ? NIGHT_GUEST_THEMES[nightGuest] : GUEST_THEMES[order]
+  if (!theme) return
+  guestReserveEl.style.setProperty('--guest-accent', theme.accent)
+  guestReserveEl.style.setProperty('--guest-title', theme.title)
+  guestReserveEl.style.setProperty('--guest-keyword', theme.keyword)
+  avatarFrameEl.style.background = theme.avatarBg
+  avatarFrameEl.style.borderColor = theme.accent
+  bubbleEl.style.setProperty('--bubble-bg', theme.bubbleBg)
+  bubbleEl.style.setProperty('--bubble-border', theme.bubbleBorder)
+  bubbleEl.style.setProperty('--bubble-ink', theme.bubbleInk)
 }
 
 function nightBlockedMessage(blocked) {
@@ -895,6 +928,24 @@ function hideBubble() {
   bubbleEl.hidden = true
   bubbleEl.classList.remove('tail-up')
   bubbleAnchor = null
+}
+
+function hideNightCurtain() {
+  clearTimeout(nightCurtainTimer)
+  nightCurtainEl.hidden = true
+  nightCurtainEl.classList.remove('show')
+}
+
+function showNightCurtain() {
+  clearTimeout(nightCurtainTimer)
+  nightCurtainEl.hidden = false
+  nightCurtainEl.classList.remove('show')
+  void nightCurtainEl.offsetWidth
+  nightCurtainEl.classList.add('show')
+  nightCurtainTimer = setTimeout(() => {
+    nightCurtainEl.hidden = true
+    nightCurtainEl.classList.remove('show')
+  }, 350)
 }
 
 function positionBubble() {
@@ -1455,10 +1506,19 @@ function buildRoute(g, guestOverride = null) {
   const markers = []
   let pickedShield = false
   let endTile = null
+  let gaugeSeen = false
+  const dangerKeys = new Set()
   const push = (p) => {
     const last = raw[raw.length - 1]
     if (last && last.x === p.x && last.y === p.y) return
     raw.push({ x: p.x, y: p.y })
+  }
+  const addDanger = (at, reason) => {
+    if (!at) return
+    const key = reason + ':' + at.x + ',' + at.y
+    if (dangerKeys.has(key)) return
+    dangerKeys.add(key)
+    markers.push({ kind: 'danger', x: at.x, y: at.y, reason })
   }
   if (plan) {
     for (const a of plan.actions) {
@@ -1470,6 +1530,18 @@ function buildRoute(g, guestOverride = null) {
       } else if (a.type === 'pickupShield') {
         markers.push({ kind: 'shield', x: a.x, y: a.y })
         pickedShield = true
+      } else if (a.type === 'archive') {
+        markers.push({ kind: 'archive', x: a.x, y: a.y })
+      } else if (a.type === 'part') {
+        markers.push({ kind: 'part', x: a.x, y: a.y })
+      } else if (a.type === 'moss') {
+        markers.push({ kind: 'moss', x: a.x, y: a.y })
+      } else if (a.type === 'pendulum') {
+        addDanger(a.at, 'pendulum')
+      } else if (a.type === 'patrol') {
+        addDanger(a.at, 'patrol')
+      } else if (a.type === 'log' && a.event === 'gauge') {
+        gaugeSeen = true
       } else if (a.type === 'trap') {
         if (a.stop) push(a.stop)
         if (a.beam) {
@@ -1488,6 +1560,37 @@ function buildRoute(g, guestOverride = null) {
             markers.push({ kind: 'shield', x: found.x, y: found.y })
             pickedShield = true
           }
+        }
+      }
+    }
+    if (gaugeSeen) {
+      markers.push({ kind: 'gauge', x: TIDE.gauge.x, y: TIDE.gauge.y })
+    }
+    if (order === 4) {
+      for (const span of TIDE.spans) {
+        const hasBridge = [...source.items.values()].some(
+          (it) => it.type === 'bridge' && it.y === span.y,
+        )
+        if (!hasBridge) continue
+        if (raw.some((t) => t.y === span.y && t.x >= span.x1 && t.x <= span.x2)) {
+          markers.push({
+            kind: 'bridge',
+            x: Math.round((span.x1 + span.x2) / 2),
+            y: span.y,
+          })
+        }
+      }
+    }
+    if (order === 5) {
+      for (const d of ARCHIVE.doors) {
+        const weight = source.items.get(tileKey(d.plate.x, d.plate.y))
+        if (!weight || weight.type !== 'weight') continue
+        if (raw.some((t) => t.x === d.x && t.y === d.y)) {
+          markers.push({
+            kind: d.id === 'red' ? 'redDoor' : 'yellowDoor',
+            x: d.x,
+            y: d.y,
+          })
         }
       }
     }
@@ -1633,6 +1736,7 @@ function updateMapFrameGlow() {
 
 function updateHUD() {
   updateMapFrameGlow()
+  applyGuestTheme()
   // 只给真实收支做动效：移动/取消/拖错余额不变，换单只换数字
   const prev = shownGold[order]
   if (typeof prev === 'number' && prev !== game.gold) triggerGoldFx(game.gold - prev)
@@ -1756,6 +1860,7 @@ function setOrder(n) {
   hoverItem = null
   invalidFlash = null
   clearFootprintPreview()
+  hideNightCurtain()
   pop = null
   skeleton.pose = 'idle'
   if (n === 8) {
@@ -1763,6 +1868,7 @@ function setOrder(n) {
     nightPreviewGuest = 1
     nightBadges = { 1: false, 2: false }
     nightGuardPoses = { 1: 'idle', 2: 'idle' }
+    nightPastGuest = null
     applyNightStage(1)
     setNightGuestUI(1)
   } else {
@@ -2172,6 +2278,7 @@ function startBusiness() {
     nightPreviewGuest = 1
     nightBadges = { 1: false, 2: false }
     nightGuardPoses = { 1: 'idle', 2: 'idle' }
+    nightPastGuest = null
     game.badgeTaken = false
     applyNightStage(1)
     setNightGuestUI(1)
@@ -2198,7 +2305,7 @@ function startBusiness() {
   runHasTrap = plan.actions.some((a) => a.type === 'trap')
   swingUsed = false
   swingWarn = null
-  swingStopped = new Set()
+  swingStopped = new Map()
   bridgeSplash = null
   lastBridgeRow = null
   doorMotes = null
@@ -2224,6 +2331,9 @@ function startBusiness() {
     y: plan.start.y,
     hasShield: false,
     hasBadge: false,
+    hasArchive: false,
+    hasPart: false,
+    hasMoss: false,
     variant: order === 8 ? NIGHT.guests[0].variant : GUEST_VARIANT[order] || 'knight',
     facing: 'down',
     walkPhase: 0,
@@ -2248,6 +2358,7 @@ function startBusiness() {
   btnTrap.classList.remove('timing')
   trapTimerFillEl.style.transform = 'scaleX(0)'
   hideBubble()
+  hideNightCurtain()
   status('营业中：客人正在探索……')
   updateHUD()
 }
@@ -2256,6 +2367,7 @@ function resetBusiness() {
   walker = null
   guest = null
   hideBubble()
+  hideNightCurtain()
   hideReview()
   mode = 'setup'
   clearGoldFx()
@@ -2273,6 +2385,7 @@ function resetBusiness() {
     nightPreviewGuest = 1
     nightBadges = { 1: false, 2: false }
     nightGuardPoses = { 1: 'idle', 2: 'idle' }
+    nightPastGuest = null
     applyNightStage(1)
     setNightGuestUI(1)
   }
@@ -2297,7 +2410,7 @@ function resetBusiness() {
   trapTimerFillEl.style.transform = 'scaleX(0)'
   swingUsed = false
   swingWarn = null
-  swingStopped = new Set()
+  swingStopped = new Map()
   btnSwing.classList.remove('armed', 'timing', 'standby')
   swingTimerFillEl.style.transform = 'scaleX(0)'
   runHasTrap = true
@@ -2426,6 +2539,7 @@ function stepWalker(t, realT) {
     }
     if (a.type === 'archive') {
       game.takenArchives.add(a.site)
+      if (guest) guest.hasArchive = true
       addLog(game, 'archive', {
         site: a.site,
         name: a.name,
@@ -2440,6 +2554,7 @@ function stepWalker(t, realT) {
     }
     if (a.type === 'part') {
       game.takenParts.add(a.site)
+      if (guest) guest.hasPart = true
       addLog(game, 'part', { site: a.site, label: `取到${a.name}` })
       updateLogUI()
       sfx.chest()
@@ -2450,6 +2565,7 @@ function stepWalker(t, realT) {
     }
     if (a.type === 'moss') {
       game.takenMoss = true
+      if (guest) guest.hasMoss = true
       addLog(game, 'moss', { label: '取到苔火样本' })
       updateLogUI()
       sfx.chest()
@@ -2598,7 +2714,11 @@ function stepWalker(t, realT) {
         if (swingWarn && swingWarn.pressed) {
           addLog(game, 'pendulumStop')
           updateLogUI()
-          swingStopped.add(swingWarn.id)
+          const pIndex = PENDULUM.pendulums.findIndex((p) => p.id === swingWarn.id)
+          const stopAngle = reducedMotion || pIndex < 0
+            ? 0
+            : Math.sin(performance.now() / 420 + pIndex * 2.1) * 0.82
+          swingStopped.set(swingWarn.id, { angle: stopAngle, start: performance.now() })
           sfx.block()
           status('钟摆停住了')
           a.phase = 'done'
@@ -2804,6 +2924,24 @@ function stepWalker(t, realT) {
         nightGuest = a.guest || 2
         nightBadges[1] = nightBadges[1] || !!(guest && guest.hasBadge)
         nightGuardPoses[1] = skeleton.pose || nightGuardPoses[1]
+        if (guest && guest.hasBadge) {
+          const west = NIGHT.guests[0]
+          nightPastGuest = {
+            ...guest,
+            x: west.stop.x,
+            y: west.stop.y,
+            facing: 'down',
+            moving: false,
+            walkPhase: 0,
+            gesture: null,
+            blockStart: 0,
+            offsetX: 0,
+            offsetY: 0,
+            hideBadge: false,
+          }
+        } else {
+          nightPastGuest = null
+        }
         const nextGuest = NIGHT.guests[nightGuest - 1]
         applyNightStage(nightGuest)
         skeleton.pose = nightGuardPoses[nightGuest] || 'idle'
@@ -2812,6 +2950,9 @@ function stepWalker(t, realT) {
           guest.y = nextGuest.spawn.y
           guest.hasShield = false
           guest.hasBadge = false
+          guest.hasArchive = false
+          guest.hasPart = false
+          guest.hasMoss = false
           guest.variant = nextGuest.variant
           guest.facing = 'down'
           guest.moving = false
@@ -2833,8 +2974,8 @@ function stepWalker(t, realT) {
         addLog(game, 'nightSwitch', { guest: 2, label: '换场：东门护卫客入场' })
         updateLogUI()
         sfx.sign()
-        showBubble('东门护卫客从东门入场')
         status('夜场换边：东门护卫客从东门入场。上一场用掉的道具今晚不再补。')
+        showNightCurtain()
       }
       if (t - walker.actionStart >= (a.ms || 1000)) {
         advanceWalker(t)
@@ -3469,6 +3610,8 @@ function frame(realT) {
     const east = !!(eastBell && eastBell.type === 'bell')
     const side = west && !east ? 'north' : east && !west ? 'south' : 'center'
     const loop = MOSS.loops[side]
+    const loopColor =
+      side === 'north' ? '#c9a24b' : side === 'south' ? '#c96a52' : '#7fbf6f'
     const legMs = 850
     const frac = (realT / legMs) % loop.length
     const i0 = Math.floor(frac)
@@ -3476,8 +3619,29 @@ function frame(realT) {
     const f = frac - i0
     const A = loop[i0]
     const B = loop[i1]
+    const dx = B.x - A.x
+    const dy = B.y - A.y
+    const facing = reducedMotion
+      ? 'down'
+      : Math.abs(dx) >= Math.abs(dy)
+        ? dx > 0
+          ? 'right'
+          : 'left'
+        : dy > 0
+          ? 'down'
+          : 'up'
+    const bells = []
+    if (west && !east) {
+      bells.push({ x: MOSS.bells[0].x, y: MOSS.bells[0].y, seed: 0 })
+    } else if (east && !west) {
+      bells.push({ x: MOSS.bells[1].x, y: MOSS.bells[1].y, seed: 0.5 })
+    }
     mossPatrol = {
       side,
+      facing,
+      loop,
+      loopColor,
+      bells,
       pos: reducedMotion
         ? { x: loop[0].x, y: loop[0].y }
         : { x: A.x + (B.x - A.x) * f, y: A.y + (B.y - A.y) * f },
@@ -3551,9 +3715,11 @@ function frame(realT) {
         : null,
     parts: order === 6 ? game.takenParts : null,
     patrol: mossPatrol,
+    mossBells: order === 7 ? mossPatrol.bells : null,
     moss: order === 7 ? { taken: game.takenMoss } : null,
     stand: currentMap.stand,
     standBadge: order === 8 ? false : !game.badgeTaken,
+    pastGuests: order === 8 && nightPastGuest ? [nightPastGuest] : null,
     entryGlow: entryGlowScene,
     stands:
       order === 8

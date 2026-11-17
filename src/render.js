@@ -1131,7 +1131,7 @@ function drawBarrierItem(ctx, ox, oy) {
 }
 
 // 古铃卡片/拖拽图标：木架 + 黄铜铃
-function drawBellItem(ctx, ox, oy) {
+function drawBellArt(ctx, ox, oy, sway = 0) {
   ctx.fillStyle = '#1a1c2c'
   ctx.fillRect(ox + 6, oy + 5, 2, 13)
   ctx.fillStyle = '#6d4a2f'
@@ -1139,17 +1139,21 @@ function drawBellItem(ctx, ox, oy) {
   ctx.fillStyle = '#c9a24b'
   ctx.fillRect(ox + 4, oy + 4, 9, 2)
   ctx.fillStyle = '#1a1c2c'
-  ctx.fillRect(ox + 8, oy + 10, 8, 8)
+  ctx.fillRect(ox + 8 + sway, oy + 10, 8, 8)
   ctx.fillStyle = '#c9a24b'
-  ctx.fillRect(ox + 9, oy + 10, 6, 7)
+  ctx.fillRect(ox + 9 + sway, oy + 10, 6, 7)
   ctx.fillStyle = '#e8c97a'
-  ctx.fillRect(ox + 10, oy + 10, 2, 2)
+  ctx.fillRect(ox + 10 + sway, oy + 10, 2, 2)
   ctx.fillStyle = '#8a6a2b'
-  ctx.fillRect(ox + 9, oy + 16, 6, 1)
+  ctx.fillRect(ox + 9 + sway, oy + 16, 6, 1)
   ctx.fillStyle = '#a34a3a'
-  ctx.fillRect(ox + 11, oy + 18, 2, 2)
+  ctx.fillRect(ox + 11 + sway, oy + 18, 2, 2)
   ctx.fillStyle = '#e8d8b0'
-  ctx.fillRect(ox + 11, oy + 8, 1, 2)
+  ctx.fillRect(ox + 11 + sway, oy + 8, 1, 2)
+}
+
+function drawBellItem(ctx, ox, oy) {
+  drawBellArt(ctx, ox, oy, 0)
 }
 
 // 桥板卡片/拖拽图标：一段带栏杆的木桥
@@ -1351,6 +1355,130 @@ const TRADER_PALETTE = {
   g: '#ffcd75',
   C: '#6b4a2f',
   b: '#2a2018',
+}
+
+// 正篇角色各自的配色：仍用现有两套衣形，只换颜色与少量头饰
+const TIDE_PALETTE = {
+  o: '#1a1c2c',
+  K: '#23545c',
+  k: '#36727a',
+  F: '#e8c19a',
+  E: '#1a1c2c',
+  G: '#8fd0d4',
+  g: '#d8f4ee',
+  S: '#5fa8a0',
+  T: '#2f5f68',
+  b: '#1f3238',
+}
+
+const SCRIBE_PALETTE = {
+  o: '#1a1c2c',
+  H: '#2d3a5a',
+  h: '#1f2a44',
+  F: '#e8c19a',
+  E: '#1a1c2c',
+  A: '#5a2f35',
+  g: '#e8c97a',
+  C: '#7a3f4a',
+  b: '#241a20',
+}
+
+const PENDULUM_PALETTE = {
+  o: '#1a1c2c',
+  K: '#4a3b2a',
+  k: '#8a6a2b',
+  F: '#e8c19a',
+  E: '#1a1c2c',
+  G: '#ffcd75',
+  g: '#fff3c0',
+  S: '#6d4a2f',
+  T: '#4b4a52',
+  b: '#2a2622',
+}
+
+const MOSS_PALETTE = {
+  o: '#1a1c2c',
+  H: '#33502f',
+  h: '#4a6b3a',
+  F: '#e8c19a',
+  E: '#1a1c2c',
+  A: '#5b4028',
+  g: '#c9f58a',
+  C: '#3f6b34',
+  b: '#232b1e',
+}
+
+const NIGHT_WEST_PALETTE = {
+  o: '#1a1c2c',
+  H: '#5e4a6b',
+  h: '#3e3048',
+  F: '#e8c19a',
+  E: '#1a1c2c',
+  A: '#6b4a2f',
+  g: '#ffcd75',
+  C: '#3a2a4a',
+  b: '#241d2a',
+}
+
+const NIGHT_EAST_PALETTE = {
+  o: '#1a1c2c',
+  H: '#8a6a2b',
+  h: '#5a441b',
+  F: '#e8c19a',
+  E: '#1a1c2c',
+  A: '#3a3a42',
+  g: '#ffcd75',
+  C: '#4a2a2a',
+  b: '#241e1a',
+}
+
+const GUEST_STYLES = {
+  knight: { shape: 'knight', palette: KNIGHT_PALETTE, arm: '#5b6b80', head: null },
+  fan: { shape: 'fan', palette: FAN_PALETTE, arm: '#6d4a2f', head: null },
+  trader: { shape: 'knight', palette: TRADER_PALETTE, arm: '#8a5f38', head: null },
+  tide: { shape: 'fan', palette: TIDE_PALETTE, arm: '#2f5f68', head: 'tide' },
+  scribe: { shape: 'knight', palette: SCRIBE_PALETTE, arm: '#5a3a3a', head: 'scribe' },
+  pendulum: { shape: 'fan', palette: PENDULUM_PALETTE, arm: '#6d4a2f', head: null },
+  moss: { shape: 'knight', palette: MOSS_PALETTE, arm: '#4a5f38', head: 'moss' },
+  nightWest: { shape: 'knight', palette: NIGHT_WEST_PALETTE, arm: '#6b4a2f', head: null },
+  nightEast: { shape: 'knight', palette: NIGHT_EAST_PALETTE, arm: '#5b5b66', head: null },
+}
+
+function guestStyle(variant) {
+  return GUEST_STYLES[variant] || GUEST_STYLES.knight
+}
+
+// 头饰画在头顶行内，预约头像裁切时也不会被裁掉
+function drawGuestHeadwear(ctx, head, ox, oy) {
+  if (!head) return
+  if (head === 'tide') {
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(ox + 5, oy, 14, 3)
+    ctx.fillStyle = '#2f7f86'
+    ctx.fillRect(ox + 6, oy, 12, 2)
+    ctx.fillStyle = '#8fd0d4'
+    ctx.fillRect(ox + 7, oy, 5, 1)
+    ctx.fillRect(ox + 18, oy + 1, 2, 2)
+  } else if (head === 'scribe') {
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(ox + 4, oy, 16, 3)
+    ctx.fillStyle = '#2d3a5a'
+    ctx.fillRect(ox + 5, oy, 14, 2)
+    ctx.fillStyle = '#f0d9a5'
+    ctx.fillRect(ox + 11, oy, 2, 1)
+    ctx.fillStyle = '#8c3b35'
+    ctx.fillRect(ox + 18, oy + 2, 2, 3)
+  } else if (head === 'moss') {
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(ox + 5, oy, 14, 2)
+    ctx.fillStyle = '#4a6b3a'
+    ctx.fillRect(ox + 6, oy, 12, 1)
+    ctx.fillStyle = '#1f3a22'
+    ctx.fillRect(ox + 15, oy + 2, 4, 2)
+    ctx.fillStyle = '#7fbf6f'
+    ctx.fillRect(ox + 15, oy + 1, 3, 1)
+    ctx.fillRect(ox + 18, oy + 3, 2, 2)
+  }
 }
 
 const KNIGHT_FRAMES = {
@@ -1577,18 +1705,16 @@ function drawChar(ctx, sets, palette, facing, phase, cx, feetY) {
 
 // 预约卡片头像：正脸半身裁切
 export function charAvatarDataURL(variant) {
-  const sets = variant === 'fan' ? FAN_FRAMES : KNIGHT_FRAMES
-  const palette =
-    variant === 'fan'
-      ? FAN_PALETTE
-      : variant === 'trader'
-        ? TRADER_PALETTE
-        : KNIGHT_PALETTE
+  const style = guestStyle(variant)
+  const sets = style.shape === 'fan' ? FAN_FRAMES : KNIGHT_FRAMES
+  const palette = style.palette
   const rows = sets.down[0].slice(0, 9)
   const c = document.createElement('canvas')
   c.width = CHAR_W * CHAR_PX
   c.height = rows.length * CHAR_PX
-  drawCharRows(c.getContext('2d'), rows, palette, 0, 0)
+  const ctx = c.getContext('2d')
+  drawCharRows(ctx, rows, palette, 0, 0)
+  drawGuestHeadwear(ctx, style.head, 0, 0)
   return c.toDataURL()
 }
 
@@ -1817,15 +1943,13 @@ function drawSwingTrail(ctx, hx, hy, dir, p) {
   ctx.restore()
 }
 
-function drawGuestWeapon(ctx, variant, cx, feetY, facing, side, gesture, p) {
-  const armColor =
-    variant === 'fan' ? '#6d4a2f' : variant === 'trader' ? '#8a5f38' : '#5b6b80'
+function drawGuestWeapon(ctx, shape, cx, feetY, facing, side, gesture, p, armColor = '#5b6b80') {
   if (gesture && gesture.kind === 'slash') {
     const dir = facing === 'left' ? -1 : 1
     const hx = cx + dir * 8
     const hy = feetY - 20
     drawArm(ctx, cx + dir * 3, feetY - 18, hx, hy, armColor)
-    if (variant === 'fan') drawWrenchSwing(ctx, hx, hy, dir)
+    if (shape === 'fan') drawWrenchSwing(ctx, hx, hy, dir)
     else drawSwordSwing(ctx, hx, hy, dir)
     drawHand(ctx, hx, hy)
     drawSwingTrail(ctx, hx, hy, dir, p)
@@ -1845,7 +1969,7 @@ function drawGuestWeapon(ctx, variant, cx, feetY, facing, side, gesture, p) {
     hy = feetY - 14
     drawArm(ctx, cx + side * 7, feetY - 19, hx, hy, armColor)
   }
-  if (variant === 'fan') drawWrenchUp(ctx, hx, hy)
+  if (shape === 'fan') drawWrenchUp(ctx, hx, hy)
   else drawSwordUp(ctx, hx, hy)
   drawHand(ctx, hx, hy)
 }
@@ -1952,17 +2076,46 @@ export function drawHeroBadge(ctx, cx, cy, s = 1, opts = {}) {
   }
 }
 
+// 真正取到档案、零件、样本后，腰边才挂出对应小物
+function drawGuestCarry(ctx, guest, cx, feetY) {
+  if (guest.hasArchive) {
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(cx + 8, feetY - 19, 6, 7)
+    ctx.fillStyle = '#e8d8b0'
+    ctx.fillRect(cx + 9, feetY - 18, 4, 4)
+    ctx.fillStyle = '#a34a3a'
+    ctx.fillRect(cx + 9, feetY - 18, 1, 4)
+    ctx.fillStyle = '#8a6a2b'
+    ctx.fillRect(cx + 9, feetY - 13, 4, 1)
+  }
+  if (guest.hasPart) {
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(cx - 13, feetY - 17, 6, 6)
+    ctx.fillStyle = '#c9a24b'
+    ctx.fillRect(cx - 12, feetY - 16, 4, 4)
+    ctx.fillStyle = '#3a2a18'
+    ctx.fillRect(cx - 11, feetY - 15, 2, 2)
+    ctx.fillStyle = '#fff3c0'
+    ctx.fillRect(cx - 12, feetY - 16, 1, 1)
+  }
+  if (guest.hasMoss) {
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(cx + 9, feetY - 27, 4, 7)
+    ctx.fillStyle = '#7fbf6f'
+    ctx.fillRect(cx + 10, feetY - 26, 2, 4)
+    ctx.fillStyle = '#a7f070'
+    ctx.fillRect(cx + 10, feetY - 26, 1, 2)
+    ctx.fillStyle = '#4d7a55'
+    ctx.fillRect(cx + 10, feetY - 21, 2, 1)
+  }
+}
+
 // 客人：浮点格坐标；方向/步态由行走驱动；影子、分层盾牌与受击闪白
 export function drawGuest(ctx, guest) {
-  const variant =
-    guest.variant === 'fan' ? 'fan' : guest.variant === 'trader' ? 'trader' : 'knight'
-  const sets = variant === 'fan' ? FAN_FRAMES : KNIGHT_FRAMES
-  const palette =
-    variant === 'fan'
-      ? FAN_PALETTE
-      : variant === 'trader'
-        ? TRADER_PALETTE
-        : KNIGHT_PALETTE
+  const style = guestStyle(guest.variant)
+  const shape = style.shape
+  const sets = shape === 'fan' ? FAN_FRAMES : KNIGHT_FRAMES
+  const palette = style.palette
   const cx = (guest.x + 0.5) * CELL + (guest.offsetX || 0)
   const crouch = guest.blocking ? 3 : 0
   const feetY = (guest.y + 1) * CELL - 3 + (guest.offsetY || 0) + crouch
@@ -1974,8 +2127,7 @@ export function drawGuest(ctx, guest) {
     : 0
   const shieldRaise =
     gesture && gesture.kind === 'shield' ? Math.sin(Math.PI * gp) : 0
-  const armColor =
-    variant === 'fan' ? '#6d4a2f' : variant === 'trader' ? '#8a5f38' : '#5b6b80'
+  const armColor = style.arm
 
   // 脚下像素影子（走动时宽度微变）
   ctx.save()
@@ -1999,6 +2151,7 @@ export function drawGuest(ctx, guest) {
     ctx.restore()
   }
   drawChar(ctx, sets, palette, facing, phase, cx, feetY)
+  drawGuestHeadwear(ctx, style.head, cx - 12, feetY - CHAR_H * CHAR_PX)
   if (guest.hasShield && !shieldBehind) {
     drawHeldShield(
       ctx,
@@ -2021,7 +2174,8 @@ export function drawGuest(ctx, guest) {
     : facing === 'left'
       ? -1
       : 1
-  drawGuestWeapon(ctx, variant, cx, feetY, facing, weaponSide, gesture, gp)
+  drawGuestWeapon(ctx, shape, cx, feetY, facing, weaponSide, gesture, gp, armColor)
+  drawGuestCarry(ctx, guest, cx, feetY)
 
   if (guest.hasBadge && !guest.hideBadge) {
     // 头顶徽章：轻轻浮动 + 交替小星点
@@ -3168,11 +3322,11 @@ function makeWorkshopBase() {
 }
 
 // ===== 正篇第五图：苔火巡廊底图 =====
-function drawMossLoop(ctx, loop, color) {
+function drawMossLoop(ctx, loop, color, alpha = 0.18) {
   ctx.save()
-  ctx.globalAlpha = 0.18
+  ctx.globalAlpha = alpha
   ctx.strokeStyle = color
-  ctx.lineWidth = 2
+  ctx.lineWidth = 1
   ctx.beginPath()
   loop.forEach((p, i) => {
     const x = (p.x + 0.5) * CELL
@@ -3216,9 +3370,10 @@ function makeMossBase() {
   }
 
   drawWelcomeMat(ctx, MOSS.spawn.x, MOSS.spawn.y)
-  drawMossLoop(ctx, MOSS.loops.center, '#7fbf6f')
-  drawMossLoop(ctx, MOSS.loops.north, '#c9a24b')
-  drawMossLoop(ctx, MOSS.loops.south, '#a34a3a')
+  // 所有巡逻圈先留淡路痕，实际生效的那一圈在动态层单独高亮
+  drawMossLoop(ctx, MOSS.loops.center, '#2d4233', 0.3)
+  drawMossLoop(ctx, MOSS.loops.north, '#2d4233', 0.24)
+  drawMossLoop(ctx, MOSS.loops.south, '#2d4233', 0.24)
   for (const b of MOSS.bells) drawMossBellStand(ctx, b)
   drawMossSampleBase(ctx, MOSS.sample)
 
@@ -3343,48 +3498,121 @@ export function drawWorkshopParts(ctx, taken) {
   }
 }
 
+function drawPixelChain(ctx, ax, ay, bx, by) {
+  const links = 5
+  for (let i = 1; i <= links; i++) {
+    const t = i / (links + 1)
+    const x = Math.round(ax + (bx - ax) * t)
+    const y = Math.round(ay + (by - ay) * t)
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(x - 1, y - 1, 3, 3)
+    ctx.fillStyle = i % 2 ? '#94b0c2' : '#566c86'
+    ctx.fillRect(x, y, 2, 2)
+    ctx.fillStyle = '#e8e0cf'
+    ctx.fillRect(x, y, 1, 1)
+  }
+}
+
 export function drawPendulums(ctx, data, now, still = false) {
   if (!data) return
   for (let i = 0; i < data.list.length; i++) {
     const p = data.list[i]
     const px = (p.x + 0.5) * CELL
     const py = p.y * CELL + 6
-    const stopped = data.stopped && data.stopped.has(p.id)
-    const angle = stopped || still ? 0 : Math.sin(now / 420 + i * 2.1) * 0.82
+    const rawStop =
+      data.stopped && data.stopped.get
+        ? data.stopped.get(p.id)
+        : data.stopped && data.stopped.has && data.stopped.has(p.id)
+          ? { angle: 0, start: -Infinity }
+          : null
+    const stopped = !!rawStop
+    const angle = stopped ? rawStop.angle || 0 : still ? 0 : Math.sin(now / 420 + i * 2.1) * 0.82
     const len = 18
     const bx = px + Math.sin(angle) * len
     const by = py + Math.cos(angle) * len
-    // 摆杆
-    ctx.save()
-    ctx.strokeStyle = '#2a2117'
-    ctx.lineWidth = 3
-    ctx.beginPath()
-    ctx.moveTo(px, py)
-    ctx.lineTo(bx, by)
-    ctx.stroke()
-    ctx.strokeStyle = stopped ? '#566c86' : '#94b0c2'
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.moveTo(px, py)
-    ctx.lineTo(bx, by)
-    ctx.stroke()
-    // 摆锤
     const warn = data.activeId === p.id && data.warning && !stopped
+
+    // 地面扫痕：摆锤长期扫过的暗槽与磨亮的小刻点
+    ctx.save()
+    ctx.globalAlpha = 0.55
+    for (let k = 0; k < 9; k++) {
+      const a = -0.82 + (1.64 * k) / 8
+      const sx = Math.round(px + Math.sin(a) * (len + 3))
+      const sy = Math.round(py + Math.cos(a) * (len + 3))
+      ctx.fillStyle = k % 2 ? '#2a2117' : '#4a3a28'
+      ctx.fillRect(sx - 1, sy, 3, 1)
+    }
+    ctx.restore()
+
+    // 像素链条 + 顶轴
+    drawPixelChain(ctx, px, py, bx, by)
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(px - 3, py - 3, 6, 6)
+    ctx.fillStyle = '#c9a24b'
+    ctx.fillRect(px - 2, py - 2, 4, 4)
+    ctx.fillStyle = '#fff3c0'
+    ctx.fillRect(px - 1, py - 1, 1, 1)
+
+    // 摆锤：暗铁芯 + 亮刃
     ctx.fillStyle = '#1a1c2c'
     ctx.fillRect(bx - 5, by - 5, 10, 10)
     ctx.fillStyle = stopped ? '#566c86' : warn ? '#d95757' : '#94b0c2'
     ctx.fillRect(bx - 4, by - 4, 8, 8)
     ctx.fillStyle = '#e8e0cf'
     ctx.fillRect(bx - 2, by - 2, 2, 2)
+    ctx.fillStyle = '#f4f4f4'
+    ctx.fillRect(bx - 4, by + 4, 8, 1)
+    ctx.fillRect(bx + 4, by - 3, 1, 7)
+    ctx.fillStyle = '#94b0c2'
+    ctx.fillRect(bx - 3, by + 5, 6, 1)
+
+    // 止摆：小锁挂在顶轴，火花只在刚停住的一小段时间里闪
+    if (stopped) {
+      ctx.fillStyle = '#1a1c2c'
+      ctx.fillRect(px + 5, py - 3, 6, 7)
+      ctx.fillStyle = '#c9a24b'
+      ctx.fillRect(px + 6, py - 2, 4, 5)
+      ctx.fillStyle = '#8a6a2b'
+      ctx.fillRect(px + 6, py + 1, 4, 1)
+      ctx.fillStyle = '#e8c97a'
+      ctx.fillRect(px + 5, py - 5, 6, 1)
+      ctx.fillRect(px + 5, py - 5, 1, 3)
+      ctx.fillRect(px + 10, py - 5, 1, 3)
+      const sparkAge = now - (rawStop.start || 0)
+      if (still ? sparkAge < 350 : sparkAge < 650) {
+        const fade = still ? 0.7 : 1 - sparkAge / 650
+        const pts = [
+          [-7, -4],
+          [-3, -7],
+          [4, -6],
+          [7, -3],
+        ]
+        ctx.save()
+        ctx.globalAlpha = Math.max(0, fade)
+        for (let k = 0; k < pts.length; k++) {
+          const [dx, dy] = pts[k]
+          ctx.fillStyle = k % 2 ? '#ffcd75' : '#e8c97a'
+          ctx.fillRect(
+            Math.round(px + dx + (still ? 0 : (sparkAge / 650) * dx * 0.4)),
+            Math.round(py + dy - (still ? 0 : (sparkAge / 650) * 5)),
+            k % 2 ? 2 : 1,
+            k % 2 ? 1 : 2,
+          )
+        }
+        ctx.restore()
+      }
+    }
+
     if (warn) {
+      ctx.save()
       ctx.globalAlpha = 0.45 + 0.3 * Math.sin(now / 90)
       ctx.strokeStyle = '#ff5a36'
       ctx.lineWidth = 2
       ctx.beginPath()
       ctx.arc(bx, by, 11, 0, Math.PI * 2)
       ctx.stroke()
+      ctx.restore()
     }
-    ctx.restore()
   }
 }
 
@@ -3408,17 +3636,150 @@ function drawPatrolZone(ctx, zone) {
   ctx.restore()
 }
 
+function drawPatrolDiamond(ctx, cx, feetY) {
+  const pts = [
+    [0, -4], [-2, -3], [-4, -2], [-6, -1],
+    [-4, 1], [-2, 2], [0, 3], [2, 2],
+    [4, 1], [6, -1], [4, -2], [2, -3],
+  ]
+  for (const [dx, dy] of pts) {
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(cx + dx - 1, feetY + dy - 1, 3, 3)
+    ctx.fillStyle = '#7fbf6f'
+    ctx.fillRect(cx + dx, feetY + dy, 1, 1)
+  }
+}
+
+function drawMossGuard(ctx, patrol, now, still, p) {
+  const cx = (p.x + 0.5) * CELL
+  const feetY = (p.y + 1) * CELL - 3
+  const facing = patrol.facing || 'down'
+  drawPatrolDiamond(ctx, cx, feetY)
+  const bob = still ? 0 : Math.round(Math.sin(now / 340) * 1)
+  const ox = cx - 12
+  const oy = feetY - CHAR_H * CHAR_PX + bob
+
+  ctx.save()
+  if (facing === 'left') {
+    ctx.translate(cx, 0)
+    ctx.scale(-1, 1)
+    ctx.translate(-cx, 0)
+  }
+  drawCharRows(ctx, SKELETON_ROWS, SKELETON_PALETTE, ox, oy)
+  ctx.restore()
+
+  // 朝上时露出铁盔后脑，朝下时留一道面甲缝
+  if (facing === 'up') {
+    ctx.fillStyle = '#3d4a58'
+    ctx.fillRect(cx - 6, oy + 6, 12, 7)
+    ctx.fillStyle = '#2c3540'
+    ctx.fillRect(cx - 6, oy + 6, 12, 1)
+  }
+
+  // 铁盔：盔顶、护颊与铆钉
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(cx - 11, oy - 1, 22, 5)
+  ctx.fillStyle = '#3d4a58'
+  ctx.fillRect(cx - 10, oy, 20, 3)
+  ctx.fillStyle = '#6a7a88'
+  ctx.fillRect(cx - 8, oy, 16, 1)
+  ctx.fillStyle = '#2c3540'
+  ctx.fillRect(cx - 11, oy + 3, 3, 5)
+  ctx.fillRect(cx + 8, oy + 3, 3, 5)
+  if (facing === 'down') {
+    ctx.fillStyle = '#2c3540'
+    ctx.fillRect(cx - 4, oy + 4, 8, 1)
+  } else if (facing === 'right') {
+    ctx.fillStyle = '#2c3540'
+    ctx.fillRect(cx + 2, oy + 4, 6, 1)
+  } else if (facing === 'left') {
+    ctx.fillStyle = '#2c3540'
+    ctx.fillRect(cx - 8, oy + 4, 6, 1)
+  }
+  ctx.fillStyle = '#e8c97a'
+  ctx.fillRect(cx - 9, oy + 1, 1, 1)
+  ctx.fillRect(cx + 8, oy + 1, 1, 1)
+
+  // 绿灯：一侧提灯，绿色灯芯与暗铁罩
+  const side = facing === 'left' ? -1 : 1
+  const lx = cx + side * 18
+  const ly = feetY - 18
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(side > 0 ? cx + 6 : cx - 18, feetY - 22, 12, 1)
+  ctx.fillRect(lx - 1, ly - 8, 2, 4)
+  const g = ctx.createRadialGradient(lx, ly, 2, lx, ly, 18)
+  g.addColorStop(0, 'rgba(127, 191, 111, 0.26)')
+  g.addColorStop(1, 'rgba(127, 191, 111, 0)')
+  ctx.fillStyle = g
+  ctx.fillRect(lx - 18, ly - 18, 36, 36)
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(lx - 5, ly - 6, 10, 12)
+  ctx.fillStyle = '#8a6a2b'
+  ctx.fillRect(lx - 5, ly - 6, 10, 2)
+  ctx.fillRect(lx - 5, ly + 4, 10, 2)
+  ctx.fillStyle = '#3f6b34'
+  ctx.fillRect(lx - 4, ly - 4, 8, 8)
+  ctx.fillStyle = '#7fbf6f'
+  ctx.fillRect(lx - 2, ly - 3, 4, 6)
+  ctx.fillStyle = '#c9f58a'
+  ctx.fillRect(lx - 1, ly - 2, 1, 3)
+}
+
 export function drawMossPatrol(ctx, patrol, now, still = false) {
   if (!patrol) return
-  const p = patrol.pos
+  drawMossGuard(ctx, patrol, now, still, patrol.pos)
+}
+
+export function drawMossActiveLoop(ctx, loop, color, now, still = false) {
+  if (!loop) return
   ctx.save()
-  ctx.globalAlpha = 0.2
-  ctx.fillStyle = '#7fbf6f'
+  ctx.globalAlpha = 0.55
+  ctx.strokeStyle = color
+  ctx.lineWidth = 1
+  ctx.setLineDash([4, 4])
+  ctx.shadowColor = color
+  ctx.shadowBlur = 4
   ctx.beginPath()
-  ctx.arc((p.x + 0.5) * CELL, (p.y + 0.7) * CELL, 13, 0, Math.PI * 2)
-  ctx.fill()
+  loop.forEach((p, i) => {
+    const x = (p.x + 0.5) * CELL
+    const y = (p.y + 0.5) * CELL
+    if (i === 0) ctx.moveTo(x, y)
+    else ctx.lineTo(x, y)
+  })
+  ctx.closePath()
+  ctx.stroke()
+  ctx.setLineDash([])
+  ctx.fillStyle = color
+  for (const p of loop) {
+    ctx.fillRect((p.x + 0.5) * CELL - 1, (p.y + 0.5) * CELL - 1, 2, 2)
+  }
   ctx.restore()
-  drawSkeleton(ctx, p.x, p.y, 'idle', now, false, still)
+}
+
+export function drawMossBells(ctx, bells, now, still = false) {
+  if (!bells) return
+  for (const b of bells) {
+    const seed = b.seed || 0
+    const sway = still ? 0 : Math.round(Math.sin(now / 280 + seed * 6))
+    drawBellArt(ctx, b.x * CELL, b.y * CELL, sway)
+    const cx = b.x * CELL + 12
+    const cy = b.y * CELL + 14
+    const phase = still ? 0.42 : ((now + seed * 900) % 900) / 900
+    const r = 7 + phase * 10
+    const alpha = still ? 0.45 : (1 - phase) * 0.8
+    ctx.save()
+    ctx.globalAlpha = alpha
+    ctx.fillStyle = '#ffe39a'
+    ctx.fillRect(Math.round(cx - r), cy - 1, 1, 1)
+    ctx.fillRect(Math.round(cx - r + 1), cy + 1, 1, 1)
+    ctx.fillRect(Math.round(cx + r), cy - 1, 1, 1)
+    ctx.fillRect(Math.round(cx + r - 1), cy + 1, 1, 1)
+    if (phase < 0.62) {
+      ctx.fillRect(Math.round(cx - r + 2), cy - 3, 1, 1)
+      ctx.fillRect(Math.round(cx + r - 2), cy - 3, 1, 1)
+    }
+    ctx.restore()
+  }
 }
 
 export function drawMossSample(ctx, data, now, still = false) {
@@ -4163,10 +4524,100 @@ function drawRouteMarkers(ctx, data, now) {
     ctx.fillStyle = '#3f6b34'
     ctx.fillRect(bx + 2, by + 4, 5, 1)
   }
+  const drawGauge = (x, y) => {
+    const bx = x * CELL + CELL - 8
+    const by = y * CELL + 2
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(bx + 2, by, 3, 9)
+    ctx.fillStyle = preview ? '#d8f4ee' : '#8fd0d4'
+    ctx.fillRect(bx + 3, by + 1, 1, 7)
+    ctx.fillStyle = '#ffcd75'
+    ctx.fillRect(bx + 3, by + 2, 3, 1)
+    ctx.fillRect(bx + 3, by + 4, 2, 1)
+    ctx.fillRect(bx + 3, by + 6, 3, 1)
+  }
+  const drawBridge = (x, y) => {
+    const bx = x * CELL + CELL - 11
+    const by = y * CELL + 3
+    ctx.fillStyle = '#2a2117'
+    ctx.fillRect(bx, by + 1, 10, 6)
+    ctx.fillStyle = preview ? '#c9f2ee' : '#8fd0d4'
+    ctx.fillRect(bx + 1, by + 2, 8, 4)
+    ctx.fillStyle = '#4f8ba0'
+    for (let i = 0; i < 4; i++) ctx.fillRect(bx + 1 + i * 2, by + 2, 1, 4)
+    ctx.fillStyle = '#ffcd75'
+    ctx.fillRect(bx + 1, by + 1, 8, 1)
+  }
+  const drawArchive = (x, y) => {
+    const bx = x * CELL + CELL - 8
+    const by = y * CELL + 2
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(bx, by, 7, 9)
+    ctx.fillStyle = preview ? '#fff3c0' : '#e8d8b0'
+    ctx.fillRect(bx + 1, by + 1, 5, 6)
+    ctx.fillStyle = '#a34a3a'
+    ctx.fillRect(bx + 1, by + 1, 1, 6)
+    ctx.fillStyle = '#c9a24b'
+    ctx.fillRect(bx + 4, by + 2, 2, 1)
+  }
+  const drawDoor = (x, y, red) => {
+    const bx = x * CELL + CELL - 8
+    const by = y * CELL + 2
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(bx, by, 7, 9)
+    ctx.fillStyle = red ? '#c96a52' : '#e8c97a'
+    ctx.fillRect(bx + 1, by + 1, 5, 7)
+    ctx.fillStyle = red ? '#7a2e2e' : '#8a6a2b'
+    ctx.fillRect(bx + 3, by + 1, 1, 7)
+    ctx.fillStyle = '#2a2117'
+    ctx.fillRect(bx + 5, by + 4, 1, 1)
+  }
+  const drawPart = (x, y) => {
+    const bx = x * CELL + CELL - 9
+    const by = y * CELL + 3
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(bx, by, 8, 7)
+    ctx.fillStyle = preview ? '#ffe4a8' : '#c9a24b'
+    ctx.fillRect(bx + 1, by + 1, 6, 5)
+    ctx.fillStyle = '#3a2a18'
+    ctx.fillRect(bx + 3, by + 2, 2, 3)
+    ctx.fillStyle = '#fff3c0'
+    ctx.fillRect(bx + 1, by + 1, 2, 1)
+  }
+  const drawMoss = (x, y) => {
+    const bx = x * CELL + CELL - 8
+    const by = y * CELL + 2
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(bx + 1, by, 5, 9)
+    ctx.fillStyle = preview ? '#c9f58a' : '#7fbf6f'
+    ctx.fillRect(bx + 2, by + 2, 3, 5)
+    ctx.fillStyle = '#a7f070'
+    ctx.fillRect(bx + 2, by + 2, 1, 2)
+    ctx.fillStyle = '#c9a24b'
+    ctx.fillRect(bx + 2, by + 1, 3, 1)
+  }
+  const drawDanger = (x, y) => {
+    const bx = x * CELL + CELL - 7
+    const by = y * CELL + 1
+    ctx.fillStyle = '#1a1410'
+    ctx.fillRect(bx + 1, by + 1, 2, 5)
+    ctx.fillRect(bx + 1, by + 8, 2, 2)
+    ctx.fillStyle = preview ? '#ff8a6a' : '#ef5a4a'
+    ctx.fillRect(bx, by, 2, 5)
+    ctx.fillRect(bx, by + 7, 2, 2)
+  }
   for (const m of data.markers || []) {
     if (m.kind === 'chest') drawChest(m.x, m.y)
     else if (m.kind === 'shield') drawShield(m.x, m.y)
     else if (m.kind === 'trap') drawTrap(m.x, m.y)
+    else if (m.kind === 'gauge') drawGauge(m.x, m.y)
+    else if (m.kind === 'bridge') drawBridge(m.x, m.y)
+    else if (m.kind === 'archive') drawArchive(m.x, m.y)
+    else if (m.kind === 'redDoor') drawDoor(m.x, m.y, true)
+    else if (m.kind === 'yellowDoor') drawDoor(m.x, m.y, false)
+    else if (m.kind === 'part') drawPart(m.x, m.y)
+    else if (m.kind === 'moss') drawMoss(m.x, m.y)
+    else if (m.kind === 'danger') drawDanger(m.x, m.y)
     else if (m.kind === 'end') drawEnd(m.x, m.y)
   }
   // 没有经过的盾架：灰问号提示玩家这趟不会去拿
@@ -4330,6 +4781,9 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   if (scene && scene.bridges) drawTideBridges(ctx, scene.bridges)
   if (scene && scene.bridgeSplash) drawBridgeSplash(ctx, scene.bridgeSplash, now, still)
   if (scene && scene.patrol && scene.patrol.zone) drawPatrolZone(ctx, scene.patrol.zone)
+  if (scene && scene.patrol && scene.patrol.loop) {
+    drawMossActiveLoop(ctx, scene.patrol.loop, scene.patrol.loopColor, now, still)
+  }
   if (scene && scene.door) drawDoor(ctx, scene.door)
   const torches = (scene && scene.torches) || TORCHES_BY_ORDER[1]
   drawTorchFlames(ctx, now, torches, still)
@@ -4342,6 +4796,14 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   for (const [key, item] of game.items) {
     if (key === hiddenKey) continue
     if (item.type === 'bridge') continue
+    if (
+      item.type === 'bell' &&
+      scene &&
+      scene.mossBells &&
+      scene.mossBells.some((b) => b.x === item.x && b.y === item.y)
+    ) {
+      continue
+    }
     if (scene && scene.pop && scene.pop.key === key) continue
     drawItem(ctx, item.type, item.x * CELL, item.y * CELL, item.dir, item.opened, item.taken)
   }
@@ -4379,6 +4841,12 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
     } else if (item.type === 'chest' && !item.opened) {
       drawChestGlint(ctx, item, now)
     }
+  }
+  if (scene && scene.mossBells && scene.mossBells.length) {
+    const visibleBells = scene.mossBells.filter(
+      (b) => b.x + ',' + b.y !== hiddenKey,
+    )
+    if (visibleBells.length) drawMossBells(ctx, visibleBells, now, still)
   }
   if (scene && scene.footprints) drawRouteMarkers(ctx, scene.footprints, now)
   if (scene && scene.hover && scene.hover.type === 'sign') {
@@ -4439,6 +4907,9 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
       scene.flash === 'skeleton',
       still,
     )
+  }
+  if (scene && scene.pastGuests) {
+    for (const pg of scene.pastGuests) drawGuest(ctx, pg)
   }
   if (scene && scene.guest) drawGuest(ctx, scene.guest)
   if (scene && scene.fx) drawFx(ctx, scene.fx)
