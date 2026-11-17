@@ -67,6 +67,7 @@ import { sfx } from './sfx.js'
 const canvas = document.getElementById('game')
 const ctx = canvas.getContext('2d')
 const playArea = document.querySelector('.play-area')
+const canvasWrapEl = document.querySelector('.canvas-wrap')
 const btnSound = document.getElementById('btn-sound')
 const soundIconEl = document.getElementById('sound-icon')
 const sidebar = document.getElementById('sidebar')
@@ -220,6 +221,20 @@ const games = {
   ]),
 }
 let game = games[1]
+// 第 2 至 8 关开门后要亮暖光的真实入口：各图客人实际从这一格进场
+function orderEntryTile(n) {
+  return (
+    {
+      2: MAP2.spawn,
+      3: MARKET.spawn,
+      4: TIDE.spawn,
+      5: ARCHIVE.spawn,
+      6: PENDULUM.spawn,
+      7: MOSS.spawn,
+      8: NIGHT.guests[0].spawn,
+    }[n] || null
+  )
+}
 const bases = {
   1: makeBaseMap(1),
   2: makeBaseMap(2),
@@ -552,6 +567,11 @@ let stagger = null
 let runHasTrap = true
 let badgeFly = null
 let spark = null
+let entryGlow = null
+let bridgeSplash = null
+let lastBridgeRow = null
+let doorMotes = null
+let lastDoorTileKey = null
 const reducedMotionMedia = window.matchMedia('(prefers-reduced-motion: reduce)')
 let reducedMotion = reducedMotionMedia.matches
 if (reducedMotionMedia.addEventListener) {
@@ -756,14 +776,14 @@ if (portraitMedia.addEventListener) portraitMedia.addEventListener('change', syn
 else portraitMedia.addListener(syncCanvasSize)
 requestAnimationFrame(syncCanvasSize)
 
-// 字体就绪后重画两张底图（木牌字用 Fusion Pixel 12px）；字体打不开也照常开局
+// 字体就绪后重画八张底图（木牌字用 Fusion Pixel 12px）；字体打不开也照常开局
 async function refreshMapArt() {
   try {
     if (document.fonts && document.fonts.load) {
       await Promise.race([
         document.fonts.load(
           '12px "Fusion Pixel 12px"',
-          '五星好评入口通道侧室挑战房补给廊弩廊训练房军械库回声集市西铺草料东铺陶器潮汐蓄水厅西岸东岸双锁档案库西档案间东档案间红门黄门钟摆工坊上层钟摆南道苔火巡廊内院外廊铃位苔火样本',
+          '五星好评入口通道侧室挑战房补给廊弩廊训练房军械库回声集市西铺草料东铺陶器潮汐蓄水厅西岸东岸双锁档案库西档案间东档案间红门黄门钟摆工坊上层钟摆南道苔火巡廊内院外廊铃位苔火样本夜场总店西门寻宝房东门护卫房主厅第一二场·',
         ),
         new Promise((_, reject) => setTimeout(() => reject(new Error('font-timeout')), 1500)),
       ])
@@ -779,6 +799,7 @@ async function refreshMapArt() {
     bases[5] = makeBaseMap(5)
     bases[6] = makeBaseMap(6)
     bases[7] = makeBaseMap(7)
+    bases[8] = makeBaseMap(8)
     base = bases[order]
   } catch (e) {
     /* 重绘失败保留原底图 */
@@ -1604,7 +1625,14 @@ function specialPlaceReason(type, x, y, ignoreKey = null) {
   return base
 }
 
+function updateMapFrameGlow() {
+  canvasWrapEl.classList.toggle('glow-tide', order === 4)
+  canvasWrapEl.classList.toggle('glow-moss', order === 7)
+  canvasWrapEl.classList.toggle('glow-night', order === 8)
+}
+
 function updateHUD() {
+  updateMapFrameGlow()
   // 只给真实收支做动效：移动/取消/拖错余额不变，换单只换数字
   const prev = shownGold[order]
   if (typeof prev === 'number' && prev !== game.gold) triggerGoldFx(game.gold - prev)
@@ -2171,6 +2199,14 @@ function startBusiness() {
   swingUsed = false
   swingWarn = null
   swingStopped = new Set()
+  bridgeSplash = null
+  lastBridgeRow = null
+  doorMotes = null
+  lastDoorTileKey = null
+  const entry = order >= 2 ? orderEntryTile(order) : null
+  entryGlow = entry
+    ? { x: entry.x, y: entry.y, start: performance.now(), ms: 600 }
+    : null
   setDoor(1, DOOR_OPEN_MS)
   pending = null
   drag = null
@@ -2244,6 +2280,11 @@ function resetBusiness() {
   stagger = null
   badgeFly = null
   spark = null
+  entryGlow = null
+  bridgeSplash = null
+  lastBridgeRow = null
+  doorMotes = null
+  lastDoorTileKey = null
   reviewStampPlayed = false
   crossbow.mode = 'idle'
   crossbow.used = false
@@ -2781,6 +2822,7 @@ function stepWalker(t, realT) {
         nightPreviewGuest = 2
         setNightGuestUI(2)
         updateNightPreviewUI()
+        entryGlow = { x: nextGuest.spawn.x, y: nextGuest.spawn.y, start: realT, ms: 600 }
         hideBubble()
         fx = null
         stagger = null
@@ -3153,6 +3195,89 @@ function frame(realT) {
   }
   stepWalker(t, realT)
 
+  // 水厅桥面反馈：认整条已经架好的 TIDE.spans，而不是只认脚下那块桥板
+  let activeBridgeRow = null
+  if (guest && order === 4) {
+    const gx = Math.round(guest.x)
+    const gy = Math.round(guest.y)
+    const span = TIDE.spans.find(
+      (s) => s.y === gy && gx >= s.x1 && gx <= s.x2,
+    )
+    if (
+      span &&
+      [...game.items.values()].some(
+        (it) => it.type === 'bridge' && it.y === span.y,
+      )
+    ) {
+      activeBridgeRow = span.y
+    }
+  }
+  if (activeBridgeRow != null && lastBridgeRow !== activeBridgeRow && !reducedMotion) {
+    bridgeSplash = {
+      x: Math.round(guest.x),
+      y: activeBridgeRow,
+      start: realT,
+      ms: 380,
+    }
+  }
+  lastBridgeRow = activeBridgeRow
+
+  if (guest && order === 5) {
+    const gx = Math.round(guest.x)
+    const gy = Math.round(guest.y)
+    const d = ARCHIVE.doors.find((door) => door.x === gx && door.y === gy)
+    let doorNow = null
+    if (d) {
+      const weight = game.items.get(tileKey(d.plate.x, d.plate.y))
+      if (weight && weight.type === 'weight') doorNow = d
+    }
+    const doorKey = doorNow ? tileKey(doorNow.x, doorNow.y) : null
+    if (doorNow && doorKey !== lastDoorTileKey) {
+      doorMotes = {
+        door: doorNow.id,
+        x: doorNow.x,
+        y: doorNow.y,
+        start: realT,
+        ms: reducedMotion ? 300 : 520,
+      }
+    }
+    lastDoorTileKey = doorKey
+  } else {
+    lastDoorTileKey = null
+  }
+
+  let entryGlowScene = null
+  if (entryGlow) {
+    const el = realT - entryGlow.start
+    if (el >= entryGlow.ms) entryGlow = null
+    else entryGlowScene = { x: entryGlow.x, y: entryGlow.y, t: el, ms: entryGlow.ms }
+  }
+  let bridgeSplashScene = null
+  if (bridgeSplash) {
+    const el = realT - bridgeSplash.start
+    if (el >= bridgeSplash.ms) bridgeSplash = null
+    else
+      bridgeSplashScene = {
+        x: bridgeSplash.x,
+        y: bridgeSplash.y,
+        start: bridgeSplash.start,
+        ms: bridgeSplash.ms,
+      }
+  }
+  let doorMotesScene = null
+  if (doorMotes) {
+    const el = realT - doorMotes.start
+    if (el >= doorMotes.ms) doorMotes = null
+    else
+      doorMotesScene = {
+        door: doorMotes.door,
+        x: doorMotes.x,
+        y: doorMotes.y,
+        start: doorMotes.start,
+        ms: doorMotes.ms,
+      }
+  }
+
   // 人物实际动作：抬臂/横挥展示与整格脚尘
   let guestGestureScene = null
   if (guest && guest.gesture) {
@@ -3324,7 +3449,7 @@ function frame(realT) {
     order === 4
       ? [...game.items.entries()]
           .filter(([key, it]) => it.type === 'bridge' && key !== hiddenKey)
-          .map(([, it]) => ({ x: it.x, y: it.y }))
+          .map(([, it]) => ({ x: it.x, y: it.y, sink: it.y === activeBridgeRow }))
       : null
   const archiveDoors =
     order === 5
@@ -3409,7 +3534,11 @@ function frame(realT) {
     invalid: invalidScene,
     pop: popScene,
     bridges: tideBridges,
+    bridgeSplash: bridgeSplashScene,
+    waterFx: order === 4,
+    gaugeOn: order === 4 && game.log.some((e) => e.kind === 'gauge'),
     doors: archiveDoors,
+    doorMotes: doorMotesScene,
     archives: order === 5 ? game.takenArchives : null,
     pendulums:
       order === 6
@@ -3425,6 +3554,7 @@ function frame(realT) {
     moss: order === 7 ? { taken: game.takenMoss } : null,
     stand: currentMap.stand,
     standBadge: order === 8 ? false : !game.badgeTaken,
+    entryGlow: entryGlowScene,
     stands:
       order === 8
         ? NIGHT.guests.map((g, i) => ({

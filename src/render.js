@@ -18,6 +18,7 @@ import {
   buildGrid7,
   buildGrid8,
 } from './map.js'
+import { bfsWalkable } from './route-utils.js'
 
 const CELL = TILE * SCALE
 
@@ -639,6 +640,40 @@ function drawVignette(ctx) {
   ctx.fillRect(0, 0, w, h)
 }
 
+// 外框底光：从画布四边往内收的极淡环境色，不参与格子碰撞
+function drawOuterGlow(ctx, color, strength = 0.1) {
+  const w = COLS * CELL
+  const h = ROWS * CELL
+  const edge = 54
+  const rgba = (a) => `rgba(${color}, ${a})`
+  ctx.save()
+  ctx.globalCompositeOperation = 'lighter'
+  let g = ctx.createLinearGradient(0, 0, 0, edge)
+  g.addColorStop(0, rgba(strength))
+  g.addColorStop(1, rgba(0))
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, w, edge)
+
+  g = ctx.createLinearGradient(0, h, 0, h - edge)
+  g.addColorStop(0, rgba(strength))
+  g.addColorStop(1, rgba(0))
+  ctx.fillStyle = g
+  ctx.fillRect(0, h - edge, w, edge)
+
+  g = ctx.createLinearGradient(0, 0, edge, 0)
+  g.addColorStop(0, rgba(strength * 0.9))
+  g.addColorStop(1, rgba(0))
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, edge, h)
+
+  g = ctx.createLinearGradient(w, 0, w - edge, 0)
+  g.addColorStop(0, rgba(strength * 0.9))
+  g.addColorStop(1, rgba(0))
+  ctx.fillStyle = g
+  ctx.fillRect(w - edge, 0, edge, h)
+  ctx.restore()
+}
+
 // 拖拽时给固有禁放格打淡红斜纹
 function drawForbidden(ctx, tiles) {
   if (!tiles) return
@@ -779,6 +814,35 @@ function drawBarrelNiche(ctx, tx, ty) {
   rect(ctx, x + 1, y + 6, 6, 1, '#2b1d11')
 }
 
+function drawHayBaleNiche(ctx, tx, ty) {
+  // 西铺墙沿：一捆扎绳草料，落在墙龛里，不占布置地砖
+  const x = tx * 8
+  const y = ty * 8
+  drawNiche(ctx, tx, ty, 1, 2, 8)
+  rect(ctx, x + 1, y + 4, 6, 3, '#9a7434')
+  rect(ctx, x + 1, y + 4, 6, 1, '#c9a24b')
+  rect(ctx, x + 1, y + 6, 6, 1, '#5b4020')
+  rect(ctx, x + 2, y + 5, 1, 2, '#7f5f2a')
+  rect(ctx, x + 4, y + 5, 1, 2, '#7f5f2a')
+  rect(ctx, x + 3, y + 4, 2, 1, '#e8c97a')
+  rect(ctx, x + 2, y + 3, 4, 1, '#4e3826')
+}
+
+function drawGlazeJarNiche(ctx, tx, ty) {
+  // 东铺墙沿：两只彩釉小罐，蓝绿与赭红并排
+  const x = tx * 8
+  const y = ty * 8
+  drawNiche(ctx, tx, ty, 1, 2, 8)
+  rect(ctx, x + 1, y + 5, 3, 3, '#3f6b6a')
+  rect(ctx, x + 1, y + 5, 3, 1, '#8fd0d4')
+  rect(ctx, x + 2, y + 4, 1, 1, '#6fb6c4')
+  rect(ctx, x + 4, y + 4, 3, 4, '#8c4436')
+  rect(ctx, x + 4, y + 4, 3, 1, '#e8c97a')
+  rect(ctx, x + 5, y + 3, 1, 1, '#c96a52')
+  rect(ctx, x + 2, y + 6, 1, 1, '#e8d8b0')
+  rect(ctx, x + 5, y + 6, 1, 1, '#f0d9a5')
+}
+
 function drawTorch(ctx, tx, ty, mode = 'brazier') {
   const x = tx * 8
   const y = ty * 8
@@ -821,7 +885,7 @@ function drawLabels(ctx) {
     { text: '通道', x: 12.5, y: 6.5 },
     { text: '侧室', x: 6.5, y: 2.5 },
     { text: '侧室', x: 19.5, y: 8.5 },
-    { text: '挑战房', x: 18.5, y: 1.5 },
+    { text: '挑战房', x: 18.5, y: 1.65 },
   ])
 }
 
@@ -2266,6 +2330,25 @@ function drawWarmLight(ctx, now, torches, lamps, door, still = false) {
   ctx.restore()
 }
 
+// 第 2 至 8 关开门后，在真正的入口亮约 600ms 暖光；减少动效时只留静态底光
+function drawEntryGlow(ctx, glow, still = false) {
+  if (!glow) return
+  const p = Math.min(1, Math.max(0, glow.t / glow.ms))
+  if (p >= 1) return
+  const alpha = still ? 0.16 : 0.34 * (1 - p) + 0.04
+  const cx = (glow.x + 0.5) * CELL
+  const cy = (glow.y + 0.55) * CELL
+  ctx.save()
+  ctx.globalCompositeOperation = 'lighter'
+  const g = ctx.createRadialGradient(cx, cy, 3, cx, cy, 52)
+  g.addColorStop(0, `rgba(255, 200, 120, ${alpha})`)
+  g.addColorStop(0.45, `rgba(255, 184, 98, ${alpha * 0.42})`)
+  g.addColorStop(1, 'rgba(255, 184, 98, 0)')
+  ctx.fillStyle = g
+  ctx.fillRect(cx - 54, cy - 54, 108, 108)
+  ctx.restore()
+}
+
 // ===== 第二单：回形军械库底图 =====
 function drawArmoryCarpet(ctx) {
   const x = 19 * 8
@@ -2359,7 +2442,7 @@ function makeArmoryBase() {
     { text: '↑ 补给廊', x: 11.5, y: 2.5 },
     { text: '弩廊 →', x: 14.5, y: 15.5 },
     { text: '军械库', x: 11.5, y: 12.5 },
-    { text: '训练房', x: 20.5, y: 1.5 },
+    { text: '训练房', x: 20.5, y: 1.65 },
   ])
 
   return c
@@ -2500,6 +2583,11 @@ function makeMarketBase() {
   drawCrateNiche(ctx, 0, 10)
   drawBarrelNiche(ctx, 23, 9)
   drawCrateNiche(ctx, 23, 10)
+  // 西铺墙沿两捆草料、东铺彩釉罐：都收进墙龛，地面布置格保持空闲
+  drawHayBaleNiche(ctx, 0, 7)
+  drawHayBaleNiche(ctx, 0, 11)
+  drawGlazeJarNiche(ctx, 23, 7)
+  drawGlazeJarNiche(ctx, 23, 11)
 
   for (const l of LAMPS_BY_ORDER[3]) drawLamp(ctx, l.x, l.y)
   for (const t of TORCHES_BY_ORDER[3]) {
@@ -2516,7 +2604,7 @@ function makeMarketBase() {
   drawAwningText(ctx, '回声集市', 12.0, 9.5, '#f4e6c4')
   drawWallLabels(ctx, [
     { text: '入口', x: 11.5, y: 17.4 },
-    { text: '挑战房', x: 13.0, y: 0.7 },
+    { text: '挑战房', x: 13.0, y: 1.15 },
   ])
 
   return c
@@ -2529,23 +2617,63 @@ function drawWaterTile(ctx, grid, x, y) {
   const v = (x * 13 + y * 29) % 5
   const base = v === 0 ? '#2b526b' : v === 2 ? '#23455c' : '#274b62'
   rect(ctx, ux, uy, 8, 8, base)
-  alphaRect(ctx, ux, uy, 8, 1, '#4f8ba0', 0.28)
+  alphaRect(ctx, ux, uy, 8, 1, '#4f8ba0', 0.24)
   const wy = 2 + v
-  alphaRect(ctx, ux + 1, uy + wy, 5, 1, '#6fb6c4', 0.55)
-  alphaRect(ctx, ux + 2, uy + wy + 3, 4, 1, '#3f7890', 0.6)
-  alphaRect(ctx, ux + (x % 2 ? 0 : 5), uy + wy + 1, 3, 1, '#8fd0d4', 0.28)
-  if (v === 3) rect(ctx, ux + 5, uy + 5, 1, 1, '#9fd6d8')
-  const near = (xx, yy) =>
-    yy >= 0 &&
-    yy < ROWS &&
-    xx >= 0 &&
-    xx < COLS &&
-    grid[yy][xx] !== 'water' &&
-    grid[yy][xx] !== 'bridgeSlot'
-  if (near(x, y - 1)) alphaRect(ctx, ux, uy, 8, 1, '#b9e4e2', 0.38)
-  if (near(x, y + 1)) alphaRect(ctx, ux, uy + 7, 8, 1, '#b9e4e2', 0.3)
-  if (near(x - 1, y)) alphaRect(ctx, ux, uy, 1, 8, '#b9e4e2', 0.24)
-  if (near(x + 1, y)) alphaRect(ctx, ux + 7, uy, 1, 8, '#b9e4e2', 0.24)
+  alphaRect(ctx, ux + 1, uy + wy, 5, 1, '#6fb6c4', 0.42)
+  alphaRect(ctx, ux + 2, uy + wy + 3, 4, 1, '#3f7890', 0.55)
+  // 动态亮纹与岸边白沫在 drawTideWaterFX 中按 450ms 周期绘制
+}
+
+// 少量亮青水纹和岸边白沫走动态层：450ms 一轮，坐标仍按 32px 格对齐
+const TIDE_WATER_FX_CELLS = (() => {
+  const grid = buildGrid4()
+  const cells = []
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const z = grid[y][x]
+      if (z !== 'water') continue
+      const shore = []
+      const floorAt = (xx, yy) =>
+        yy >= 0 && yy < ROWS && xx >= 0 && xx < COLS && grid[yy][xx] !== 'water' && grid[yy][xx] !== 'bridgeSlot'
+      if (floorAt(x, y - 1)) shore.push('n')
+      if (floorAt(x, y + 1)) shore.push('s')
+      if (floorAt(x - 1, y)) shore.push('w')
+      if (floorAt(x + 1, y)) shore.push('e')
+      cells.push({ x, y, shore, seed: ((x * 17 + y * 29) % 13) / 13 })
+    }
+  }
+  return cells
+})()
+
+export function drawTideWaterFX(ctx, now, still = false) {
+  const t = still ? 0 : now / 450
+  for (const c of TIDE_WATER_FX_CELLS) {
+    const wave = 0.5 + 0.5 * Math.sin(t * Math.PI * 2 + c.seed * Math.PI * 2)
+    const ux = c.x * 8
+    const uy = c.y * 8
+    const hash = Math.round(c.seed * 13)
+    if (hash % 3 === 0) {
+      const ox = 1 + ((hash * 3 + Math.floor(wave * 3)) % 4)
+      const oy = 2 + (hash % 4)
+      alphaRect(ctx, ux + ox, uy + oy, 3, 1, '#b9f2f0', 0.24 + 0.24 * wave)
+      alphaRect(ctx, ux + ox + 1, uy + oy + 2, 2, 1, '#7fd4da', 0.14 + 0.12 * wave)
+    }
+    if (c.shore.length && hash % 2 === 0) {
+      const foam = 0.3 + 0.35 * wave
+      const drift = Math.floor(wave * 4)
+      for (const side of c.shore) {
+        if (side === 'n') {
+          alphaRect(ctx, ux + 1 + ((hash + drift) % 5), uy + 1, 1, 1, '#f4ffff', foam)
+        } else if (side === 's') {
+          alphaRect(ctx, ux + 1 + ((hash + 2 + drift) % 5), uy + 6, 1, 1, '#f4ffff', foam)
+        } else if (side === 'w') {
+          alphaRect(ctx, ux + 1, uy + 1 + ((hash + drift) % 5), 1, 1, '#f4ffff', foam)
+        } else {
+          alphaRect(ctx, ux + 6, uy + 1 + ((hash + 3 + drift) % 5), 1, 1, '#f4ffff', foam)
+        }
+      }
+    }
+  }
 }
 
 function drawBridgeSite(ctx, span) {
@@ -2576,6 +2704,29 @@ function drawWaterGauge(ctx, tx, ty) {
   rect(ctx, x + 1, y + 4, 1, 3, '#e8e0cf')
   rect(ctx, x + 1, y + 6, 2, 1, '#4f8ba0')
   rect(ctx, x + 6, y + 2, 1, 1, '#a34a3a')
+}
+
+// 水尺读数灯：只有客人真的走到水尺、日志记下 gauge 后才亮
+export function drawGaugeLight(ctx, on, now, still = false) {
+  if (!on) return
+  const x = TIDE.gauge.x * 8
+  const y = TIDE.gauge.y * 8
+  const px = (TIDE.gauge.x + 0.5) * CELL
+  const py = (TIDE.gauge.y + 0.36) * CELL
+  const pulse = still ? 1 : 0.84 + 0.16 * Math.sin(now / 260)
+  ctx.save()
+  ctx.globalCompositeOperation = 'lighter'
+  const g = ctx.createRadialGradient(px, py, 2, px, py, 24)
+  g.addColorStop(0, `rgba(255, 224, 150, ${0.28 * pulse})`)
+  g.addColorStop(0.5, `rgba(255, 205, 117, ${0.12 * pulse})`)
+  g.addColorStop(1, 'rgba(255, 205, 117, 0)')
+  ctx.fillStyle = g
+  ctx.fillRect(px - 24, py - 24, 48, 48)
+  ctx.restore()
+  // 灯芯与水尺顶沿同时提亮，读数点在原格内
+  rect(ctx, x + 2, y + 1, 4, 1, '#fff3c0')
+  rect(ctx, x + 6, y + 2, 1, 1, '#ffcd75')
+  rect(ctx, x + 1, y + 4, 1, 2, '#fff3c0')
 }
 
 function makeTideBase() {
@@ -2617,8 +2768,9 @@ function makeTideBase() {
   }
 
   drawVignette(ctx)
+  drawOuterGlow(ctx, '82, 156, 196', 0.12)
   drawWallLabels(ctx, [
-    { text: '潮汐蓄水厅', x: 12, y: 1.4 },
+    { text: '潮汐蓄水厅', x: 12, y: 1.6 },
     { text: '西岸', x: 4.5, y: 12.4 },
     { text: '东岸', x: 18.5, y: 12.4 },
     { text: '挑战房', x: 21.5, y: 3.4 },
@@ -2697,6 +2849,7 @@ function makeArchiveBase() {
   drawCarpetBase(ctx, 13 * 8, 8 * 8, 4 * 8, 2 * 8)
   drawDemonCrest(ctx, 8 * 8, 9 * 8)
   drawDemonCrest(ctx, 15 * 8, 9 * 8)
+  drawArchiveChannelBase(ctx)
 
   for (const d of ARCHIVE.doors) drawArchiveDoorFrame(ctx, d)
   for (const p of ARCHIVE.plates) drawArchivePlate(ctx, p, p.door)
@@ -2729,7 +2882,7 @@ function makeArchiveBase() {
 
   drawVignette(ctx)
   drawWallLabels(ctx, [
-    { text: '双锁档案库', x: 12, y: 1.4 },
+    { text: '双锁档案库', x: 12, y: 1.6 },
     { text: '挑战房', x: 21.5, y: 3.3 },
   ])
   drawAwningText(ctx, '西档案间', 7, 6.7, '#e8dcc0')
@@ -2748,9 +2901,14 @@ export function drawTideBridges(ctx, bridges) {
     ys.add(b.y)
     const span = TIDE.spans.find((s) => s.y === b.y)
     if (!span) continue
+    // 客人真的踩上桥时，整段桥面下沉 1px；离开或拆桥立即回到原位
+    const sink = bridges.some((it) => it.y === b.y && it.sink) ? 1 : 0
     const y = span.y * 8
     const x1 = span.x1 * 8
     const x2 = (span.x2 + 1) * 8
+    // 桥面是像素级下沉，避免整格 4px 的跳跃
+    ctx.save()
+    ctx.translate(0, sink)
     rect(ctx, x1 - 1, y + 2, x2 - x1 + 2, 1, '#3a2718')
     rect(ctx, x1, y + 3, x2 - x1, 5, '#6d4a2f')
     for (let i = 0; i < (x2 - x1) / 4; i++) {
@@ -2759,11 +2917,146 @@ export function drawTideBridges(ctx, bridges) {
     }
     rect(ctx, x1, y + 2, x2 - x1, 1, '#c9a24b')
     rect(ctx, x1, y + 8, x2 - x1, 1, '#c9a24b')
-    rect(ctx, x1 - 1, y + 1, 1, 8, '#2a2117')
-    rect(ctx, x2, y + 1, 1, 8, '#2a2117')
-    rect(ctx, x1 - 1, y, 1, 2, '#ffcd75')
-    rect(ctx, x2, y, 1, 2, '#ffcd75')
+    ctx.restore()
+    const py = span.y * 8
+    rect(ctx, x1 - 1, py + 1, 1, 8, '#2a2117')
+    rect(ctx, x2, py + 1, 1, 8, '#2a2117')
+    rect(ctx, x1 - 1, py, 1, 2, '#ffcd75')
+    rect(ctx, x2, py, 1, 2, '#ffcd75')
   }
+}
+
+// 上桥那一脚只溅两点水花；减少动效时不在主循环里创建这个动画
+export function drawBridgeSplash(ctx, splash, now, still = false) {
+  if (!splash) return
+  const p = still ? 0.35 : Math.min(1, Math.max(0, (now - splash.start) / splash.ms))
+  const alpha = still ? 0.55 : (1 - p) * 0.9
+  const cx = (splash.x + 0.5) * CELL
+  const cy = splash.y * CELL + 23
+  const rise = still ? 3 : Math.sin(p * Math.PI) * 8
+  const drops = [
+    [-7, -1, 2],
+    [6, -2, 1],
+  ]
+  ctx.save()
+  ctx.globalAlpha = alpha
+  ctx.fillStyle = '#c9efea'
+  for (const [dx, dy, size] of drops) {
+    ctx.fillRect(Math.round(cx + dx + p * dx * 0.25), Math.round(cy + dy - rise), size, 2)
+  }
+  ctx.restore()
+}
+
+const ARCHIVE_CHANNEL_CACHE = new Map()
+
+function archiveChannelPath(door) {
+  if (ARCHIVE_CHANNEL_CACHE.has(door.id)) return ARCHIVE_CHANNEL_CACHE.get(door.id)
+  const grid = buildGrid5()
+  const canWalk = (x, y) =>
+    y >= 0 && y < ROWS && x >= 0 && x < COLS && grid[y][x] !== 'wall'
+  const path = bfsWalkable(door.plate, { x: door.x, y: door.y }, canWalk)
+  ARCHIVE_CHANNEL_CACHE.set(door.id, path)
+  return path
+}
+
+function archiveChannelSegment(ctx, a, b, color, width) {
+  const ax = (a.x + 0.5) * CELL
+  const ay = (a.y + 0.5) * CELL
+  const bx = (b.x + 0.5) * CELL
+  const by = (b.y + 0.5) * CELL
+  ctx.fillStyle = color
+  if (ay === by) {
+    ctx.fillRect(Math.min(ax, bx), ay - (width >> 1), Math.abs(bx - ax) + 1, width)
+  } else {
+    ctx.fillRect(ax - (width >> 1), Math.min(ay, by), width, Math.abs(by - ay) + 1)
+  }
+}
+
+function drawArchiveChannelBase(ctx) {
+  for (const d of ARCHIVE.doors) {
+    const path = archiveChannelPath(d)
+    if (!path) continue
+    const groove = d.id === 'red' ? '#4a211d' : '#4d3d1d'
+    ctx.save()
+    ctx.globalAlpha = 0.68
+    for (let i = 0; i < path.length - 1; i++) {
+      archiveChannelSegment(ctx, path[i], path[i + 1], '#17110d', 3)
+    }
+    ctx.globalAlpha = 0.6
+    for (let i = 0; i < path.length - 1; i++) {
+      archiveChannelSegment(ctx, path[i], path[i + 1], groove, 1)
+    }
+    ctx.restore()
+  }
+}
+
+// 重块压上压板后，压板到对应门框的细导槽亮起
+export function drawArchiveChannels(ctx, doors, now, still = false) {
+  if (!doors) return
+  for (const d of ARCHIVE.doors) {
+    if (!doors[d.id]) continue
+    const path = archiveChannelPath(d)
+    if (!path) continue
+    const color = d.id === 'red' ? '#ff9a7a' : '#ffe39a'
+    const pulse = still ? 0.62 : 0.5 + 0.16 * Math.sin(now / 320)
+    ctx.save()
+    ctx.globalAlpha = pulse
+    ctx.shadowColor = color
+    ctx.shadowBlur = 5
+    for (let i = 0; i < path.length - 1; i++) {
+      archiveChannelSegment(ctx, path[i], path[i + 1], color, 1)
+    }
+    ctx.restore()
+  }
+}
+
+function drawWeightGlint(ctx, item, door, now, still = false) {
+  const ox = item.x * CELL
+  const oy = item.y * CELL
+  const color = door.id === 'red' ? '#ff9a7a' : '#ffe39a'
+  const alpha = still ? 0.72 : 0.52 + 0.2 * Math.sin(now / 300)
+  ctx.save()
+  ctx.globalAlpha = alpha
+  ctx.fillStyle = color
+  ctx.shadowColor = color
+  ctx.shadowBlur = 4
+  ctx.fillRect(ox + 8, oy + 9, 16, 1)
+  ctx.fillRect(ox + 7, oy + 11, 1, 8)
+  ctx.fillRect(ox + 24, oy + 12, 1, 6)
+  ctx.restore()
+}
+
+// 客人真的跨过哪扇门，就从哪扇门的门框飘起几粒光
+export function drawDoorMotes(ctx, motes, now, still = false) {
+  if (!motes) return
+  const color = motes.door === 'red' ? '#ff9a7a' : '#ffe39a'
+  const p = still
+    ? 0.32
+    : Math.min(1, Math.max(0, (now - motes.start) / motes.ms))
+  const baseX = (motes.x + 0.5) * CELL
+  const baseY = motes.y * CELL + 10
+  const alpha = still ? 0.55 : (1 - p) * 0.9
+  const motesPos = [
+    [-10, 6],
+    [9, 5],
+    [-3, 12],
+    [4, 15],
+    [12, 14],
+  ]
+  ctx.save()
+  ctx.globalAlpha = alpha
+  ctx.fillStyle = color
+  for (let i = 0; i < motesPos.length; i++) {
+    const [dx, dy] = motesPos[i]
+    const lift = still ? 0 : p * (8 + i * 2)
+    ctx.fillRect(
+      Math.round(baseX + dx + p * dx * 0.12),
+      Math.round(baseY + dy - lift),
+      i % 2 === 0 ? 2 : 1,
+      i % 2 === 0 ? 2 : 1,
+    )
+  }
+  ctx.restore()
 }
 
 export function drawArchiveDoors(ctx, doors) {
@@ -2786,7 +3079,7 @@ export function drawArchiveDoors(ctx, doors) {
       ctx.save()
       ctx.globalAlpha = 0.16
       ctx.fillStyle = '#ffcd75'
-      ctx.fillRect(x + 2 * U, y + 1 * U, 5 * U, 6 * U)
+      ctx.fillRect((x + 2) * U, (y + 1) * U, 5 * U, 6 * U)
       ctx.restore()
     }
   }
@@ -2948,6 +3241,7 @@ function makeMossBase() {
   }
 
   drawVignette(ctx)
+  drawOuterGlow(ctx, '78, 150, 88', 0.12)
   drawWallLabels(ctx, [
     { text: '苔火巡廊', x: 11, y: 2.4 },
     { text: '内院', x: 12, y: 12.5 },
@@ -3015,8 +3309,10 @@ function makeNightBase() {
   }
 
   drawVignette(ctx)
+  drawOuterGlow(ctx, '116, 82, 132', 0.13)
+  drawOuterGlow(ctx, '158, 120, 72', 0.045)
   drawWallLabels(ctx, [
-    { text: '夜场总店', x: 12, y: 1.2 },
+    { text: '夜场总店', x: 12, y: 1.55 },
     { text: '西门 · 寻宝房', x: 4.5, y: 2.25 },
     { text: '东门 · 护卫房', x: 18.5, y: 2.25 },
     { text: '主厅', x: 12, y: 9.2 },
@@ -3137,15 +3433,12 @@ export function drawMossSample(ctx, data, now, still = false) {
   const pulse = still ? 0.7 : 0.6 + 0.3 * Math.sin(now / 360)
   ctx.save()
   ctx.globalAlpha = pulse
-  ctx.fillStyle = '#7fbf6f'
-  ctx.fillRect(x + 2, y + 1, 2, 2)
-  ctx.fillRect(x + 5, y + 2, 2, 2)
-  ctx.fillRect(x + 3, y + 2, 1, 1)
-  ctx.fillStyle = '#a7f070'
-  ctx.fillRect(x + 4, y + 1, 1, 1)
+  rect(ctx, x + 2, y + 1, 2, 2, '#7fbf6f')
+  rect(ctx, x + 5, y + 2, 2, 2, '#7fbf6f')
+  rect(ctx, x + 3, y + 2, 1, 1, '#7fbf6f')
+  rect(ctx, x + 4, y + 1, 1, 1, '#a7f070')
   ctx.globalAlpha = 0.25
-  ctx.fillStyle = '#a7f070'
-  ctx.fillRect(x + 1, y + 3, 6, 1)
+  rect(ctx, x + 1, y + 3, 6, 1, '#a7f070')
   ctx.restore()
 }
 
@@ -4031,10 +4324,12 @@ function drawCornerBrackets(ctx, x, y, valid, now) {
 
 export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene = null) {
   ctx.drawImage(base, 0, 0)
-  if (scene && scene.bridges) drawTideBridges(ctx, scene.bridges)
-  if (scene && scene.patrol && scene.patrol.zone) drawPatrolZone(ctx, scene.patrol.zone)
   const now = performance.now()
   const still = !!(scene && scene.still)
+  if (scene && scene.waterFx) drawTideWaterFX(ctx, now, still)
+  if (scene && scene.bridges) drawTideBridges(ctx, scene.bridges)
+  if (scene && scene.bridgeSplash) drawBridgeSplash(ctx, scene.bridgeSplash, now, still)
+  if (scene && scene.patrol && scene.patrol.zone) drawPatrolZone(ctx, scene.patrol.zone)
   if (scene && scene.door) drawDoor(ctx, scene.door)
   const torches = (scene && scene.torches) || TORCHES_BY_ORDER[1]
   drawTorchFlames(ctx, now, torches, still)
@@ -4089,6 +4384,15 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   if (scene && scene.hover && scene.hover.type === 'sign') {
     drawSignTurnHint(ctx, scene.hover, now)
   }
+  if (scene && scene.doors) {
+    for (const d of ARCHIVE.doors) {
+      if (!scene.doors[d.id]) continue
+      const item = game.items.get(d.plate.x + ',' + d.plate.y)
+      if (item && item.type === 'weight') {
+        drawWeightGlint(ctx, item, d, now, still)
+      }
+    }
+  }
 
   // 徽章展示台（墙面原位陈列）
   if (scene && scene.stands) {
@@ -4104,8 +4408,10 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
       1,
     )
   }
+  if (scene && scene.doors) drawArchiveChannels(ctx, scene.doors, now, still)
   if (scene && scene.doors) drawArchiveDoors(ctx, scene.doors)
   if (scene && scene.archives) drawArchiveBooks(ctx, scene.archives)
+  if (scene && scene.doorMotes) drawDoorMotes(ctx, scene.doorMotes, now, still)
   if (scene && scene.parts) drawWorkshopParts(ctx, scene.parts)
   if (scene && scene.pendulums) drawPendulums(ctx, scene.pendulums, now, still)
   if (scene && scene.patrol) drawMossPatrol(ctx, scene.patrol, now, still)
@@ -4164,6 +4470,7 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
     drawHeroBadge(ctx, bx, by, 1)
   }
   if (scene && scene.crossbow) drawBolt(ctx, scene.crossbow)
+  if (scene && scene.gaugeOn) drawGaugeLight(ctx, true, now, still)
   drawWarmLight(
     ctx,
     now,
@@ -4172,6 +4479,7 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
     scene && scene.door,
     still,
   )
+  if (scene && scene.entryGlow) drawEntryGlow(ctx, scene.entryGlow, still)
   if (scene && scene.crossbow && scene.crossbow.warnEdge) {
     drawWarningEdge(ctx, now, scene.crossbow.warnRemain, still)
   }
