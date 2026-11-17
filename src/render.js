@@ -2342,21 +2342,20 @@ function drawFx(ctx, fx, still = false) {
     for (let i = 0; i < 5; i++) {
       ctx.fillRect(cx - 18 + i * 8, cy + 14 - i * 7, 4, 4)
     }
-    // 三粒米白骨片；减少动效时定格在固定小弧上
+    // 三粒米白骨片：向右侧抛起，再落回下方；减少动效时静止
     const chips = [
-      [-12, -6, 2],
-      [9, -9, 1],
-      [-4, 8, 2],
+      { dx: -2, dy: -4, vx: 16, peak: 12, size: 2 },
+      { dx: 2, dy: -7, vx: 20, peak: 15, size: 1 },
+      { dx: 6, dy: -2, vx: 24, peak: 10, size: 2 },
     ]
+    const q = still ? 0.35 : p
     ctx.fillStyle = '#e8e0cf'
-    for (let i = 0; i < chips.length; i++) {
-      const [dx, dy, s] = chips[i]
-      const drift = still ? 0 : p * (6 + i * 2)
+    for (const chip of chips) {
       ctx.fillRect(
-        Math.round(cx + dx - p * 3),
-        Math.round(cy + dy - drift),
-        s === 2 ? 2 : 1,
-        s === 2 ? 2 : 1,
+        Math.round(cx + chip.dx + q * chip.vx),
+        Math.round(cy + chip.dy - Math.sin(q * Math.PI) * chip.peak + q * q * 14),
+        chip.size,
+        chip.size,
       )
     }
   }

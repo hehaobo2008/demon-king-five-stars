@@ -176,6 +176,62 @@ export const sfx = {
     })
   },
 
+  // 古铃放下：木质落地声上叠约 0.25 秒的 1760 Hz 铜铃
+  bell() {
+    play((ac) => {
+      tone(ac, { f0: 180, f1: 72, dur: 0.1, type: 'triangle', gain: 0.5 })
+      hiss(ac, { dur: 0.03, gain: 0.1, freq: 680 })
+      tone(ac, { f0: 1760, f1: 1760, dur: 0.25, type: 'triangle', gain: 0.12, delay: 0.006 })
+      tone(ac, { f0: 3520, f1: 3520, dur: 0.06, type: 'sine', gain: 0.035, delay: 0.008 })
+      hiss(ac, { dur: 0.02, gain: 0.03, freq: 4200, q: 1.6 })
+    })
+  },
+
+  // 重块压上压板：110 -> 220 Hz 石闸低鸣
+  gate() {
+    play((ac) => {
+      tone(ac, { f0: 110, f1: 220, dur: 0.28, type: 'triangle', gain: 0.36 })
+      tone(ac, { f0: 55, f1: 110, dur: 0.24, type: 'sine', gain: 0.22, delay: 0.01 })
+      hiss(ac, { dur: 0.08, gain: 0.07, freq: 220, q: 0.7 })
+    })
+  },
+
+  // 桥板拍水：木板闷响加短水花
+  bridge() {
+    play((ac) => {
+      tone(ac, { f0: 240, f1: 120, dur: 0.12, type: 'triangle', gain: 0.38 })
+      tone(ac, { f0: 160, f1: 80, dur: 0.1, type: 'sine', gain: 0.2, delay: 0.015 })
+      hiss(ac, { dur: 0.07, gain: 0.14, freq: 900, q: 0.65, delay: 0.02 })
+    })
+  },
+
+  // 隔栅：保留木响，再补一下铁扣
+  barrier() {
+    play((ac) => {
+      tone(ac, { f0: 180, f1: 72, dur: 0.1, type: 'triangle', gain: 0.45 })
+      hiss(ac, { dur: 0.03, gain: 0.09, freq: 680, q: 0.9 })
+      tone(ac, { f0: 1080, f1: 720, dur: 0.03, type: 'square', gain: 0.12, delay: 0.055 })
+      tone(ac, { f0: 760, f1: 540, dur: 0.035, type: 'square', gain: 0.09, delay: 0.08 })
+    })
+  },
+
+  // 水尺 / 档案 / 零件 / 样本：659 -> 880 Hz 短双音
+  pickup() {
+    play((ac) => {
+      tone(ac, { f0: 659, f1: 659, dur: 0.075, type: 'triangle', gain: 0.16 })
+      tone(ac, { f0: 880, f1: 880, dur: 0.11, type: 'triangle', gain: 0.14, delay: 0.085 })
+    })
+  },
+
+  // 成功开门：1318 -> 1975 Hz 迎客铜铃
+  openDoor() {
+    play((ac) => {
+      tone(ac, { f0: 1318, f1: 1318, dur: 0.14, type: 'triangle', gain: 0.15 })
+      tone(ac, { f0: 1975, f1: 1975, dur: 0.2, type: 'triangle', gain: 0.13, delay: 0.09 })
+      tone(ac, { f0: 2637, f1: 2637, dur: 0.07, type: 'sine', gain: 0.04, delay: 0.1 })
+    })
+  },
+
   // 路牌转动：两下短促的木棘轮
   sign() {
     play((ac) => {

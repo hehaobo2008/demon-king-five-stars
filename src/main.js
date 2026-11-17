@@ -114,6 +114,7 @@ const swingLabelEl = document.getElementById('swing-label')
 const swingTimerFillEl = document.getElementById('swing-timer-fill')
 const btnNext = document.getElementById('btn-next')
 const orderTabs = document.getElementById('order-tabs')
+const subtitleEl = document.getElementById('subtitle')
 const galleryBarEl = document.getElementById('gallery-bar')
 const galleryToggleEl = document.getElementById('gallery-toggle')
 const galleryPrevBtn = document.getElementById('gallery-prev')
@@ -152,6 +153,11 @@ const reviewTitle = document.getElementById('review-title')
 const reviewSealEl = document.getElementById('review-seal')
 const reviewNewRecordEl = document.getElementById('review-new-record')
 const reviewStars = document.getElementById('review-stars')
+const storeTotalEl = document.getElementById('store-total')
+const storeTotalLabel = document.getElementById('store-total-label')
+const btnStoreLedger = document.getElementById('btn-store-ledger')
+const storeLedgerEl = document.getElementById('store-ledger')
+const storeLedgerList = document.getElementById('store-ledger-list')
 const reviewEvents = document.getElementById('review-events')
 const reviewComment = document.getElementById('review-comment')
 const reviewCommentTextEl = document.getElementById('review-comment-text')
@@ -1222,6 +1228,17 @@ const TAB_LABELS = {
   7: '07 苔火巡廊',
   8: '08 夜场总店',
 }
+const LEVEL_NAMES = {
+  1: '试炼地牢',
+  2: '回形军械库',
+  3: '回声集市',
+  4: '潮汐蓄水厅',
+  5: '双锁档案库',
+  6: '钟摆工坊',
+  7: '苔火巡廊',
+  8: '夜场总店',
+}
+const CN_ORDINALS = ['', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌']
 
 function updateGalleryCurrent() {
   const name = TAB_NAMES[order] || TAB_NAMES[1]
@@ -1367,6 +1384,37 @@ function recordBestStars(review) {
   }
 }
 
+function updateStoreLedger(review) {
+  const isNight = order === 8
+  storeTotalEl.hidden = !isNight
+  storeLedgerEl.hidden = true
+  storeLedgerList.textContent = ''
+  btnStoreLedger.hidden = true
+  btnStoreLedger.setAttribute('aria-expanded', 'false')
+  btnStoreLedger.textContent = '查看全店经营总账'
+  if (!isNight) return
+
+  const stars = {}
+  for (let n = 1; n <= 8; n++) stars[n] = bestStars[n] || 0
+  if (review.status === 'rated') {
+    stars[8] = Math.max(stars[8], review.stars || 0)
+  }
+  const total = Object.values(stars).reduce((sum, v) => sum + v, 0)
+  const allFull = Object.values(stars).every((v) => v === 5)
+  storeTotalLabel.textContent = `全店累计星级：★ ${total} / 40${allFull ? ' · 传奇五星魔王' : ''}`
+  btnStoreLedger.hidden = !(review.status === 'rated' && review.stars === 5)
+  for (let n = 1; n <= 8; n++) {
+    const li = document.createElement('li')
+    const name = document.createElement('span')
+    name.textContent = TAB_LABELS[n]
+    const star = document.createElement('span')
+    star.className = 'ledger-stars'
+    star.textContent = `★${stars[n]}`
+    li.append(name, star)
+    storeLedgerList.appendChild(li)
+  }
+}
+
 function showReview() {
   clearReviewTimers()
   const r = buildReview(game.log, order)
@@ -1381,6 +1429,7 @@ function showReview() {
   reviewNewRecordEl.hidden = !(
     r.status === 'rated' && r.stars > priorBest
   )
+  updateStoreLedger(r)
 
   // 右上角真实星级印章：先留空，最后一颗星落稳后再盖
   const sealText = { 5: '五星神店', 4: '瑕不掩瑜', 3: '差强人意' }[r.stars]
@@ -1507,6 +1556,7 @@ function showReview() {
 
 function hideReview() {
   reviewCard.hidden = true
+  storeLedgerEl.hidden = true
   if (guest) guest.fiveStar = false
   // 提前关票或重开：取消还没落下的星声与盖章
   clearReviewTimers()
@@ -1521,6 +1571,13 @@ function triggerReviewPrimary() {
   if (reviewCard.hidden) return
   reviewPrimaryButton().click()
 }
+
+btnStoreLedger.addEventListener('click', () => {
+  const open = storeLedgerEl.hidden
+  storeLedgerEl.hidden = !open
+  btnStoreLedger.setAttribute('aria-expanded', open ? 'true' : 'false')
+  btnStoreLedger.textContent = open ? '收起全店经营总账' : '查看全店经营总账'
+})
 
 btnAgain.addEventListener('click', resetBusiness)
 
@@ -1597,6 +1654,59 @@ window.addEventListener('keydown', (e) => {
   if (active && active !== document.body && typeof active.blur === 'function') active.blur()
   e.preventDefault()
   triggerReviewPrimary()
+})
+
+// 全局按键：布置 Enter 开门；营业 R 保留摆法重开；1/2 调倍速；
+// 二单/六单的真实预警期间，空格等同按亮起的拉闸/止摆按钮。
+window.addEventListener('keydown', (e) => {
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return
+  if (!reviewCard.hidden) return
+  if (drag || pending) return
+  const active = document.activeElement
+  const tag = active ? active.tagName : ''
+  if (
+    tag === 'INPUT' ||
+    tag === 'TEXTAREA' ||
+    tag === 'SELECT' ||
+    (active && active.isContentEditable)
+  ) {
+    return
+  }
+  const enabledButton = tag === 'BUTTON' && active && !active.disabled
+  const key = e.key
+  if (key === 'Enter') {
+    if (mode === 'setup' && !enabledButton) {
+      e.preventDefault()
+      startBusiness()
+    }
+    return
+  }
+  if (key === 'r' || key === 'R') {
+    if (mode === 'business') {
+      e.preventDefault()
+      resetBusiness()
+    }
+    return
+  }
+  if (key === '1' || key === '2') {
+    e.preventDefault()
+    setSpeed(key === '1' ? 1 : 2)
+    return
+  }
+  if (key === ' ' || key === 'Spacebar') {
+    if (mode !== 'business') return
+    if (order === 2 && !btnTrap.disabled) {
+      e.preventDefault()
+      btnTrap.click()
+      return
+    }
+    if (order === 6 && !btnSwing.disabled) {
+      e.preventDefault()
+      btnSwing.click()
+      return
+    }
+    if (enabledButton) return
+  }
 })
 
 // 按真实 planRoute 生成脚印序列、事件标记和未经过的盾架
@@ -1902,8 +2012,18 @@ function updateMapFrameGlow() {
   canvasWrapEl.classList.toggle('glow-night', order === 8)
 }
 
+function updatePlaqueSubtitle() {
+  if (!secondUnlocked) {
+    subtitleEl.textContent = '先摆好道具，再开门迎客。'
+    return
+  }
+  const n = LEVEL_NAMES[order] ? order : 1
+  subtitleEl.textContent = `第${CN_ORDINALS[n]}单 · ${LEVEL_NAMES[n]}`
+}
+
 function updateHUD() {
   updateMapFrameGlow()
+  updatePlaqueSubtitle()
   applyGuestTheme()
   // 只给真实收支做动效：移动/取消/拖错余额不变，换单只换数字
   const prev = shownGold[order]
@@ -1948,7 +2068,7 @@ function updateHUD() {
     const countEl = cardCountEls[type]
     const count = counts[type] || 0
     if (countEl) {
-      countEl.hidden = false
+      countEl.hidden = count === 0
       countEl.textContent = String(count)
       countEl.classList.toggle('zero', count === 0)
     }
@@ -2007,7 +2127,7 @@ function updateTrapButton() {
   if (!armed) trapTimerFillEl.style.transform = 'scaleX(0)'
   let label = '弩机待命 · 客人靠近可拉闸'
   if (mode === 'business') {
-    if (crossbow.windowOpen) label = armed ? '拉闸暂停机械弩' : '弩机已暂停'
+    if (crossbow.windowOpen) label = armed ? '拉闸暂停机械弩 [空格]' : '弩机已暂停'
     else if (crossbow.mode === 'spent' || crossbow.mode === 'firing') label = '弩机已了结'
     else if (crossbow.used || crossbow.mode === 'paused') label = '弩机已暂停'
     else if (crossbow.mode === 'warning') label = '预警已过'
@@ -2033,7 +2153,7 @@ function updateSwingButton() {
   let label = '钟摆待命 · 全局一次止摆'
   if (mode === 'business') {
     if (swingUsed) label = '止摆已用'
-    else if (warning) label = '止摆停住钟摆'
+    else if (warning) label = '止摆停住钟摆 [空格]'
     else label = '钟摆待命 · 走过才预警'
   }
   swingLabelEl.textContent = label
@@ -2503,6 +2623,7 @@ function startBusiness() {
     )
     return
   }
+  sfx.openDoor()
   runHasTrap = plan.actions.some((a) => a.type === 'trap')
   swingUsed = false
   swingWarn = null
@@ -2782,7 +2903,7 @@ function stepWalker(t, realT) {
         label: `取到${a.name}的档案`,
       })
       updateLogUI()
-      sfx.chest()
+      sfx.pickup()
       startGuestGesture('chest', 520, t)
       spark = { x: a.x, y: a.y, start: t, ms: 520 }
       advanceWalker(t)
@@ -2793,7 +2914,7 @@ function stepWalker(t, realT) {
       if (guest) guest.hasPart = true
       addLog(game, 'part', { site: a.site, label: `取到${a.name}` })
       updateLogUI()
-      sfx.chest()
+      sfx.pickup()
       startGuestGesture('chest', 520, t)
       spark = { x: a.x, y: a.y, start: t, ms: 520 }
       advanceWalker(t)
@@ -2804,7 +2925,7 @@ function stepWalker(t, realT) {
       if (guest) guest.hasMoss = true
       addLog(game, 'moss', { label: '取到苔火样本' })
       updateLogUI()
-      sfx.chest()
+      sfx.pickup()
       startGuestGesture('chest', 520, t)
       spark = { x: a.x, y: a.y, start: t, ms: 520 }
       advanceWalker(t)
@@ -2886,6 +3007,7 @@ function stepWalker(t, realT) {
           : null,
       )
       updateLogUI()
+      if (a.event === 'gauge') sfx.pickup()
       advanceWalker(t)
       continue
     }
@@ -3238,6 +3360,14 @@ function stepWalker(t, realT) {
 
 // ---------- 拖拽（仅 setup 模式可用） ----------
 
+function playPlaceSound(type) {
+  if (type === 'bell') sfx.bell()
+  else if (type === 'weight') sfx.gate()
+  else if (type === 'bridge') sfx.bridge()
+  else if (type === 'barrier') sfx.barrier()
+  else sfx.land()
+}
+
 function startDrag(source, type, dir, e) {
   setGalleryOpen(false)
   bracketTrail = []
@@ -3481,14 +3611,14 @@ window.addEventListener('pointerup', () => {
     if (d.source === 'shop') {
       placeFromShop(game, d.type, d.target.x, d.target.y)
       setPop(d.type, d.target.x, d.target.y, 0)
-      sfx.land()
+      playPlaceSound(d.type)
       status(`放下${def.name}，-${def.price} 金`)
     } else {
       const same = d.target.x === d.source.x && d.target.y === d.source.y
       moveItem(game, d.source, d.target)
       if (!same) {
         setPop(d.type, d.target.x, d.target.y, d.dir)
-        sfx.land()
+        playPlaceSound(d.type)
       }
       status(same ? `${def.name}留在原格` : `挪动${def.name}，不花金币`)
     }
@@ -3824,7 +3954,7 @@ function frame(realT) {
       updateSwingButton()
     }
     if (swingRemain != null && !swingUsed) {
-      const label = `止摆停住钟摆 · ${(swingRemain / 1000).toFixed(1)}s`
+      const label = `止摆停住钟摆 [空格] · ${(swingRemain / 1000).toFixed(1)}s`
       if (swingLabelEl.textContent !== label) swingLabelEl.textContent = label
     }
   }
@@ -3836,7 +3966,7 @@ function frame(realT) {
   }
   // 预警时把剩余时间并进按钮文案；到点或拉闸后由状态字立即接管
   if (trapRemain != null && crossbow.mode === 'warning' && !crossbow.used) {
-    const label = `拉闸暂停机械弩 · ${(trapRemain / 1000).toFixed(1)}s`
+    const label = `拉闸暂停机械弩 [空格] · ${(trapRemain / 1000).toFixed(1)}s`
     if (trapLabelEl.textContent !== label) trapLabelEl.textContent = label
   }
   const hiddenKey =
