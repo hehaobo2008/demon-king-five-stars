@@ -19,6 +19,7 @@ import {
   buildGrid8,
 } from './map.js'
 import { bfsWalkable } from './route-utils.js'
+import { PENDULUM_MOTION } from './pendulum-route.js'
 
 const CELL = TILE * SCALE
 
@@ -41,7 +42,7 @@ const FLOORS = {
   tideEast: { base: '#665444', light: '#726050', dark: '#594a3b' }, // 潮汐东岸
   tideCross: { base: '#565b66', light: '#616774', dark: '#4a4f59' }, // 南北干路
   library: { base: '#4a3d32', light: '#56483b', dark: '#3e332a' }, // 档案库木廊
-  workshop: { base: '#5d5044', light: '#6a5b4d', dark: '#4e4338' }, // 工坊铁石
+  workshop: { base: '#526776', light: '#5d7381', dark: '#465b69' }, // 工坊冷铁蓝灰
   moss: { base: '#44523f', light: '#4f5f48', dark: '#394534' }, // 苔火绿石
   nightWest: { base: '#5b4632', light: '#664f39', dark: '#4c3a27' }, // 夜场西门木廊
   nightEast: { base: '#43505a', light: '#4d5b66', dark: '#38444d' }, // 夜场东门石廊
@@ -72,12 +73,12 @@ const WALL = {
 
 export const TORCHES_BY_ORDER = {
   1: [
-    { x: 7, y: 12 },
-    { x: 9, y: 8 },
-    { x: 12, y: 7 },
-    { x: 1, y: 2 },
-    { x: 13, y: 5 },
-    { x: 21, y: 1 },
+    { x: 7, y: 7 }, // 左室北墙
+    { x: 27, y: 6 }, // 右室北墙
+    { x: 13, y: 0 }, // 挑战厅北墙
+    { x: 18, y: 0 },
+    { x: 17, y: 19 }, // 南厅北墙（门东）
+    { x: 18, y: 19 },
   ],
   2: [
     { x: 4, y: 4 }, // 补给廊口
@@ -88,26 +89,26 @@ export const TORCHES_BY_ORDER = {
     { x: 20, y: 1 }, // 训练房北墙
   ],
   3: [
-    { x: 3, y: 6 }, // 西铺门楣
-    { x: 20, y: 6 }, // 东铺门楣
-    { x: 4, y: 12 }, // 西铺南墙
-    { x: 19, y: 12 }, // 东铺南墙
-    { x: 9, y: 0 }, // 挑战房北墙
-    { x: 16, y: 0 },
+    { x: 10, y: 8 }, // 西铺北短巷口
+    { x: 10, y: 12 }, // 西铺南短巷口
+    { x: 22, y: 8 }, // 东铺北短巷口
+    { x: 24, y: 14 }, // 东铺南短巷口
+    { x: 13, y: 0 }, // 北厅北墙
+    { x: 18, y: 0 },
   ],
   4: [
-    { x: 7, y: 1 }, // 北墙
-    { x: 16, y: 1 },
-    { x: 3, y: 4 }, // 西岸
-    { x: 21, y: 3 }, // 东岸挑战房外
+    { x: 5, y: 1 }, // 西岸北墙
+    { x: 26, y: 1 }, // 东岸北墙
+    { x: 20, y: 19 }, // 东岸南墙（堤门外）
+    { x: 27, y: 19 },
   ],
   6: [
-    { x: 3, y: 4 },
-    { x: 20, y: 4 },
-    { x: 3, y: 9 },
-    { x: 20, y: 10 },
-    { x: 10, y: 11 },
-    { x: 13, y: 12 },
+    { x: 10, y: 4 }, // 上工作区西段北墙
+    { x: 25, y: 2 }, // 上工作区东段北墙
+    { x: 18, y: 8 }, // 中廊北墙
+    { x: 27, y: 14 }, // 下工作区东段北墙
+    { x: 18, y: 18 }, // 南廊北墙
+    { x: 4, y: 17 }, // 入口间北墙
   ],
   7: [
     { x: 3, y: 3 },
@@ -125,39 +126,40 @@ export const TORCHES_BY_ORDER = {
     { x: 22, y: 10 }, // 外廊东
   ],
   5: [
-    { x: 3, y: 3 }, // 外圈西北
-    { x: 9, y: 3 }, // 北廊
-    { x: 18, y: 4 }, // 东廊
-    { x: 3, y: 12 }, // 外圈西
-    { x: 10, y: 6 }, // 内圈
+    { x: 4, y: 3 }, // 西档案间北墙
+    { x: 9, y: 3 }, // 西档案间东北墙
+    { x: 23, y: 3 }, // 东档案间西北墙
+    { x: 27, y: 3 }, // 东档案间北墙
+    { x: 12, y: 18 }, // 南厅西柱
+    { x: 19, y: 18 }, // 南厅东柱
   ],
 }
 
 // 黄灯位置：暖光在角色层之后再叠加，灯架本体留在底图
 export const LAMPS_BY_ORDER = {
   1: [
-    { x: 4, y: 11 },
-    { x: 14, y: 8 },
+    { x: 9, y: 10 }, // 左室两口之间
+    { x: 17, y: 10 }, // 右室两口之间
   ],
   2: [
     { x: 4, y: 7 },
     { x: 17, y: 3 },
   ],
   3: [
-    { x: 3, y: 9 }, // 西铺
-    { x: 20, y: 9 }, // 东铺
+    { x: 3, y: 8 }, // 西铺
+    { x: 28, y: 11 }, // 东铺
   ],
   4: [
-    { x: 6, y: 9 }, // 西岸
-    { x: 18, y: 8 }, // 东岸
+    { x: 2, y: 10 }, // 西岸外线
+    { x: 29, y: 15 }, // 东岸外线
   ],
   5: [
-    { x: 7, y: 6 }, // 内圈
-    { x: 20, y: 8 }, // 东廊
+    { x: 3, y: 8 }, // 西档案间
+    { x: 28, y: 9 }, // 东档案间
   ],
   6: [
-    { x: 7, y: 7 },
-    { x: 14, y: 13 },
+    { x: 8, y: 5 }, // 上工作区西段
+    { x: 28, y: 15 }, // 下工作区东段
   ],
   7: [
     { x: 7, y: 7 },
@@ -181,6 +183,8 @@ function alphaRect(ctx, x, y, w, h, color, alpha) {
 }
 
 function drawFloorTile(ctx, grid, x, y, zone) {
+  const rows = grid.length
+  const cols = grid[0].length
   const f = FLOORS[zone]
   const ux = x * 8
   const uy = y * 8
@@ -215,7 +219,7 @@ function drawFloorTile(ctx, grid, x, y, zone) {
 
     // 靠墙苔点 / 碎石（固定装饰）
     const isWall = (xx, yy) =>
-      yy < 0 || yy >= ROWS || xx < 0 || xx >= COLS || grid[yy][xx] === 'wall'
+      yy < 0 || yy >= rows || xx < 0 || xx >= cols || grid[yy][xx] === 'wall'
     const sides = []
     if (isWall(x, y - 1)) sides.push('n')
     if (isWall(x, y + 1)) sides.push('s')
@@ -239,7 +243,7 @@ function drawFloorTile(ctx, grid, x, y, zone) {
 
   // 靠墙环境阴影（冷色）
   const isWall = (xx, yy) =>
-    yy < 0 || yy >= ROWS || xx < 0 || xx >= COLS || grid[yy][xx] === 'wall'
+    yy < 0 || yy >= rows || xx < 0 || xx >= cols || grid[yy][xx] === 'wall'
   if (isWall(x, y - 1)) {
     alphaRect(ctx, ux, uy, 8, 1, '#12101a', 0.36)
     alphaRect(ctx, ux, uy + 1, 8, 1, '#12101a', 0.15)
@@ -272,10 +276,12 @@ function drawFloorTile(ctx, grid, x, y, zone) {
 }
 
 function drawWallTile(ctx, grid, x, y) {
+  const rows = grid.length
+  const cols = grid[0].length
   const ux = x * 8
   const uy = y * 8
   const isFloor = (xx, yy) =>
-    yy >= 0 && yy < ROWS && xx >= 0 && xx < COLS && grid[yy][xx] !== 'wall'
+    yy >= 0 && yy < rows && xx >= 0 && xx < cols && grid[yy][xx] !== 'wall'
   const floorBelow = isFloor(x, y + 1)
   const nearFloor =
     isFloor(x - 1, y) ||
@@ -344,7 +350,7 @@ function drawWallTile(ctx, grid, x, y) {
   const facadeLeft =
     x > 0 && grid[y][x - 1] === 'wall' && isFloor(x - 1, y + 1)
   const facadeRight =
-    x < COLS - 1 && grid[y][x + 1] === 'wall' && isFloor(x + 1, y + 1)
+    x < cols - 1 && grid[y][x + 1] === 'wall' && isFloor(x + 1, y + 1)
   if (!facadeLeft) alphaRect(ctx, ux, uy + 1, 1, 7, '#0c0a11', 0.62)
   if (!facadeRight) alphaRect(ctx, ux + 7, uy + 1, 1, 7, '#0c0a11', 0.62)
 }
@@ -396,15 +402,15 @@ function drawCarpetBase(ctx, x, y, w, h) {
 }
 
 function drawCarpet(ctx) {
-  // 挑战房暗砖红旧地毯：x15..21, y3..5
-  const x = 15 * 8
-  const y = 3 * 8
-  const w = 56
+  // 挑战厅暗砖红旧地毯：x13..18, y2..4
+  const x = 13 * 8
+  const y = 2 * 8
+  const w = 48
   const h = 24
   drawCarpetBase(ctx, x, y, w, h)
   // 磨损露出的地面
   const holes = [
-    [18, 5], [26, 9], [34, 4], [44, 12], [52, 7], [22, 15], [40, 17], [48, 3],
+    [16, 5], [24, 9], [32, 4], [40, 12], [44, 7], [20, 15], [36, 17], [10, 3],
   ]
   for (const [hx, hy] of holes) rect(ctx, x + hx, y + hy, 1 + (hx % 2), 1, '#7d7165')
   // 两侧流苏
@@ -437,10 +443,27 @@ function drawDoorway(ctx, span) {
   if (span.bottomPost !== false) drawDoorPost(ctx, sx, y2 - 1)
 }
 
+// 横向门洞（南北向开口）：门槛横贯整段开口，两端各一根石门柱
+function drawDoorwayH(ctx, span) {
+  const uy = span.y * 8
+  const x1 = span.x1 * 8
+  const x2 = span.x2 * 8 + 8
+  const w = x2 - x1
+  const sy = uy + 3
+  rect(ctx, x1 + 1, sy, w - 2, 2, '#7d5f35')
+  rect(ctx, x1 + 1, sy, w - 2, 1, '#a98a52')
+  alphaRect(ctx, x1 + 1, sy + 2, w - 2, 1, '#1f1a16', 0.22)
+  for (const px of [x1 - 2, x2]) {
+    rect(ctx, px, uy + 2, 2, 4, '#3a3646')
+    rect(ctx, px, uy + 2, 2, 1, '#565264')
+    rect(ctx, px, uy + 5, 2, 1, '#1d1a26')
+  }
+}
+
 // 入口铁箍木门：open 0..1，门扇向左滑入墙内，门洞透暖光
 function drawDoor(ctx, door) {
-  const tx = 3
-  const ty = 17
+  const tx = 15
+  const ty = 23
   const x = tx * 8 * U
   const y = ty * 8 * U
   const ox = x + U
@@ -541,6 +564,18 @@ function drawCompassSlot(ctx, tx, ty) {
   rect(ctx, x + 3, y + 3, 2, 2, '#1b1510')
 }
 
+// 守卫阵前的浅路牌位（铜色压暗）：徽章到手后才读这格，朝右走右外廊回程寻宝
+function drawFaintCompassSlot(ctx, tx, ty) {
+  const x = tx * 8
+  const y = ty * 8
+  rect(ctx, x + 1, y + 1, 6, 6, '#241d14')
+  rect(ctx, x + 1, y + 1, 6, 1, '#57431f')
+  rect(ctx, x + 1, y + 6, 6, 1, '#57431f')
+  rect(ctx, x + 1, y + 1, 1, 6, '#57431f')
+  rect(ctx, x + 6, y + 1, 1, 6, '#57431f')
+  rect(ctx, x + 3, y + 3, 2, 2, '#171209')
+}
+
 // 守卫脚下的暗石座
 function drawGuardPedestal(ctx, tx, ty) {
   const x = tx * 8
@@ -621,10 +656,10 @@ function drawGearCage(ctx, phase = 0) {
   rect(ctx, x, y + h - 2, w, 1, '#15131c')
 }
 
-// 地图暗角：中心通透、边缘约 0.55
+// 地图暗角：中心通透、边缘约 0.55（按所绘底图的实际尺寸）
 function drawVignette(ctx) {
-  const w = COLS * CELL
-  const h = ROWS * CELL
+  const w = ctx.canvas.width
+  const h = ctx.canvas.height
   const g = ctx.createRadialGradient(
     w / 2,
     h / 2,
@@ -642,8 +677,8 @@ function drawVignette(ctx) {
 
 // 外框底光：从画布四边往内收的极淡环境色，不参与格子碰撞
 function drawOuterGlow(ctx, color, strength = 0.1) {
-  const w = COLS * CELL
-  const h = ROWS * CELL
+  const w = ctx.canvas.width
+  const h = ctx.canvas.height
   const edge = 54
   const rgba = (a) => `rgba(${color}, ${a})`
   ctx.save()
@@ -720,12 +755,12 @@ function drawNiche(ctx, tx, ty, wTiles, inTop, inBottom) {
   alphaRect(ctx, x - 1, sillY + 2, w + 2, 1, '#0d0a0e', 0.22)
 }
 
-function drawCounterNiche(ctx) {
-  // 入口北墙龛：深木柜台 + 黄铜小铃 + 账本（x1..3, y11）
-  const x = 1 * 8
-  const y = 11 * 8
-  const w = 24
-  drawNiche(ctx, 1, 11, 3, 1, 8)
+function drawCounterNiche(ctx, tx, ty, wTiles = 3) {
+  // 入口北墙龛：深木柜台 + 黄铜小铃 + 账本
+  const x = tx * 8
+  const y = ty * 8
+  const w = wTiles * 8
+  drawNiche(ctx, tx, ty, wTiles, 1, 8)
   rect(ctx, x + 1, y + 4, w - 2, 4, '#4a3020')
   rect(ctx, x + 1, y + 4, w - 2, 1, '#3a2717')
   rect(ctx, x + 1, y + 3, w - 2, 1, '#7f5b3c')
@@ -741,7 +776,7 @@ function drawCounterNiche(ctx) {
 }
 
 function drawShelfNiche(ctx) {
-  drawShelf(ctx, 2, 2, 3)
+  drawShelf(ctx, 3, 7, 3)
 }
 
 // 任意位置的墙龛书架
@@ -771,22 +806,22 @@ function drawLamp(ctx, tx, ty) {
   rect(ctx, tx * 8 + 3, ty * 8 + 0, 2, 1, '#ffcd75')
 }
 
-function drawCrateNiche(ctx) {
-  // 侧室 A 南墙龛：木箱（x7, y8）
-  const x = 7 * 8
-  const y = 8 * 8
-  drawNiche(ctx, 7, 8, 1, 2, 8)
+function drawCrateNiche(ctx, tx, ty) {
+  // 墙龛木箱（按传入格坐标画）
+  const x = tx * 8
+  const y = ty * 8
+  drawNiche(ctx, tx, ty, 1, 2, 8)
   rect(ctx, x + 1, y + 3, 6, 4, '#5d3b26')
   rect(ctx, x + 1, y + 3, 6, 1, '#755033')
   rect(ctx, x + 1, y + 6, 6, 1, '#3b2718')
   for (let i = 1; i < 5; i++) rect(ctx, x + i, y + 3 + i, 1, 1, '#3b2718')
 }
 
-function drawTableNiche(ctx) {
-  // 侧室 B 北墙龛：矮桌 + 蜡烛 + 凳子（x15..17, y8）
-  const x = 15 * 8
-  const y = 8 * 8
-  drawNiche(ctx, 15, 8, 3, 2, 7)
+function drawTableNiche(ctx, tx, ty) {
+  // 北墙龛：矮桌 + 蜡烛 + 凳子（3 格宽）
+  const x = tx * 8
+  const y = ty * 8
+  drawNiche(ctx, tx, ty, 3, 2, 7)
   // 桌
   rect(ctx, x + 1, y + 4, 14, 2, '#6d4a2f')
   rect(ctx, x + 1, y + 4, 14, 1, '#7f5b3c')
@@ -881,11 +916,11 @@ function drawFlag(ctx, tx, ty) {
 function drawLabels(ctx) {
   // 房间名上墙：两钉木牌
   drawWallLabels(ctx, [
-    { text: '入口', x: 4.6, y: 17.5 },
-    { text: '通道', x: 12.5, y: 6.5 },
-    { text: '侧室', x: 6.5, y: 2.5 },
-    { text: '侧室', x: 19.5, y: 8.5 },
-    { text: '挑战房', x: 18.5, y: 1.65 },
+    { text: '入口', x: 13.5, y: 23.1 },
+    { text: '通道', x: 14, y: 16.5 },
+    { text: '侧室', x: 4.5, y: 15.4 },
+    { text: '侧室', x: 28, y: 14.4 },
+    { text: '挑战房', x: 16, y: 0.65 },
   ])
 }
 
@@ -1227,7 +1262,7 @@ export function drawItem(ctx, type, ox, oy, dir = 0, opened = false, taken = fal
     drawBarrierItem(ctx, ox, oy)
     return
   }
-  if (type === 'bridge') {
+  if (type === 'bridge' || type === 'plank') {
     drawBridgeItem(ctx, ox, oy)
     return
   }
@@ -1331,6 +1366,13 @@ const KNIGHT_PALETTE = {
   b: '#2a2f3d', // 深色靴
 }
 
+// 首单剑士专用：钢蓝盔不变，斗篷加浅黄铜边 L，腰间加深色甲块 D
+const KNIGHT1_PALETTE = {
+  ...KNIGHT_PALETTE,
+  L: '#e8c97a',
+  D: '#2a2f3d',
+}
+
 const FAN_PALETTE = {
   o: '#1a1c2c',
   K: '#3a2a1c',
@@ -1384,16 +1426,16 @@ const SCRIBE_PALETTE = {
 }
 
 const PENDULUM_PALETTE = {
-  o: '#1a1c2c',
-  K: '#4a3b2a',
-  k: '#8a6a2b',
+  o: '#14212c',
+  K: '#446a70',
+  k: '#8fb8b4',
   F: '#e8c19a',
   E: '#1a1c2c',
-  G: '#ffcd75',
-  g: '#fff3c0',
-  S: '#6d4a2f',
-  T: '#4b4a52',
-  b: '#2a2622',
+  G: '#e8c17b',
+  g: '#effff5',
+  S: '#487c7a',
+  T: '#294b55',
+  b: '#192e38',
 }
 
 const MOSS_PALETTE = {
@@ -1568,6 +1610,95 @@ const KNIGHT_FRAMES = {
   ],
 }
 
+// 首单剑士新轮廓：肩后短斗篷（浅黄铜边 L 收底）、腰间深色甲块 D。
+// 头盔/脸/靴与摆腿帧保持原样，右侧仍由左帧镜像， footprint 不变（8×11 格）
+const KNIGHT1_FRAMES = {
+  down: [
+    [
+      '..oooo..',
+      '.oHHHHo.',
+      '.oHhhHo.',
+      '.oFFFFo.',
+      '.oFEFEo.',
+      '.oFFFFo.',
+      'CoAAAAoC',
+      'CoAgAAoC',
+      'LoAAAAoL',
+      '.oADDAo.',
+      '..b..b..',
+    ],
+    [
+      '..oooo..',
+      '.oHHHHo.',
+      '.oHhhHo.',
+      '.oFFFFo.',
+      '.oFEFEo.',
+      '.oFFFFo.',
+      'CoAAAAoC',
+      'CoAgAAoC',
+      'LoAAAAo.',
+      '.oADDAo.',
+      '.b....b.',
+    ],
+  ],
+  up: [
+    [
+      '..oooo..',
+      '.oHHHHo.',
+      '.oHHHHo.',
+      '.oHHHHo.',
+      '.oHhhHo.',
+      '.oCCCCo.',
+      '.oCCCCo.',
+      'CoCCCCoC',
+      'CoLLLLoC',
+      '.oADDAo.',
+      '..b..b..',
+    ],
+    [
+      '..oooo..',
+      '.oHHHHo.',
+      '.oHHHHo.',
+      '.oHHHHo.',
+      '.oHhhHo.',
+      '.oCCCCo.',
+      '.oCCCCo.',
+      'CoCCCCoC',
+      'CoLLLLo.',
+      '.oADDAo.',
+      '.b....b.',
+    ],
+  ],
+  left: [
+    [
+      '..oooo..',
+      '.oHHHHo.',
+      '.oHhhHo.',
+      '.oFFHHo.',
+      '.oFEHHo.',
+      '.oFFHHo.',
+      '.oAAACo.',
+      'oAAAACCo',
+      'oAAAALLo',
+      '.oAADDo.',
+      '..b..b..',
+    ],
+    [
+      '..oooo..',
+      '.oHHHHo.',
+      '.oHhhHo.',
+      '.oFFHHo.',
+      '.oFEHHo.',
+      '.oFFHHo.',
+      '.oAAACo.',
+      'oAAAACCo',
+      'oAAAALL.',
+      '.oAADDo.',
+      '.b...b..',
+    ],
+  ],
+}
+
 const FAN_FRAMES = {
   down: [
     [
@@ -1670,6 +1801,31 @@ const SKELETON_ROWS = [
   '.oWWWWo.',
   '..oWWo..',
   'RoWWWWoR',
+  '.oWwWWo.',
+  '.oWWWWo.',
+  '..oWWo..',
+  '..o..o..',
+  '.oo..oo.',
+]
+
+// 首关守卫：暖白头骨不变，眼窝加深成两块，肩部换暗褐护肩，
+// 与剑士的钢蓝/黄铜边区分；身子和脚保持原尺寸
+const SKELETON1_PALETTE = {
+  o: '#1a1c2c',
+  W: '#e8e0cf',
+  w: '#b8ad97',
+  E: '#1a1c2c',
+  R: '#6d4a2f', // 暗褐护肩
+  r: '#4a3020',
+}
+
+const SKELETON1_ROWS = [
+  '..oooo..',
+  '.oWWWWo.',
+  '.oWEWEo.',
+  '.oWEWEo.',
+  '.RoWWoR.',
+  'roWWWWor',
   '.oWwWWo.',
   '.oWWWWo.',
   '..oWWo..',
@@ -1840,14 +1996,21 @@ function drawHand(ctx, x, y) {
   ctx.fillRect(x - 1, y + 1, 3, 1)
 }
 
-function drawSwordUp(ctx, hx, hy) {
+function drawSwordUp(ctx, hx, hy, bright = false) {
   const P = WEAPON_PAL
   ctx.fillStyle = P.dark
   ctx.fillRect(hx - 2, hy - 16, 5, 13)
   ctx.fillStyle = P.blade
   ctx.fillRect(hx - 1, hy - 15, 3, 11)
   ctx.fillStyle = P.edge
-  ctx.fillRect(hx, hy - 15, 1, 10)
+  if (bright) {
+    // 首单剑士：亮边加宽到 2px，剑尖一点白光，轮廓里一眼能认出短剑
+    ctx.fillRect(hx - 1, hy - 15, 2, 10)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(hx - 1, hy - 15, 1, 2)
+  } else {
+    ctx.fillRect(hx, hy - 15, 1, 10)
+  }
   ctx.fillStyle = P.dark
   ctx.fillRect(hx - 4, hy - 4, 9, 3)
   ctx.fillStyle = P.guard
@@ -1943,7 +2106,7 @@ function drawSwingTrail(ctx, hx, hy, dir, p) {
   ctx.restore()
 }
 
-function drawGuestWeapon(ctx, shape, cx, feetY, facing, side, gesture, p, armColor = '#5b6b80') {
+function drawGuestWeapon(ctx, shape, cx, feetY, facing, side, gesture, p, armColor = '#5b6b80', brightEdge = false) {
   if (gesture && gesture.kind === 'slash') {
     const dir = facing === 'left' ? -1 : 1
     const hx = cx + dir * 8
@@ -1970,11 +2133,122 @@ function drawGuestWeapon(ctx, shape, cx, feetY, facing, side, gesture, p, armCol
     drawArm(ctx, cx + side * 7, feetY - 19, hx, hy, armColor)
   }
   if (shape === 'fan') drawWrenchUp(ctx, hx, hy)
-  else drawSwordUp(ctx, hx, hy)
+  else drawSwordUp(ctx, hx, hy, brightEdge)
   drawHand(ctx, hx, hy)
 }
 
-function drawHeldShield(ctx, cx, feetY, facing, blocking, raise = 0, armColor = '#5b6b80') {
+// 首单剑士的盾：深钢蓝面 + 浅钢边。
+// 朝上背盾从左侧露一点盾沿；格挡时盾挡在身前（朝上则在远侧身前，从头顶上方露沿，先于人物绘制）
+function drawSteelShield(ctx, cx, feetY, facing, blocking, raise, armColor) {
+  const rim = '#94b0c2'
+  const face = '#2e4a7a'
+  const hi = '#3b5dc9'
+  const boss = '#ffcd75'
+  if (raise > 0.02 && !blocking) {
+    const side = facing === 'right' ? 1 : -1
+    const sx = side > 0 ? cx + 8 : cx - 20
+    const top = feetY - 34 - raise * 18
+    drawArm(
+      ctx,
+      cx + side * 5,
+      feetY - 20,
+      cx + side * 14,
+      top + 15,
+      armColor,
+    )
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(sx - 1, top - 1, 14, 18)
+    ctx.fillStyle = rim
+    ctx.fillRect(sx, top, 12, 16)
+    ctx.fillStyle = face
+    ctx.fillRect(sx + 1, top + 1, 10, 14)
+    ctx.fillStyle = hi
+    ctx.fillRect(sx + 1, top + 1, 10, 2)
+    ctx.fillStyle = rim
+    ctx.fillRect(sx + 4, top + 7, 4, 5)
+    ctx.fillStyle = boss
+    ctx.fillRect(sx + 5, top + 4, 2, 2)
+    return
+  }
+  if (blocking) {
+    if (facing === 'up') {
+      // 朝上格挡：盾在远侧身前，人物挡住下半，头顶上方露出盾沿
+      const sx = cx - 7
+      const top = feetY - 42
+      ctx.fillStyle = '#1a1c2c'
+      ctx.fillRect(sx - 1, top - 1, 14, 18)
+      ctx.fillStyle = rim
+      ctx.fillRect(sx, top, 12, 16)
+      ctx.fillStyle = face
+      ctx.fillRect(sx + 1, top + 1, 10, 14)
+      ctx.fillStyle = hi
+      ctx.fillRect(sx + 1, top + 1, 10, 2)
+      ctx.fillStyle = boss
+      ctx.fillRect(sx + 5, top + 3, 2, 2)
+      return
+    }
+    // 朝下/左/右格挡：盾压在身前躯干上，不再偏到体侧
+    const sx =
+      facing === 'right' ? cx + 4 : facing === 'left' ? cx - 16 : cx - 6
+    const top = feetY - 30
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(sx, top, 12, 18)
+    ctx.fillStyle = rim
+    ctx.fillRect(sx + 1, top + 1, 10, 16)
+    ctx.fillStyle = face
+    ctx.fillRect(sx + 2, top + 2, 8, 14)
+    ctx.fillStyle = hi
+    ctx.fillRect(sx + 2, top + 2, 8, 2)
+    ctx.fillStyle = rim
+    ctx.fillRect(sx + 4, top + 7, 4, 5)
+    ctx.fillStyle = boss
+    ctx.fillRect(sx + 5, top + 4, 2, 2)
+    return
+  }
+  if (facing === 'left' || facing === 'right') {
+    // 侧面只露窄边：浅边 + 一线深面
+    const sx = facing === 'right' ? cx + 9 : cx - 13
+    const top = feetY - 24
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(sx, top, 4, 14)
+    ctx.fillStyle = rim
+    ctx.fillRect(sx + 1, top + 1, 1, 12)
+    ctx.fillStyle = face
+    ctx.fillRect(sx + 2, top + 1, 1, 12)
+    return
+  }
+  if (facing === 'up') {
+    // 朝上背着：从左侧露出一点浅盾沿（先于人物绘制）
+    const sx = cx - 16
+    const top = feetY - 30
+    ctx.fillStyle = '#1a1c2c'
+    ctx.fillRect(sx, top, 10, 14)
+    ctx.fillStyle = rim
+    ctx.fillRect(sx + 1, top + 1, 8, 12)
+    ctx.fillStyle = face
+    ctx.fillRect(sx + 2, top + 2, 6, 10)
+    return
+  }
+  // 朝下：盾在手臂旁
+  const sx = cx - 17
+  const top = feetY - 22
+  ctx.fillStyle = '#1a1c2c'
+  ctx.fillRect(sx, top, 9, 14)
+  ctx.fillStyle = rim
+  ctx.fillRect(sx + 1, top + 1, 7, 12)
+  ctx.fillStyle = face
+  ctx.fillRect(sx + 2, top + 2, 5, 10)
+  ctx.fillStyle = hi
+  ctx.fillRect(sx + 2, top + 2, 5, 1)
+  ctx.fillStyle = boss
+  ctx.fillRect(sx + 3, top + 5, 3, 3)
+}
+
+function drawHeldShield(ctx, cx, feetY, facing, blocking, raise = 0, armColor = '#5b6b80', steel = false) {
+  if (steel) {
+    drawSteelShield(ctx, cx, feetY, facing, blocking, raise, armColor)
+    return
+  }
   if (raise > 0.02 && !blocking) {
     const side = facing === 'right' ? 1 : -1
     const sx = side > 0 ? cx + 8 : cx - 20
@@ -2114,8 +2388,11 @@ function drawGuestCarry(ctx, guest, cx, feetY) {
 export function drawGuest(ctx, guest) {
   const style = guestStyle(guest.variant)
   const shape = style.shape
-  const sets = shape === 'fan' ? FAN_FRAMES : KNIGHT_FRAMES
-  const palette = style.palette
+  // 首单剑士用新轮廓与新盾色；其他客人（含共用衣形的）照旧
+  const steel = guest.variant === 'knight'
+  const artisan = guest.variant === 'pendulum'
+  const sets = shape === 'fan' ? FAN_FRAMES : steel ? KNIGHT1_FRAMES : KNIGHT_FRAMES
+  const palette = steel ? KNIGHT1_PALETTE : style.palette
   const cx = (guest.x + 0.5) * CELL + (guest.offsetX || 0)
   const crouch = guest.blocking ? 3 : 0
   const feetY = (guest.y + 1) * CELL - 3 + (guest.offsetY || 0) + crouch
@@ -2138,11 +2415,35 @@ export function drawGuest(ctx, guest) {
   ctx.fillRect(cx - 6 + wob, feetY + 2, 12 - wob, 1)
   ctx.restore()
 
-  // 朝上时盾先画（背在身后）；抬盾展示时改到身前
+  // 只标识第六单工匠；定位框跟真实浮点位置走，不扩大碰撞体。
+  if (artisan) {
+    ctx.save()
+    const cy = (guest.y + 0.5) * CELL + (guest.offsetY || 0)
+    ctx.fillStyle = '#bff7ee'
+    for (const side of [-1, 1]) {
+      ctx.fillRect(cx + side * 12 - 1, cy - 5, 2, 10)
+      ctx.fillRect(cx + (side < 0 ? -12 : 7), cy + 5, 5, 2)
+    }
+    ctx.fillStyle = '#61bfb3'
+    ctx.fillRect(cx - 7, feetY + 2, 14, 2)
+    ctx.restore()
+  }
+
+  // 朝上时盾先画（背在身后）；抬盾展示时改到身前。
+  // 首单剑士朝上格挡也先画：盾在远侧身前，从头顶上方露沿
   const shieldBehind =
-    facing === 'up' && !guest.blocking && shieldRaise <= 0.02
+    facing === 'up' && shieldRaise <= 0.02 && (!guest.blocking || steel)
   if (guest.hasShield && shieldBehind) {
-    drawHeldShield(ctx, cx, feetY, facing, false, 0, armColor)
+    drawHeldShield(
+      ctx,
+      cx,
+      feetY,
+      facing,
+      !!guest.blocking,
+      0,
+      armColor,
+      steel,
+    )
   }
   if (guest.flash) {
     ctx.save()
@@ -2161,6 +2462,7 @@ export function drawGuest(ctx, guest) {
       !!guest.blocking,
       shieldRaise,
       armColor,
+      steel,
     )
   }
 
@@ -2174,8 +2476,22 @@ export function drawGuest(ctx, guest) {
     : facing === 'left'
       ? -1
       : 1
-  drawGuestWeapon(ctx, shape, cx, feetY, facing, weaponSide, gesture, gp, armColor)
+  drawGuestWeapon(ctx, shape, cx, feetY, facing, weaponSide, gesture, gp, armColor, steel)
   drawGuestCarry(ctx, guest, cx, feetY)
+
+  if (artisan) {
+    ctx.save()
+    const tagY = feetY - CHAR_H * CHAR_PX - 20
+    ctx.fillStyle = '#10232e'
+    ctx.fillRect(cx - 30, tagY - 16, 60, 30)
+    ctx.fillStyle = '#c7fff3'
+    ctx.fillRect(cx - 30, tagY + 14, 60, 2)
+    ctx.font = '28px "Fusion Pixel 12px", "Courier New", monospace'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('工匠', cx, tagY)
+    ctx.restore()
+  }
 
   if (guest.hasBadge && !guest.hideBadge) {
     // 头顶徽章：轻轻浮动 + 交替小星点
@@ -2205,7 +2521,80 @@ export function drawGuest(ctx, guest) {
   }
 }
 
-function drawSkeletonHammer(ctx, ox, oy, pose, now = 0, still = false) {
+// 首关守卫的锤：举锤/落锤形状做开——带轮廓的方锤头 + 清楚的锤柄。
+// 举起时方锤从头侧抬出，头、柄、方锤一眼可辨；落下沿原拍原位，只压旁边一截。
+// 90ms 抖动与飘点时机照旧；其他关仍走 drawSkeletonHammer 旧形状
+function drawGuard1Hammer(ctx, ox, oy, pose, now = 0, still = false) {
+  const steel = '#94b0c2'
+  const steelHi = '#c9d4dd'
+  const steelLo = '#566c86'
+  const shaft = '#ef7d57'
+  const dark = '#1a1c2c'
+  if (pose === 'raise') {
+    // 蓄力：锤头仍约每 90ms 右移 1px 来回；柄竖直连到骨拳
+    const headX = ox + 16 + (still ? 0 : Math.floor(now / 90) % 2)
+    ctx.fillStyle = dark
+    ctx.fillRect(ox + 21, oy - 15, 5, 28)
+    ctx.fillStyle = shaft
+    ctx.fillRect(ox + 22, oy - 14, 3, 26)
+    // 方锤头：轮廓 + 浅钢面 + 顶高光、底阴影
+    ctx.fillStyle = dark
+    ctx.fillRect(headX, oy - 28, 16, 14)
+    ctx.fillStyle = steel
+    ctx.fillRect(headX + 1, oy - 27, 14, 12)
+    ctx.fillStyle = steelHi
+    ctx.fillRect(headX + 1, oy - 27, 14, 2)
+    ctx.fillStyle = steelLo
+    ctx.fillRect(headX + 1, oy - 17, 14, 2)
+    // 握柄的骨拳
+    ctx.fillStyle = dark
+    ctx.fillRect(ox + 19, oy + 9, 9, 6)
+    ctx.fillStyle = '#e8e0cf'
+    ctx.fillRect(ox + 20, oy + 10, 7, 4)
+    // 锤头右侧两粒暗红小方点往上飘；减少动效时定格
+    const cycle = 520
+    for (let i = 0; i < 2; i++) {
+      const p = still ? (i === 0 ? 0.65 : 0.3) : (now / cycle + i * 0.5) % 1
+      ctx.fillStyle = i === 0 ? '#8c3b35' : '#7a2e2e'
+      ctx.fillRect(ox + 33 + i * 2, oy - 20 - Math.round(p * 12), 2, 2)
+    }
+  } else if (pose === 'strike' || pose === 'recoil') {
+    // 落锤：沿原来那一拍，锤头在体侧落出一截带轮廓的方形，不压过剑士整个人
+    // recoil（空档）沿用落锤形状：锤已砸在地上，守卫还没收势
+    ctx.fillStyle = dark
+    ctx.fillRect(ox - 8, oy + 21, 22, 5)
+    ctx.fillStyle = shaft
+    ctx.fillRect(ox - 7, oy + 22, 20, 3)
+    ctx.fillStyle = dark
+    ctx.fillRect(ox - 20, oy + 15, 13, 13)
+    ctx.fillStyle = steel
+    ctx.fillRect(ox - 19, oy + 16, 11, 11)
+    ctx.fillStyle = steelHi
+    ctx.fillRect(ox - 19, oy + 16, 11, 2)
+    ctx.fillStyle = steelLo
+    ctx.fillRect(ox - 19, oy + 16, 3, 11)
+  } else {
+    // 歇锤在侧：同一套方锤语言，位置照旧
+    ctx.fillStyle = dark
+    ctx.fillRect(ox + 16, oy + 9, 5, 20)
+    ctx.fillStyle = shaft
+    ctx.fillRect(ox + 17, oy + 10, 3, 18)
+    ctx.fillStyle = dark
+    ctx.fillRect(ox + 11, oy + 3, 15, 10)
+    ctx.fillStyle = steel
+    ctx.fillRect(ox + 12, oy + 4, 13, 8)
+    ctx.fillStyle = steelHi
+    ctx.fillRect(ox + 12, oy + 4, 13, 2)
+    ctx.fillStyle = steelLo
+    ctx.fillRect(ox + 12, oy + 10, 13, 2)
+  }
+}
+
+function drawSkeletonHammer(ctx, ox, oy, pose, now = 0, still = false, firstOrder = false) {
+  if (firstOrder) {
+    drawGuard1Hammer(ctx, ox, oy, pose, now, still)
+    return
+  }
   if (pose === 'raise') {
     // 蓄力：锤头约每 90ms 在基准位与右移 1px 之间来回；身体保持站稳
     const headX = ox + 10 + (still ? 0 : Math.floor(now / 90) % 2)
@@ -2276,7 +2665,7 @@ function drawSkeletonDown(ctx, cx, feetY, now = 0, still = false) {
   ctx.restore()
 }
 
-export function drawSkeleton(ctx, sx, sy, pose, now = 0, flash = false, still = false) {
+export function drawSkeleton(ctx, sx, sy, pose, now = 0, flash = false, still = false, firstOrder = false) {
   const cx = (sx + 0.5) * CELL
   const feetY = (sy + 1) * CELL - 3
 
@@ -2291,16 +2680,35 @@ export function drawSkeleton(ctx, sx, sy, pose, now = 0, flash = false, still = 
     return
   }
   const bob = pose === 'idle' && !still ? Math.round(Math.sin(now / 700)) : 0
+  // 空档（recoil）：落锤后身体朝勇士方向前倾 2px，还没收势
+  const lean = pose === 'recoil' ? 2 : 0
   const ox = cx - 12
-  const oy = feetY - CHAR_H * CHAR_PX + bob
+  const oy = feetY - CHAR_H * CHAR_PX + bob + lean
+  // 首关守卫用深眼窝/暗褐护肩本体与新锤形；其他关照旧
+  const rows = firstOrder ? SKELETON1_ROWS : SKELETON_ROWS
+  const palette = firstOrder ? SKELETON1_PALETTE : SKELETON_PALETTE
   if (flash) {
     ctx.save()
     ctx.globalAlpha = 0.75
-    drawCharRows(ctx, SKELETON_ROWS, makeWhitePalette(), ox, oy)
+    drawCharRows(ctx, rows, makeWhitePalette(), ox, oy)
     ctx.restore()
   }
-  drawCharRows(ctx, SKELETON_ROWS, SKELETON_PALETTE, ox, oy)
-  drawSkeletonHammer(ctx, ox, oy, pose, now, still)
+  drawCharRows(ctx, rows, palette, ox, oy)
+  drawSkeletonHammer(ctx, ox, oy, pose, now, still, firstOrder)
+  if (pose === 'recoil') {
+    // 空档提示：两颗小金星绕头顶慢转（与倒地金星同一套语言，转得更快）
+    const orbit = still ? 0 : (now / 900) * Math.PI * 2
+    for (let i = 0; i < 2; i++) {
+      const a = orbit + i * Math.PI
+      ctx.fillStyle = '#ffcd75'
+      ctx.fillRect(
+        Math.round(cx + Math.cos(a) * 6),
+        Math.round(oy - 5 + Math.sin(a) * 2),
+        2,
+        2,
+      )
+    }
+  }
   // 偶尔红眼（短暂）
   if (now % 4400 < 700) {
     ctx.fillStyle = '#d9534f'
@@ -2381,14 +2789,16 @@ export function makeBaseMap(order = 1) {
   if (order === 7) return makeMossBase()
   if (order === 8) return makeNightBase()
   const c = document.createElement('canvas')
-  c.width = COLS * CELL
-  c.height = ROWS * CELL
-  const ctx = c.getContext('2d')
   const grid = buildGrid()
+  const cols = grid[0].length
+  const rows = grid.length
+  c.width = cols * CELL
+  c.height = rows * CELL
+  const ctx = c.getContext('2d')
 
   // 1. 地板
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
       if (grid[y][x] !== 'wall') drawFloorTile(ctx, grid, x, y, grid[y][x])
     }
   }
@@ -2397,51 +2807,54 @@ export function makeBaseMap(order = 1) {
   drawCarpet(ctx)
 
   // 3. 地面装饰：入口欢迎垫 / 岔口罗盘槽 / 守卫石座（纯装饰，不改格子）
-  drawWelcomeMat(ctx, 3, 16)
-  drawCompassSlot(ctx, 11, 11)
-  drawCompassSlot(ctx, 10, 5)
-  drawGuardPedestal(ctx, 19, 4)
-  drawBadgeStand(ctx, 23, 3)
+  drawWelcomeMat(ctx, 15, 22)
+  drawCompassSlot(ctx, 15, 12)
+  drawCompassSlot(ctx, 16, 11)
+  drawFaintCompassSlot(ctx, 16, 4)
+  drawGuardPedestal(ctx, 16, 3)
+  drawBadgeStand(ctx, 21, 3)
 
   // 4. 砖砌厚墙（只有下方有地板的墙格画正面砖面）
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
       if (grid[y][x] === 'wall') drawWallTile(ctx, grid, x, y)
     }
   }
 
-  // 5. 中段墙的「五星好评」锦旗
-  drawPennant(ctx, 9, 10)
+  // 5. 主路西侧墙的「五星好评」锦旗
+  drawPennant(ctx, 14, 11)
 
   // 6. 门洞（门槛横跨实际开口 + 两端石门柱）与入口铁箍木门
   for (const s of [
-    { x: 7, y1: 14, y2: 14 },
-    { x: 8, y1: 5, y2: 5 },
-    { x: 12, y1: 11, y2: 11 },
-    { x: 12, y1: 4, y2: 4 },
+    { x: 9, y1: 9, y2: 9 },
+    { x: 9, y1: 12, y2: 12 },
+    { x: 22, y1: 8, y2: 8 },
+    { x: 22, y1: 11, y2: 11 },
   ]) {
     drawDoorway(ctx, s)
   }
+  drawDoorwayH(ctx, { y: 6, x1: 15, x2: 16 }) // 挑战厅南门
+  drawDoorwayH(ctx, { y: 19, x1: 15, x2: 16 }) // 南厅北门
 
   // 7. 靠墙陈设（全部收进墙格壁龛，地面保持可摆放）
-  drawCounterNiche(ctx) // 入口北墙：柜台龛 + 黄铜小铃
-  drawShelfNiche(ctx) // 侧室 A 北墙：书架龛
-  drawCrateNiche(ctx) // 侧室 A 南墙：木箱龛
-  drawTableNiche(ctx) // 侧室 B 北墙：桌凳龛 + 蜡烛
-  drawBarrelNiche(ctx, 10, 2)
-  drawBarrelNiche(ctx, 6, 17)
-  drawBarrelNiche(ctx, 20, 14)
-  drawBarrelNiche(ctx, 22, 7)
+  drawCounterNiche(ctx, 12, 19) // 南厅北墙：柜台龛 + 黄铜小铃
+  drawShelfNiche(ctx) // 左室北墙：书架龛
+  drawCrateNiche(ctx, 6, 15) // 左室南墙：木箱龛
+  drawTableNiche(ctx, 23, 6) // 右室北墙：桌凳龛 + 蜡烛
+  drawBarrelNiche(ctx, 10, 4)
+  drawBarrelNiche(ctx, 19, 19)
+  drawBarrelNiche(ctx, 26, 14)
+  drawBarrelNiche(ctx, 29, 6)
 
   // 8. 火把支架（火焰在动态层）、灯与旧旗
   for (const t of TORCHES_BY_ORDER[1]) {
     const mode =
-      t.y + 1 < ROWS && grid[t.y + 1][t.x] !== 'wall' ? 'bracket' : 'brazier'
+      t.y + 1 < rows && grid[t.y + 1][t.x] !== 'wall' ? 'bracket' : 'brazier'
     drawTorch(ctx, t.x, t.y, mode)
   }
   for (const l of LAMPS_BY_ORDER[1]) drawLamp(ctx, l.x, l.y)
-  drawFlag(ctx, 5, 11)
-  drawFlag(ctx, 23, 4)
+  drawFlag(ctx, 2, 15)
+  drawFlag(ctx, 23, 14)
 
   // 9. 地图暗角（中心通透到边缘 0.55）
   drawVignette(ctx)
@@ -2511,7 +2924,7 @@ function drawWarmLight(ctx, now, torches, lamps, door, still = false) {
     glow(lx, ly + 16, 28, 0.045, '255, 216, 124')
   }
   if (door && door.open > 0.01) {
-    glow(3.5 * CELL, 17 * CELL - 3, 52, 0.11 * door.open, '255, 194, 112')
+    glow(15.5 * CELL, 23 * CELL - 3, 52, 0.11 * door.open, '255, 194, 112')
   }
   ctx.restore()
 }
@@ -2665,31 +3078,6 @@ function drawAwningText(ctx, text, cx, cy, color) {
   ctx.restore()
 }
 
-// 中央岛：一整片带条纹顶棚的集市棚屋
-function drawMarketPavilion(ctx) {
-  const x = 7 * 8
-  const y = 7 * 8
-  const w = 10 * 8
-  const h = 5 * 8
-  rect(ctx, x + 1, y + 1, w - 2, h - 2, '#2a2117')
-  for (let i = 0; i < 10; i++) {
-    const col = i % 2 === 0 ? '#d8c49a' : '#8c4436'
-    rect(ctx, x + 2 + i * 8, y + 2, 7, h - 5, col)
-  }
-  rect(ctx, x + 1, y + h - 4, w - 2, 2, '#1a1410')
-  rect(ctx, x + 1, y + 1, w - 2, 1, '#5f452e')
-  // 四角立柱
-  for (const px of [x + 1, x + w - 3]) {
-    rect(ctx, px, y + 2, 2, h - 6, '#4e3826')
-    rect(ctx, px, y + 2, 2, 1, '#c9a24b')
-  }
-  // 摊位零碎：木箱与陶罐
-  rect(ctx, x + 4, y + h - 9, 4, 5, '#3a2718')
-  rect(ctx, x + 5, y + h - 10, 2, 1, '#8a5f38')
-  rect(ctx, x + w - 7, y + h - 9, 4, 5, '#3a2718')
-  rect(ctx, x + w - 6, y + h - 10, 2, 1, '#8a5f38')
-}
-
 function drawMarketDoorCross(ctx, tx, ty) {
   const x = tx * 8
   const y = ty * 8
@@ -2711,7 +3099,7 @@ function drawMarketJunctionMark(ctx, tx, ty) {
 }
 
 function drawMarketCarpet(ctx) {
-  const x = 11 * 8
+  const x = 14 * 8
   const y = 2 * 8
   const w = 5 * 8
   const h = 2 * 8
@@ -2729,56 +3117,58 @@ function drawMarketCarpet(ctx) {
 
 function makeMarketBase() {
   const c = document.createElement('canvas')
-  c.width = COLS * CELL
-  c.height = ROWS * CELL
-  const ctx = c.getContext('2d')
   const grid = buildGrid3()
+  const cols = grid[0].length
+  const rows = grid.length
+  c.width = cols * CELL
+  c.height = rows * CELL
+  const ctx = c.getContext('2d')
 
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
       if (grid[y][x] !== 'wall') drawFloorTile(ctx, grid, x, y, grid[y][x])
     }
   }
 
-  // 地面：欢迎垫 / 挑战房地毯 / 罗盘岔口
+  // 地面：欢迎垫 / 北厅地毯 / 罗盘岔口
   drawWelcomeMat(ctx, MARKET.spawn.x, MARKET.spawn.y)
   drawMarketCarpet(ctx)
   for (const j of MARKET.junctions) drawMarketJunctionMark(ctx, j.x, j.y)
 
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
       if (grid[y][x] === 'wall') drawWallTile(ctx, grid, x, y)
     }
   }
 
-  // 中央岛棚顶与两侧铺面雨棚
-  drawMarketPavilion(ctx)
-  drawMarketAwning(ctx, 1, 4, 6, '#4d7a55', '#d8c49a')
-  drawMarketAwning(ctx, 19, 22, 6, '#a34a3a', '#d8c49a')
+  // 两铺门脸雨棚：只落在实墙段，避开巷口与门洞（旧中央棚顶已随新地形收掉）
+  drawMarketAwning(ctx, 2, 3, 6, '#4d7a55', '#d8c49a')
+  drawMarketAwning(ctx, 23, 26, 7, '#a34a3a', '#d8c49a')
+  drawMarketAwning(ctx, 28, 29, 7, '#a34a3a', '#d8c49a')
 
-  // 门洞小铜十字：铺面、广场、挑战房
+  // 门洞小铜十字：铺面、广场、北厅
   for (const group of Object.values(MARKET.doors)) {
     for (const d of group) drawMarketDoorCross(ctx, d.x, d.y)
   }
 
+  // 北厅是账房：守卫只当陈设，徽章展示台随挑战房旧名一起收掉
   drawGuardPedestal(ctx, MARKET.skeleton.x, MARKET.skeleton.y)
-  drawBadgeStand(ctx, MARKET.stand.x, MARKET.stand.y)
 
-  // 靠墙陈设：两口铺子的货桶与木箱
-  drawBarrelNiche(ctx, 0, 9)
-  drawCrateNiche(ctx, 0, 10)
-  drawBarrelNiche(ctx, 23, 9)
-  drawCrateNiche(ctx, 23, 10)
+  // 靠墙陈设：两铺外墙的货桶与木箱
+  drawBarrelNiche(ctx, 1, 9)
+  drawCrateNiche(ctx, 1, 10)
+  drawBarrelNiche(ctx, 30, 10)
+  drawCrateNiche(ctx, 30, 11)
   // 西铺墙沿两捆草料、东铺彩釉罐：都收进墙龛，地面布置格保持空闲
-  drawHayBaleNiche(ctx, 0, 7)
-  drawHayBaleNiche(ctx, 0, 11)
-  drawGlazeJarNiche(ctx, 23, 7)
-  drawGlazeJarNiche(ctx, 23, 11)
+  drawHayBaleNiche(ctx, 1, 7)
+  drawHayBaleNiche(ctx, 1, 12)
+  drawGlazeJarNiche(ctx, 30, 8)
+  drawGlazeJarNiche(ctx, 30, 13)
 
   for (const l of LAMPS_BY_ORDER[3]) drawLamp(ctx, l.x, l.y)
   for (const t of TORCHES_BY_ORDER[3]) {
     const mode =
-      t.y + 1 < ROWS && grid[t.y + 1][t.x] !== 'wall' ? 'bracket' : 'brazier'
+      t.y + 1 < rows && grid[t.y + 1][t.x] !== 'wall' ? 'bracket' : 'brazier'
     drawTorch(ctx, t.x, t.y, mode)
   }
 
@@ -2786,11 +3176,11 @@ function makeMarketBase() {
 
   // 店名与区域牌
   drawAwningText(ctx, '西铺 · 草料', 3.0, 6.5, '#e8dcc0')
-  drawAwningText(ctx, '东铺 · 陶器', 21.0, 6.5, '#f0d9a5')
-  drawAwningText(ctx, '回声集市', 12.0, 9.5, '#f4e6c4')
+  drawAwningText(ctx, '东铺 · 陶器', 25.0, 7.5, '#f0d9a5')
+  drawAwningText(ctx, '回声集市', 15.5, 9.3, '#f4e6c4')
   drawWallLabels(ctx, [
-    { text: '入口', x: 11.5, y: 17.4 },
-    { text: '挑战房', x: 13.0, y: 1.15 },
+    { text: '入口', x: 15.5, y: 23.1 },
+    { text: '账房', x: 15.5, y: 0.65 },
   ])
 
   return c
@@ -2813,14 +3203,16 @@ function drawWaterTile(ctx, grid, x, y) {
 // 少量亮青水纹和岸边白沫走动态层：450ms 一轮，坐标仍按 32px 格对齐
 const TIDE_WATER_FX_CELLS = (() => {
   const grid = buildGrid4()
+  const rows = grid.length
+  const cols = grid[0].length
   const cells = []
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
       const z = grid[y][x]
       if (z !== 'water') continue
       const shore = []
       const floorAt = (xx, yy) =>
-        yy >= 0 && yy < ROWS && xx >= 0 && xx < COLS && grid[yy][xx] !== 'water' && grid[yy][xx] !== 'bridgeSlot'
+        yy >= 0 && yy < rows && xx >= 0 && xx < cols && grid[yy][xx] !== 'water' && grid[yy][xx] !== 'bridgeSlot'
       if (floorAt(x, y - 1)) shore.push('n')
       if (floorAt(x, y + 1)) shore.push('s')
       if (floorAt(x - 1, y)) shore.push('w')
@@ -2892,13 +3284,13 @@ function drawWaterGauge(ctx, tx, ty) {
   rect(ctx, x + 6, y + 2, 1, 1, '#a34a3a')
 }
 
-// 水尺读数灯：只有客人真的走到水尺、日志记下 gauge 后才亮
-export function drawGaugeLight(ctx, on, now, still = false) {
-  if (!on) return
-  const x = TIDE.gauge.x * 8
-  const y = TIDE.gauge.y * 8
-  const px = (TIDE.gauge.x + 0.5) * CELL
-  const py = (TIDE.gauge.y + 0.36) * CELL
+// 水尺读数灯：只有客人真的走到那一岸的水尺、日志记下 gauge 后才亮
+export function drawGaugeLight(ctx, gauge, now, still = false) {
+  if (!gauge) return
+  const x = gauge.x * 8
+  const y = gauge.y * 8
+  const px = (gauge.x + 0.5) * CELL
+  const py = (gauge.y + 0.36) * CELL
   const pulse = still ? 1 : 0.84 + 0.16 * Math.sin(now / 260)
   ctx.save()
   ctx.globalCompositeOperation = 'lighter'
@@ -2917,13 +3309,15 @@ export function drawGaugeLight(ctx, on, now, still = false) {
 
 function makeTideBase() {
   const c = document.createElement('canvas')
-  c.width = COLS * CELL
-  c.height = ROWS * CELL
-  const ctx = c.getContext('2d')
   const grid = buildGrid4()
+  const cols = grid[0].length
+  const rows = grid.length
+  c.width = cols * CELL
+  c.height = rows * CELL
+  const ctx = c.getContext('2d')
 
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
       const z = grid[y][x]
       if (z === 'wall') continue
       if (z === 'water' || z === 'bridgeSlot') drawWaterTile(ctx, grid, x, y)
@@ -2931,36 +3325,38 @@ function makeTideBase() {
     }
   }
 
+  // 出入口同一格：欢迎垫就是返回点；两把水尺各立一杆
   drawWelcomeMat(ctx, TIDE.spawn.x, TIDE.spawn.y)
   for (const span of TIDE.spans) drawBridgeSite(ctx, span)
-  drawWaterGauge(ctx, TIDE.gauge.x, TIDE.gauge.y)
+  drawWaterGauge(ctx, TIDE.gauges.west.x, TIDE.gauges.west.y)
+  drawWaterGauge(ctx, TIDE.gauges.east.x, TIDE.gauges.east.y)
 
-  drawCarpetBase(ctx, 19 * 8, 4 * 8, 4 * 8, 3 * 8)
-  drawDemonCrest(ctx, 21 * 8, 5 * 8 + 8)
-  drawGuardPedestal(ctx, TIDE.skeleton.x, TIDE.skeleton.y)
-
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
       if (grid[y][x] === 'wall') drawWallTile(ctx, grid, x, y)
     }
   }
 
-  drawBadgeStand(ctx, TIDE.stand.x, TIDE.stand.y)
   for (const l of LAMPS_BY_ORDER[4]) drawLamp(ctx, l.x, l.y)
   for (const t of TORCHES_BY_ORDER[4]) {
     const mode =
-      t.y + 1 < ROWS && grid[t.y + 1][t.x] !== 'wall' ? 'bracket' : 'brazier'
+      t.y + 1 < rows && grid[t.y + 1][t.x] !== 'wall' ? 'bracket' : 'brazier'
     drawTorch(ctx, t.x, t.y, mode)
   }
 
   drawVignette(ctx)
   drawOuterGlow(ctx, '82, 156, 196', 0.12)
   drawWallLabels(ctx, [
-    { text: '潮汐蓄水厅', x: 12, y: 1.6 },
-    { text: '西岸', x: 4.5, y: 12.4 },
-    { text: '东岸', x: 18.5, y: 12.4 },
-    { text: '挑战房', x: 21.5, y: 3.4 },
+    { text: '潮汐蓄水厅', x: 15.5, y: 1.6 },
+    { text: '入口 · 返回点', x: 6, y: 23.1 },
   ])
+  drawAwningText(ctx, '西岸', 4.5, 3.2, '#d8e8d0')
+  drawAwningText(ctx, '东岸', 26.5, 3.2, '#f0d9a5')
+  drawAwningText(ctx, '西岸水尺', 4, 12.4, '#c9e8e4')
+  drawAwningText(ctx, '东岸水尺', 27.5, 7.4, '#c9e8e4')
+  drawAwningText(ctx, '北桥', 15.5, 6.2, '#e8dcc0')
+  drawAwningText(ctx, '中桥', 15.5, 12.2, '#e8dcc0')
+  drawAwningText(ctx, '南干堤', 22, 21.5, '#e8dcc0')
   return c
 }
 
@@ -3016,65 +3412,72 @@ function drawLibraryShelf(ctx, tx, ty) {
   }
 }
 
+function drawArchiveExitBase(ctx, e, side) {
+  const x = e.x * 8
+  const y = e.y * 8
+  const col = side === 'west' ? '#6b2f2b' : '#7a5a1e'
+  const hi = side === 'west' ? '#c96a52' : '#c9a24b'
+  rect(ctx, x + 1, y + 1, 6, 6, '#241c14')
+  rect(ctx, x + 1, y + 1, 6, 1, col)
+  rect(ctx, x + 1, y + 6, 6, 1, col)
+  rect(ctx, x + 1, y + 1, 1, 6, col)
+  rect(ctx, x + 6, y + 1, 1, 6, col)
+  rect(ctx, x + 3, y + 3, 2, 2, hi)
+}
+
 function makeArchiveBase() {
   const c = document.createElement('canvas')
-  c.width = COLS * CELL
-  c.height = ROWS * CELL
-  const ctx = c.getContext('2d')
   const grid = buildGrid5()
+  const cols = grid[0].length
+  const rows = grid.length
+  c.width = cols * CELL
+  c.height = rows * CELL
+  const ctx = c.getContext('2d')
 
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
       if (grid[y][x] !== 'wall') drawFloorTile(ctx, grid, x, y, grid[y][x])
     }
   }
 
   drawWelcomeMat(ctx, ARCHIVE.spawn.x, ARCHIVE.spawn.y)
-
-  drawCarpetBase(ctx, 6 * 8, 8 * 8, 4 * 8, 2 * 8)
-  drawCarpetBase(ctx, 13 * 8, 8 * 8, 4 * 8, 2 * 8)
-  drawDemonCrest(ctx, 8 * 8, 9 * 8)
-  drawDemonCrest(ctx, 15 * 8, 9 * 8)
+  drawArchiveExitBase(ctx, ARCHIVE.exits.west, 'west')
+  drawArchiveExitBase(ctx, ARCHIVE.exits.east, 'east')
   drawArchiveChannelBase(ctx)
 
   for (const d of ARCHIVE.doors) drawArchiveDoorFrame(ctx, d)
   for (const p of ARCHIVE.plates) drawArchivePlate(ctx, p, p.door)
   for (const a of ARCHIVE.archives) drawArchivePedestal(ctx, a)
 
-  drawCarpetBase(ctx, 19 * 8, 4 * 8, 4 * 8, 3 * 8)
-  drawDemonCrest(ctx, 21 * 8, 5 * 8 + 8)
-  drawGuardPedestal(ctx, ARCHIVE.skeleton.x, ARCHIVE.skeleton.y)
-
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
       if (grid[y][x] === 'wall') drawWallTile(ctx, grid, x, y)
     }
   }
 
-  drawBadgeStand(ctx, ARCHIVE.stand.x, ARCHIVE.stand.y)
   drawLibraryShelf(ctx, 3, 4)
-  drawLibraryShelf(ctx, 5, 7)
-  drawLibraryShelf(ctx, 9, 3)
-  drawLibraryShelf(ctx, 18, 3)
-  drawLibraryShelf(ctx, 4, 12)
-  drawLibraryShelf(ctx, 20, 12)
+  drawLibraryShelf(ctx, 9, 4)
+  drawLibraryShelf(ctx, 23, 4)
+  drawLibraryShelf(ctx, 28, 4)
 
   for (const l of LAMPS_BY_ORDER[5]) drawLamp(ctx, l.x, l.y)
   for (const t of TORCHES_BY_ORDER[5]) {
     const mode =
-      t.y + 1 < ROWS && grid[t.y + 1][t.x] !== 'wall' ? 'bracket' : 'brazier'
+      t.y + 1 < rows && grid[t.y + 1][t.x] !== 'wall' ? 'bracket' : 'brazier'
     drawTorch(ctx, t.x, t.y, mode)
   }
 
   drawVignette(ctx)
   drawWallLabels(ctx, [
-    { text: '双锁档案库', x: 12, y: 1.6 },
-    { text: '挑战房', x: 21.5, y: 3.3 },
+    { text: '双锁档案库', x: 15.5, y: 1.6 },
+    { text: '入口', x: 15.5, y: 23.1 },
   ])
-  drawAwningText(ctx, '西档案间', 7, 6.7, '#e8dcc0')
-  drawAwningText(ctx, '东档案间', 16, 11.5, '#f0d9a5')
-  drawAwningText(ctx, '红门', 8, 6.3, '#c96a52')
-  drawAwningText(ctx, '黄门', 15, 9.5, '#e8c97a')
+  drawAwningText(ctx, '西档案间', 5, 5.6, '#e8dcc0')
+  drawAwningText(ctx, '东档案间', 26.5, 6.6, '#f0d9a5')
+  drawAwningText(ctx, '红门', 7, 10.4, '#c96a52')
+  drawAwningText(ctx, '黄门', 25, 10.4, '#e8c97a')
+  drawAwningText(ctx, '西出口', 4, 21.5, '#e8b0a0')
+  drawAwningText(ctx, '东出口', 27, 21.5, '#ffe4a8')
   return c
 }
 
@@ -3138,8 +3541,10 @@ const ARCHIVE_CHANNEL_CACHE = new Map()
 function archiveChannelPath(door) {
   if (ARCHIVE_CHANNEL_CACHE.has(door.id)) return ARCHIVE_CHANNEL_CACHE.get(door.id)
   const grid = buildGrid5()
+  const rows = grid.length
+  const cols = grid[0].length
   const canWalk = (x, y) =>
-    y >= 0 && y < ROWS && x >= 0 && x < COLS && grid[y][x] !== 'wall'
+    y >= 0 && y < rows && x >= 0 && x < cols && grid[y][x] !== 'wall'
   const path = bfsWalkable(door.plate, { x: door.x, y: door.y }, canWalk)
   ARCHIVE_CHANNEL_CACHE.set(door.id, path)
   return path
@@ -3286,70 +3691,187 @@ export function drawArchiveBooks(ctx, taken) {
   }
 }
 
-// ===== 正篇第四图：钟摆工坊底图 =====
+// 选中的交档出口：呼吸描边，颜色跟按钮一致（西红 / 东黄）
+export function drawArchiveExitGlow(ctx, exit, now, still = false) {
+  if (!exit) return
+  const color = exit.side === 'west' ? '#ff9a7a' : '#ffe39a'
+  const alpha = still ? 0.7 : 0.55 + 0.2 * Math.sin(now / 300)
+  const x = exit.x * 8
+  const y = exit.y * 8
+  ctx.save()
+  ctx.globalAlpha = alpha
+  ctx.shadowColor = color
+  ctx.shadowBlur = 5
+  rect(ctx, x, y, 8, 1, color)
+  rect(ctx, x, y + 7, 8, 1, color)
+  rect(ctx, x, y + 1, 1, 6, color)
+  rect(ctx, x + 7, y + 1, 1, 6, color)
+  ctx.restore()
+}
+
+// ===== 钟摆工坊 =====
 function drawPendulumFrame(ctx, p) {
-  const x = p.x * 8
-  const y = p.y * 8
-  rect(ctx, x + 1, y + 1, 6, 1, '#3d3730')
-  rect(ctx, x + 2, y + 1, 1, 2, '#94b0c2')
-  rect(ctx, x + 5, y + 1, 1, 2, '#94b0c2')
-  rect(ctx, x + 1, y + 6, 6, 1, '#241f19')
-  rect(ctx, x + 2, y + 5, 4, 1, '#8a6a2b')
+  // 轴承在真实悬点；不再把整格画成横挡住走廊的架子。
+  const x = (p.x + 0.5) * CELL
+  const y = (p.y - PENDULUM_MOTION.length + 0.5) * CELL
+  ctx.fillStyle = '#182630'
+  ctx.fillRect(x - 8, y - 4, 16, 8)
+  ctx.fillStyle = '#637784'
+  ctx.fillRect(x - 7, y - 3, 3, 3)
+  ctx.fillRect(x + 4, y - 3, 3, 3)
 }
 
 function drawWorkshopPartBase(ctx, part) {
   const x = part.x * 8
   const y = part.y * 8
-  rect(ctx, x + 2, y + 5, 5, 2, '#2a2117')
-  rect(ctx, x + 2, y + 5, 5, 1, '#8a6a2b')
+  // 单格齐平插座，亮件和空座共用；不越界挤占邻格。
+  rect(ctx, x + 0.5, y + 0.5, 7, 7, '#12212b')
+  rect(ctx, x + 1, y + 1, 6, 6, '#344956')
+  for (const dx of [0.5, 6.5]) {
+    rect(ctx, x + dx, y + 0.5, 1, 1, '#d3a45e')
+    rect(ctx, x + dx, y + 6.5, 1, 1, '#d3a45e')
+  }
+}
+
+// 工坊墙牌按整图缩至 390px 后的字号绘制，替换原有细小散字。
+function drawWorkshopLabel(ctx, text, x, y, color, size = 32) {
+  ctx.save()
+  ctx.font = `${size}px "Fusion Pixel 12px", "Courier New", monospace`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  const w = Math.ceil((ctx.measureText(text).width + 24) / 4) * 4
+  const h = size + 12
+  const cx = Math.round(x * CELL)
+  const cy = Math.round(y * CELL)
+  ctx.fillStyle = '#101e29'
+  ctx.fillRect(cx - w / 2, cy - h / 2, w, h)
+  ctx.fillStyle = '#384b58'
+  ctx.fillRect(cx - w / 2, cy - h / 2, w, 2)
+  ctx.fillStyle = color
+  ctx.fillRect(cx - w / 2, cy - h / 2 + 4, 3, h - 8)
+  ctx.fillText(text, cx, cy + 1)
+  ctx.restore()
+}
+
+// 未铺就是完整黑断口；只有两端铜接口，不画横贯空隙的木条。
+function drawPlankSite(ctx, span) {
+  const y = span.y * 8
+  const x1 = span.x1 * 8
+  const x2 = (span.x2 + 1) * 8
+  rect(ctx, x1, y, x2 - x1, 8, '#070e16')
+  rect(ctx, x1, y, x2 - x1, 1, '#03070d')
+  rect(ctx, x1, y + 7.5, x2 - x1, 0.5, '#1b2b38')
+  for (const x of [x1, x2 - 1]) {
+    rect(ctx, x, y + 1, 1, 6, '#997344')
+    rect(ctx, x, y + 1, 1, 1, '#edbf77')
+    rect(ctx, x, y + 6, 1, 1, '#edbf77')
+  }
+}
+
+// 铺板覆盖真实三格跨度；墙上状态随实际 planks 更新，空数组也显示未铺。
+export function drawWorkshopPlanks(ctx, planks) {
+  const ys = new Set((planks || []).map((b) => b.y))
+  for (const [i, span] of PENDULUM.spans.entries()) {
+    const ready = ys.has(span.y)
+    const y = span.y * 8
+    const x1 = span.x1 * 8
+    const x2 = (span.x2 + 1) * 8
+    if (ready) {
+      rect(ctx, x1, y, x2 - x1, 8, '#b0864d')
+      rect(ctx, x1, y + 1, x2 - x1, 6, '#806344')
+      for (let x = x1 + 1; x < x2; x += 3) {
+        rect(ctx, x, y + 1, 0.5, 6, '#493f34')
+        rect(ctx, x + 0.5, y + 1, 2, 0.5, '#bc9662')
+      }
+      rect(ctx, x1, y, x2 - x1, 0.5, '#efc782')
+      rect(ctx, x1, y + 7.5, x2 - x1, 0.5, '#dab370')
+      for (const x of [x1, x2 - 1]) {
+        rect(ctx, x, y + 1, 1, 6, '#284c50')
+        rect(ctx, x, y + 2, 1, 4, '#8ce9cc')
+        rect(ctx, x, y + 2, 0.5, 2, '#ddffec')
+      }
+    }
+    drawWorkshopLabel(
+      ctx,
+      `${i === 0 ? '上' : '下'} ${ready ? '已通' : '未铺'}`,
+      (span.x1 + span.x2 + 1) / 2,
+      span.y - 1.75,
+      ready ? '#a6f3d8' : '#f1c786',
+    )
+  }
+}
+
+function drawWorkshopEntry(ctx) {
+  const x = PENDULUM.spawn.x * 8
+  const y = PENDULUM.spawn.y * 8
+  // 仍是原出生格上的齐平交件垫；四边留出地砖，不封任何相邻路。
+  rect(ctx, x + 0.5, y + 0.5, 7, 7, '#142f38')
+  rect(ctx, x + 1, y + 1, 6, 6, '#28615e')
+  rect(ctx, x + 0.5, y + 0.5, 7, 0.5, '#b9fbe1')
+  rect(ctx, x + 0.5, y + 7, 7, 0.5, '#87ddc6')
+  rect(ctx, x + 0.5, y + 1, 0.5, 6, '#87ddc6')
+  rect(ctx, x + 7, y + 1, 0.5, 6, '#87ddc6')
+  rect(ctx, x + 2, y + 3, 4, 1, '#b9fbe1')
+  rect(ctx, x + 3, y + 2, 2, 3, '#b9fbe1')
+  rect(ctx, x + 3, y + 3, 2, 1, '#28615e')
+  // 返程门框刻在南侧实墙，不把门框立在通道里。
+  const wallY = (PENDULUM.exit.y + 2) * 8
+  rect(ctx, x - 1, wallY, 10, 0.5, '#63b9ab')
+  rect(ctx, x - 1, wallY, 0.5, 1.5, '#63b9ab')
+  rect(ctx, x + 8.5, wallY, 0.5, 1.5, '#63b9ab')
+  rect(ctx, x + 3, wallY, 2, 0.5, '#d7fff0')
 }
 
 function makeWorkshopBase() {
   const c = document.createElement('canvas')
-  c.width = COLS * CELL
-  c.height = ROWS * CELL
-  const ctx = c.getContext('2d')
   const grid = buildGrid6()
+  const cols = grid[0].length
+  const rows = grid.length
+  c.width = cols * CELL
+  c.height = rows * CELL
+  const ctx = c.getContext('2d')
 
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      if (grid[y][x] !== 'wall') drawFloorTile(ctx, grid, x, y, grid[y][x])
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const z = grid[y][x]
+      if (z === 'wall' || z === 'plankSlot') continue
+      drawFloorTile(ctx, grid, x, y, z)
     }
   }
 
-  drawWelcomeMat(ctx, PENDULUM.spawn.x, PENDULUM.spawn.y)
+  for (const span of PENDULUM.spans) drawPlankSite(ctx, span)
   for (const p of PENDULUM.pendulums) drawPendulumFrame(ctx, p)
   for (const p of PENDULUM.parts) drawWorkshopPartBase(ctx, p)
 
-  // 中央检修换道平台
-  rect(ctx, 10 * 8, 11 * 8, 4 * 8, 1, '#3d3730')
-  rect(ctx, 10 * 8 + 2, 11 * 8, 3 * 8, 1, '#8a6a2b')
-
-  drawCarpetBase(ctx, 19 * 8, 6 * 8, 4 * 8, 3 * 8)
-  drawDemonCrest(ctx, 21 * 8, 7 * 8 + 8)
-  drawGuardPedestal(ctx, PENDULUM.skeleton.x, PENDULUM.skeleton.y)
-
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      if (grid[y][x] === 'wall') drawWallTile(ctx, grid, x, y)
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      if (grid[y][x] !== 'wall') continue
+      drawWallTile(ctx, grid, x, y)
+      // 独立钢蓝罩色，仅压暗原墙格；共有墙色、其他订单不变。
+      alphaRect(ctx, x * 8, y * 8, 8, 8, '#071725', 0.68)
+      if (y + 1 < rows && grid[y + 1][x] !== 'wall') {
+        rect(ctx, x * 8, y * 8 + 7.5, 8, 0.5, '#2f4351')
+      }
     }
   }
 
-  drawBadgeStand(ctx, PENDULUM.stand.x, PENDULUM.stand.y)
+  // 铜管退到北面实墙，只有接头有一点亮度，不形成假通路。
+  rect(ctx, 9 * 8, 3 * 8 + 2, 13 * 8, 1, '#473e33')
+  rect(ctx, 9 * 8, 3 * 8 + 2, 13 * 8, 0.25, '#6a5740')
+  for (const x of [9, 12, 21]) {
+    rect(ctx, x * 8, 3 * 8 + 1.5, 1, 2, '#735a3e')
+  }
   for (const l of LAMPS_BY_ORDER[6]) drawLamp(ctx, l.x, l.y)
   for (const t of TORCHES_BY_ORDER[6]) {
     const mode =
-      t.y + 1 < ROWS && grid[t.y + 1][t.x] !== 'wall' ? 'bracket' : 'brazier'
+      t.y + 1 < rows && grid[t.y + 1][t.x] !== 'wall' ? 'bracket' : 'brazier'
     drawTorch(ctx, t.x, t.y, mode)
   }
 
   drawVignette(ctx)
-  drawWallLabels(ctx, [
-    { text: '钟摆工坊', x: 12, y: 2.4 },
-    { text: '上层钟摆', x: 9.5, y: 4.6 },
-    { text: '南道', x: 7.5, y: 13.4 },
-    { text: '挑战房', x: 21.5, y: 5.4 },
-  ])
+  drawWorkshopEntry(ctx)
+  drawWorkshopLabel(ctx, '钟摆工坊', 16.5, 1.55, '#b8ccd5', 36)
+  drawWorkshopLabel(ctx, '入口 · 交件', 6.5, 22.85, '#b9fbe1')
   return c
 }
 
@@ -3517,24 +4039,119 @@ function makeNightBase() {
   return c
 }
 
-// 工坊动态：钟摆、零件
+// 工坊动态：两件各占原目标格，A/B 铭牌只在东侧实墙上。
 export function drawWorkshopParts(ctx, taken) {
   for (const p of PENDULUM.parts) {
     const x = p.x * 8
     const y = p.y * 8
-    if (taken && taken.has(p.id)) continue
-    rect(ctx, x + 3, y + 3, 3, 2, '#c9a24b')
-    rect(ctx, x + 2, y + 4, 5, 1, '#8a6a2b')
-    rect(ctx, x + 3, y + 2, 1, 1, '#ffcd75')
-    rect(ctx, x + 4, y + 5, 1, 1, '#566c86')
+    const top = p.id === 'top'
+    const collected = !!(taken && taken.has(p.id))
+    drawWorkshopPartBase(ctx, p)
+    if (collected) {
+      rect(ctx, x + 1.5, y + 1.5, 5, 5, '#1c303c')
+      // 空插座里留像素勾，不再保留实体零件。
+      rect(ctx, x + 2, y + 3.5, 1, 1, '#b2efd9')
+      rect(ctx, x + 3, y + 4.5, 1, 1, '#b2efd9')
+      rect(ctx, x + 4, y + 3.5, 1, 1, '#b2efd9')
+      rect(ctx, x + 5, y + 2.5, 1, 1, '#b2efd9')
+    } else if (top) {
+      // 七单位齿轮：四向齿、明亮黄铜轮缘和镂空轴心。
+      const gear = [
+        '..HHH..',
+        '.GGGGG.',
+        'HGoooGH',
+        'HGoHoGH',
+        'HGoooGH',
+        '.GGGGG.',
+        '..HHH..',
+      ]
+      const colors = { H: '#fff0a4', G: '#e9b956', o: '#4e4939' }
+      for (let gy = 0; gy < gear.length; gy++) {
+        for (let gx = 0; gx < gear[gy].length; gx++) {
+          const color = colors[gear[gy][gx]]
+          if (color) rect(ctx, x + 0.5 + gx, y + 0.5 + gy, 1, 1, color)
+        }
+      }
+    } else {
+      // 机芯：方铜壳、偏心小齿与竖向发条，与上件轮廓不同。
+      rect(ctx, x + 0.5, y + 0.5, 7, 7, '#edc269')
+      rect(ctx, x + 1, y + 1, 6, 0.5, '#fff0ac')
+      rect(ctx, x + 1, y + 1.5, 6, 5.5, '#967047')
+      rect(ctx, x + 1.5, y + 2.5, 3, 3, '#ffdf85')
+      rect(ctx, x + 2.5, y + 1.5, 1, 5, '#ffdf85')
+      rect(ctx, x + 1, y + 3.5, 4, 1, '#ffdf85')
+      rect(ctx, x + 2.5, y + 3.5, 1, 1, '#36434a')
+      rect(ctx, x + 5, y + 2, 1.5, 4, '#3c4140')
+      for (let gy = 2; gy <= 5; gy++) {
+        rect(ctx, x + 5, y + gy, 1.5, 0.5, '#fff0ac')
+      }
+    }
+
+    ctx.save()
+    const left = 30 * CELL + 4
+    const cy = (p.y + 0.5) * CELL
+    const color = collected ? '#abefd6' : '#ffe49a'
+    ctx.fillStyle = '#111f29'
+    ctx.fillRect(left, cy - 26, 120, 52)
+    // 切角编号章比细小悬浮文字更容易对应上、下两件。
+    ctx.fillStyle = color
+    ctx.beginPath()
+    ctx.moveTo(left + 10, cy - 20)
+    ctx.lineTo(left + 38, cy - 20)
+    ctx.lineTo(left + 46, cy - 12)
+    ctx.lineTo(left + 46, cy + 20)
+    ctx.lineTo(left + 10, cy + 20)
+    ctx.lineTo(left + 4, cy + 14)
+    ctx.lineTo(left + 4, cy - 14)
+    ctx.closePath()
+    ctx.fill()
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.font = '32px "Fusion Pixel 12px", "Courier New", monospace'
+    ctx.fillStyle = '#192933'
+    ctx.fillText(top ? 'A' : 'B', left + 25, cy + 1)
+    ctx.font = '30px "Fusion Pixel 12px", "Courier New", monospace'
+    ctx.fillStyle = color
+    ctx.fillText(collected ? '已取' : top ? '齿轮' : '机芯', left + 84, cy + 1)
+    ctx.restore()
   }
 }
 
-const PENDULUM_ANGLE_CACHE = new Map()
-
-// 给主循环取「屏幕上最后画出的摆角」，止摆时不再用下一帧的新时间重算
-export function lastPendulumAngle(id) {
-  return PENDULUM_ANGLE_CACHE.has(id) ? PENDULUM_ANGLE_CACHE.get(id) : null
+// 链条不参与碰撞，扫域只覆盖摆砣圆盘经过的范围。
+function drawWorkshopHazards(ctx, data) {
+  if (!data) return
+  const len = PENDULUM_MOTION.length * CELL
+  const radius = PENDULUM_MOTION.bobRadius * CELL
+  const maxAngle = PENDULUM_MOTION.maxAngle
+  ctx.save()
+  ctx.lineCap = 'round'
+  for (const pose of data.poses) {
+    const px = (pose.pivot.x + 0.5) * CELL
+    const py = (pose.pivot.y + 0.5) * CELL
+    ctx.globalAlpha = pose.stopped ? 0.12 : 0.23
+    ctx.strokeStyle = '#c3a16d'
+    ctx.lineWidth = radius * 2
+    ctx.beginPath()
+    ctx.arc(px, py, len, Math.PI / 2 - maxAngle, Math.PI / 2 + maxAngle)
+    ctx.stroke()
+    ctx.globalAlpha = 0.42
+    ctx.fillStyle = '#d4b480'
+    for (let k = 0; k <= 12; k++) {
+      const a = maxAngle * (-1 + (2 * k) / 12)
+      const x = px + Math.sin(a) * len
+      const y = py + Math.cos(a) * len
+      ctx.fillRect(Math.round(x) - 1, Math.round(y) - 1, 2, 2)
+    }
+  }
+  ctx.restore()
+  drawWorkshopLabel(
+    ctx,
+    data.poses.some((pose) => pose.stopped) ? '停住仍危险 · 链可穿' : '摆砣危险 · 链可穿',
+    16,
+    12.8,
+    '#e1b77d',
+    30,
+  )
 }
 
 function drawPixelChain(ctx, ax, ay, bx, by) {
@@ -3552,39 +4169,17 @@ function drawPixelChain(ctx, ax, ay, bx, by) {
   }
 }
 
-export function drawPendulums(ctx, data, now, still = false) {
+export function drawPendulums(ctx, data, still = false) {
   if (!data) return
-  for (let i = 0; i < data.list.length; i++) {
-    const p = data.list[i]
-    const px = (p.x + 0.5) * CELL
-    const py = p.y * CELL + 6
-    const rawStop =
-      data.stopped && data.stopped.get
-        ? data.stopped.get(p.id)
-        : data.stopped && data.stopped.has && data.stopped.has(p.id)
-          ? { angle: 0, start: -Infinity }
-          : null
-    const stopped = !!rawStop
-    const angle = stopped ? rawStop.angle || 0 : still ? 0 : Math.sin(now / 420 + i * 2.1) * 0.82
-    if (!stopped) PENDULUM_ANGLE_CACHE.set(p.id, angle)
-    const len = 18
-    const bx = px + Math.sin(angle) * len
-    const by = py + Math.cos(angle) * len
-    const warn = data.activeId === p.id && data.warning && !stopped
+  for (const pose of data.poses) {
+    const px = (pose.pivot.x + 0.5) * CELL
+    const py = (pose.pivot.y + 0.5) * CELL
+    const bx = (pose.bob.x + 0.5) * CELL
+    const by = (pose.bob.y + 0.5) * CELL
+    const radius = PENDULUM_MOTION.bobRadius * CELL
+    const stopped = pose.stopped
 
-    // 地面扫痕：摆锤长期扫过的暗槽与磨亮的小刻点
-    ctx.save()
-    ctx.globalAlpha = 0.55
-    for (let k = 0; k < 9; k++) {
-      const a = -0.82 + (1.64 * k) / 8
-      const sx = Math.round(px + Math.sin(a) * (len + 3))
-      const sy = Math.round(py + Math.cos(a) * (len + 3))
-      ctx.fillStyle = k % 2 ? '#2a2117' : '#4a3a28'
-      ctx.fillRect(sx - 1, sy, 3, 1)
-    }
-    ctx.restore()
-
-    // 像素链条 + 顶轴
+    // 可穿过的链条只用冷灰，不染危险橙；顶轴跟真实 pose 对齐。
     drawPixelChain(ctx, px, py, bx, by)
     ctx.fillStyle = '#1a1c2c'
     ctx.fillRect(px - 3, py - 3, 6, 6)
@@ -3593,33 +4188,23 @@ export function drawPendulums(ctx, data, now, still = false) {
     ctx.fillStyle = '#fff3c0'
     ctx.fillRect(px - 1, py - 1, 1, 1)
 
-    // 摆锤：暗铁芯 + 亮刃
-    ctx.fillStyle = '#1a1c2c'
-    ctx.fillRect(bx - 5, by - 5, 10, 10)
-    ctx.fillStyle = stopped ? '#566c86' : warn ? '#d95757' : '#94b0c2'
-    ctx.fillRect(bx - 4, by - 4, 8, 8)
-    ctx.fillStyle = '#e8e0cf'
-    ctx.fillRect(bx - 2, by - 2, 2, 2)
-    // 有弧度的像素月牙刃：外弧暗描边 + 内侧亮银
-    const crescent = [
-      [3, -6],
-      [5, -4],
-      [7, -1],
-      [7, 2],
-      [5, 5],
-      [2, 7],
-      [-1, 8],
-    ]
-    ctx.fillStyle = '#1a1c2c'
-    for (const [dx, dy] of crescent) ctx.fillRect(bx + dx - 1, by + dy - 1, 3, 2)
-    ctx.fillStyle = '#f4f4f4'
-    for (const [dx, dy] of crescent) ctx.fillRect(bx + dx, by + dy, 2, 1)
-    ctx.fillStyle = '#94b0c2'
-    for (const [dx, dy] of crescent.slice(1, 5)) {
-      ctx.fillRect(bx + dx - 1, by + dy + 1, 1, 1)
+    // 外缘匹配 bobRadius；止摆仍有碰撞，因此保留危险色。
+    for (const [r, color] of [
+      [radius, '#f4ac62'],
+      [Math.max(1, radius - 2), stopped ? '#6d7477' : '#87979e'],
+    ]) {
+      ctx.fillStyle = color
+      for (let dy = -r; dy < r; dy += 2) {
+        const h = Math.min(2, r - dy)
+        const half = Math.floor(Math.sqrt(Math.max(0, r * r - (dy + h / 2) ** 2)))
+        ctx.fillRect(bx - half, by + dy, half * 2, h)
+      }
     }
-    ctx.fillStyle = '#fff3c0'
-    ctx.fillRect(bx + 5, by - 4, 1, 1)
+    ctx.fillStyle = '#243541'
+    ctx.fillRect(bx - 2, by - 4, 4, 9)
+    ctx.fillStyle = '#ffe7b0'
+    ctx.fillRect(bx - 1, by - 3, 2, 4)
+    ctx.fillRect(bx - 1, by + 3, 2, 2)
 
     // 止摆：小锁挂在顶轴，火花只在刚停住的一小段时间里闪
     if (stopped) {
@@ -3633,9 +4218,9 @@ export function drawPendulums(ctx, data, now, still = false) {
       ctx.fillRect(px + 5, py - 5, 6, 1)
       ctx.fillRect(px + 5, py - 5, 1, 3)
       ctx.fillRect(px + 10, py - 5, 1, 3)
-      const sparkAge = now - (rawStop.start || 0)
-      if (still ? sparkAge < 350 : sparkAge < 650) {
-        const fade = still ? 0.7 : 1 - sparkAge / 650
+      const sparkAge = data.time - data.stopAt
+      if (!still && sparkAge < 650) {
+        const fade = 1 - sparkAge / 650
         const pts = [
           [-7, -4],
           [-3, -7],
@@ -3658,16 +4243,6 @@ export function drawPendulums(ctx, data, now, still = false) {
       }
     }
 
-    if (warn) {
-      ctx.save()
-      ctx.globalAlpha = 0.45 + 0.3 * Math.sin(now / 90)
-      ctx.strokeStyle = '#ff5a36'
-      ctx.lineWidth = 2
-      ctx.beginPath()
-      ctx.arc(bx, by, 11, 0, Math.PI * 2)
-      ctx.stroke()
-      ctx.restore()
-    }
   }
 }
 
@@ -4374,6 +4949,7 @@ LOG_ICON_ART.part = LOG_ICON_ART.chest
 LOG_ICON_ART.moss = LOG_ICON_ART.supply
 LOG_ICON_ART.pendulumStop = LOG_ICON_ART.safe
 LOG_ICON_ART.nightSwitch = LOG_ICON_ART.badge
+LOG_ICON_ART.return = LOG_ICON_ART.safe
 
 const logIconCache = new Map()
 
@@ -4832,8 +5408,8 @@ function drawWarningEdge(ctx, now, remain, still) {
   const period = 320 - urgency * 230
   const pulse = still ? 0.5 : 0.5 + 0.5 * Math.sin(now / period)
   const alpha = 0.14 + 0.16 * pulse
-  const w = COLS * CELL
-  const h = ROWS * CELL
+  const w = ctx.canvas.width
+  const h = ctx.canvas.height
   ctx.save()
   const g = ctx.createRadialGradient(
     w / 2,
@@ -4911,6 +5487,8 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   const still = !!(scene && scene.still)
   if (scene && scene.waterFx) drawTideWaterFX(ctx, now, still)
   if (scene && scene.bridges) drawTideBridges(ctx, scene.bridges)
+  if (scene && scene.planks) drawWorkshopPlanks(ctx, scene.planks)
+  if (scene && scene.pendulums) drawWorkshopHazards(ctx, scene.pendulums)
   if (scene && scene.bridgeSplash) drawBridgeSplash(ctx, scene.bridgeSplash, now, still)
   if (scene && scene.patrol && scene.patrol.zone) drawPatrolZone(ctx, scene.patrol.zone)
   if (scene && scene.patrol && scene.patrol.loop) {
@@ -4934,7 +5512,7 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   if (scene && scene.hover) drawHoverGlow(ctx, scene.hover)
   for (const [key, item] of game.items) {
     if (key === hiddenKey) continue
-    if (item.type === 'bridge') continue
+    if (item.type === 'bridge' || item.type === 'plank') continue
     if (
       item.type === 'bell' &&
       scene &&
@@ -5038,9 +5616,10 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
   if (scene && scene.doors) drawArchiveChannels(ctx, scene.doors, now, still)
   if (scene && scene.doors) drawArchiveDoors(ctx, scene.doors)
   if (scene && scene.archives) drawArchiveBooks(ctx, scene.archives)
+  if (scene && scene.archiveExit) drawArchiveExitGlow(ctx, scene.archiveExit, now, still)
   if (scene && scene.doorMotes) drawDoorMotes(ctx, scene.doorMotes, now, still)
   if (scene && scene.parts) drawWorkshopParts(ctx, scene.parts)
-  if (scene && scene.pendulums) drawPendulums(ctx, scene.pendulums, now, still)
+  if (scene && scene.pendulums) drawPendulums(ctx, scene.pendulums, still)
   if (scene && scene.patrol) drawMossPatrol(ctx, scene.patrol, now, still)
   if (scene && scene.moss) drawMossSample(ctx, scene.moss, now, still)
   if (scene && scene.dust) drawWalkDust(ctx, scene.dust)
@@ -5054,6 +5633,7 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
         now,
         !!sk.flash,
         still,
+        scene.guardOrder === 1,
       )
     }
   } else if (scene && scene.skeleton) {
@@ -5065,12 +5645,17 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
       now,
       scene.flash === 'skeleton',
       still,
+      scene.guardOrder === 1,
     )
   }
   if (scene && scene.pastGuests) {
     for (const pg of scene.pastGuests) drawGuest(ctx, pg)
   }
   if (scene && scene.guest) drawGuest(ctx, scene.guest)
+  else if (scene && scene.parts) {
+    // 第六单布置时的待命预览；营业有真实 guest 后绝不再画替身。
+    drawGuest(ctx, { ...PENDULUM.spawn, variant: 'pendulum', facing: 'up', still: true })
+  }
   if (scene && scene.fx) drawFx(ctx, scene.fx, still)
   // 开箱：三粒沿不同抛物线散开的星芒
   if (scene && scene.spark) {
@@ -5100,7 +5685,9 @@ export function renderScene(ctx, base, game, highlight, hiddenKey = null, scene 
     drawHeroBadge(ctx, bx, by, 1)
   }
   if (scene && scene.crossbow) drawBolt(ctx, scene.crossbow)
-  if (scene && scene.gaugeOn) drawGaugeLight(ctx, true, now, still)
+  if (scene && scene.gaugesOn) {
+    for (const bank of scene.gaugesOn) drawGaugeLight(ctx, TIDE.gauges[bank], now, still)
+  }
   drawWarmLight(
     ctx,
     now,

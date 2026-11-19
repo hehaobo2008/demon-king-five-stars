@@ -1,6 +1,9 @@
 // 正篇第三关：回声集市路线。
-// 客人会主动找铺面里的宝箱，再去北侧挑战房；岔口路牌可强制走一段相邻路，
-// 隔栅占格挡路。路牌互指/绕圈有次数上限，超限后回到目标导向，保证收束。
+// 淘货客进西铺开一只箱取草料纪念品、进东铺开一只箱取陶器，谁先都有效；
+// 开过一铺的一只就去找另一铺，每铺只取一件，站位必须在铺内（站门外开不算）。
+// 另一铺没摆箱或走不到也先回去；不打锤、不拿徽章，守卫只是北厅陈设。
+// 岔口路牌可强制走一段相邻路，隔栅占格挡路；路牌互指/绕圈有次数上限，
+// 超限后回到目标导向，保证收束。结尾真的走回南厅 (16,21) 才出评价。
 import { MARKET, buildGrid3 } from './map.js'
 import { tileKey, isFloor } from './game.js'
 
@@ -17,15 +20,6 @@ const SIGN_DIRS = [
   [0, 1], // 2 下
   [-1, 0], // 3 左
 ]
-
-const faceToward = (from, to) =>
-  Math.abs(to.x - from.x) >= Math.abs(to.y - from.y)
-    ? to.x > from.x
-      ? 'right'
-      : 'left'
-    : to.y > from.y
-      ? 'down'
-      : 'up'
 
 function bfsWalkable(from, to, canWalk) {
   if (from.x === to.x && from.y === to.y) return [from]
@@ -67,76 +61,47 @@ export function planRouteMarket(game) {
     return z === 'westShop' ? 'west' : z === 'eastShop' ? 'east' : null
   }
 
-  // 挑战房必须可达；隔栅封死必经路时返回 null，开门留在布置
-  if (!bfsWalkable(MARKET.spawn, MARKET.challengeStop, canWalk)) return null
+  // 回南厅的路必须通；隔栅封死出口时返回 null，开门留在布置
+  if (!bfsWalkable(MARKET.spawn, MARKET.exit, canWalk)) return null
 
   const actions = []
   let cur = { ...MARKET.spawn }
-  let hasShield = false
   const opened = new Set()
+  const collected = new Set() // 已取过货的铺面：每铺只开一只，不拿同铺两箱凑两件
   const chests = [...game.items.values()]
     .filter((it) => it.type === 'chest' && !it.opened && shopOf(it.x, it.y))
     .map((it) => ({ x: it.x, y: it.y, shop: shopOf(it.x, it.y), key: tileKey(it.x, it.y) }))
 
+  // 淘货客不打锤，沿途不拾盾；走路就是纯走路
   const walkPath = (path) => {
-    let segStart = 0
-    for (let i = 1; i < path.length; i++) {
-      const t = path[i]
-      const item = game.items.get(tileKey(t.x, t.y))
-      if (!hasShield && item && item.type === 'shield' && !item.taken) {
-        actions.push({ type: 'move', path: path.slice(segStart, i + 1) })
-        actions.push({
-          type: 'pickupShield',
-          x: t.x,
-          y: t.y,
-          say: '正好用得上！',
-          hold: 1000,
-        })
-        hasShield = true
-        segStart = i
-      }
-    }
-    if (segStart < path.length - 1) {
-      actions.push({ type: 'move', path: path.slice(segStart) })
-    }
+    actions.push({ type: 'move', path })
     cur = { x: path[path.length - 1].x, y: path[path.length - 1].y }
   }
 
+  // 站位必须也在同一间铺面里——站在门外开盖不算取货；
+  // 铺内四邻都不可站则这只箱不排开箱
   const standPath = (chest) => {
     let best = null
     for (const [dx, dy] of DIRS) {
       const t = { x: chest.x + dx, y: chest.y + dy }
       if (!canWalk(t.x, t.y)) continue
+      if (shopOf(t.x, t.y) !== chest.shop) continue
       const p = bfsWalkable(cur, t, canWalk)
       if (p && (!best || p.length < best.length)) best = p
     }
     return best
   }
 
+  // 只找还没取过货的铺面里最近的箱；两铺都取齐 / 另一箱没摆或走不到 → null
   const nextChestPath = () => {
-    const here = shopOf(cur.x, cur.y)
-    const left = chests.filter((c) => !opened.has(c.key))
-    let pool = left
-    if (here) {
-      const local = left.filter((c) => c.shop === here)
-      if (local.length) pool = local
-    }
+    const left = chests.filter((c) => !opened.has(c.key) && !collected.has(c.shop))
     let best = null
     let bestChest = null
-    for (const c of pool) {
+    for (const c of left) {
       const p = standPath(c)
       if (p && (!best || p.length < best.length)) {
         best = p
         bestChest = c
-      }
-    }
-    if (!bestChest && pool !== left) {
-      for (const c of left) {
-        const p = standPath(c)
-        if (p && (!best || p.length < best.length)) {
-          best = p
-          bestChest = c
-        }
       }
     }
     return bestChest ? { chest: bestChest, path: best } : null
@@ -147,7 +112,7 @@ export function planRouteMarket(game) {
   let signsIgnored = false
   const signUses = new Map()
 
-  // 从岔口沿箭头直走，直到下一处岔口、铺面、广场或挑战房
+  // 从岔口沿箭头直走，直到下一处岔口、铺面、广场或北厅
   const signSegment = (from, dx, dy) => {
     const seg = [from]
     let x = from.x
@@ -159,7 +124,6 @@ export function planRouteMarket(game) {
       x = nx
       y = ny
       seg.push({ x, y })
-      if (x === MARKET.challengeStop.x && y === MARKET.challengeStop.y) break
       const z = zoneAt(x, y)
       if (z === 'westShop' || z === 'eastShop' || z === 'plaza' || z === 'challenge') break
       if (junctionSet.has(tileKey(x, y))) break
@@ -167,44 +131,42 @@ export function planRouteMarket(game) {
     return seg
   }
 
+  // adjacentChest：人站在铺内、箱在身旁且这铺还没取过货，才开
   const adjacentChest = () =>
     chests.find(
       (c) =>
         !opened.has(c.key) &&
+        !collected.has(c.shop) &&
+        shopOf(cur.x, cur.y) === c.shop &&
         Math.abs(c.x - cur.x) + Math.abs(c.y - cur.y) === 1,
     )
 
+  const openChest = (c) => {
+    actions.push({ type: 'open', x: c.x, y: c.y, shop: c.shop })
+    opened.add(c.key)
+    collected.add(c.shop)
+    actions.push({
+      type: 'bubble',
+      text:
+        c.shop === 'west'
+          ? '西铺的草料纪念品，收进包里。'
+          : '东铺的陶器，收进包里。',
+      wait: 850,
+    })
+  }
+
   actions.push({
     type: 'bubble',
-    text: '我是回声集市的淘货客，来找宝箱和勇者徽章。',
+    text: '我是回声集市的淘货客，西铺的草料纪念品、东铺的陶器，各带一件回去。',
     wait: 1200,
   })
-  const spawnItem = game.items.get(tileKey(MARKET.spawn.x, MARKET.spawn.y))
-  if (spawnItem && spawnItem.type === 'shield' && !spawnItem.taken) {
-    actions.push({
-      type: 'pickupShield',
-      x: MARKET.spawn.x,
-      y: MARKET.spawn.y,
-      say: '正好用得上！',
-      hold: 1000,
-    })
-    hasShield = true
-  }
 
   let guard = 0
   while (guard++ < 110) {
-    if (cur.x === MARKET.challengeStop.x && cur.y === MARKET.challengeStop.y) break
-
-    // 站到箱子旁就开；开箱事件带铺面，评价按「另一处铺面」判五星
+    // 站到铺内箱子旁就开；每铺一件，开过就去找另一铺
     const near = adjacentChest()
     if (near) {
-      actions.push({ type: 'open', x: near.x, y: near.y, shop: near.shop })
-      opened.add(near.key)
-      actions.push({
-        type: 'bubble',
-        text: near.shop === 'west' ? '西铺这只箱子，我收了。' : '东铺这只箱子，我收了。',
-        wait: 850,
-      })
+      openChest(near)
       continue
     }
 
@@ -230,84 +192,32 @@ export function planRouteMarket(game) {
       }
     }
 
-    // 目标：本铺面的箱子优先，否则最近的铺面箱子，最后挑战房
+    // 目标：还没取货的铺面里最近的箱；没有就收程回南厅
     const chestTarget = nextChestPath()
-    let path
-    if (chestTarget) {
-      path = chestTarget.path
-    } else {
-      path = bfsWalkable(cur, MARKET.challengeStop, canWalk)
-    }
-    if (!path) break
+    if (!chestTarget) break
+    const path = chestTarget.path
     if (path.length <= 1) {
-      if (chestTarget && !opened.has(chestTarget.chest.key)) {
-        const c = chestTarget.chest
-        actions.push({ type: 'open', x: c.x, y: c.y, shop: c.shop })
-        opened.add(c.key)
-        continue
-      }
-      break
+      openChest(chestTarget.chest)
+      continue
     }
     walkPath([path[0], path[1]])
   }
 
-  // 路牌绕圈或走太久：直接回到挑战房，保证整趟能结束
-  if (cur.x !== MARKET.challengeStop.x || cur.y !== MARKET.challengeStop.y) {
-    const path = bfsWalkable(cur, MARKET.challengeStop, canWalk)
-    if (!path) return null
-    walkPath(path)
-  }
-
-  const at = { ...cur }
-  actions.push({ type: 'face', dir: faceToward(at, MARKET.skeleton) })
-  actions.push({
-    type: 'bubble',
-    text: '挑战房到了！摊子逛完，该拿徽章了。',
-    wait: 1100,
-    arena: true,
-  })
-  actions.push({ type: 'skeleton', pose: 'raise' })
-  actions.push({ type: 'bubble', text: '它举起大锤了……', wait: 900, arena: true })
-  actions.push({ type: 'skeleton', pose: 'strike' })
-  actions.push({ type: 'effect', kind: 'strike', at, ms: 250 })
-
-  if (hasShield) {
-    actions.push({ type: 'effect', kind: 'block', at, ms: 350 })
-    actions.push({ type: 'log', event: 'block' })
-    actions.push({ type: 'bubble', text: '有盾！挡住了。', wait: 800, arena: true })
-    actions.push({
-      type: 'effect',
-      kind: 'slash',
-      at: { x: MARKET.skeleton.x, y: MARKET.skeleton.y },
-      ms: 300,
-    })
-    actions.push({ type: 'skeleton', pose: 'down' })
-    actions.push({ type: 'bubble', text: '徽章归我了！', wait: 900, arena: true })
+  // 回程：真的走回南厅离场格 (16,21)，走到了才出评价
+  const back = bfsWalkable(cur, MARKET.exit, canWalk)
+  if (!back) return null
+  const gotWest = collected.has('west')
+  const gotEast = collected.has('east')
+  if (gotWest && gotEast) {
+    actions.push({ type: 'bubble', text: '两件都齐了，回南厅交差！', wait: 1000 })
+  } else if (gotWest || gotEast) {
+    const missingName = gotWest ? '东铺的陶器' : '西铺的草料纪念品'
+    actions.push({ type: 'bubble', text: `${missingName}没寻着，先回南厅吧。`, wait: 1000 })
   } else {
-    actions.push({ type: 'effect', kind: 'hit', at, ms: 350 })
-    actions.push({ type: 'stagger', ms: 420 })
-    actions.push({ type: 'log', event: 'hit' })
-    actions.push({
-      type: 'bubble',
-      text: '哎哟……被砸中了！',
-      wait: 900,
-      arena: true,
-      tone: 'hurt',
-    })
-    actions.push({ type: 'bubble', text: '稳住，反击！', wait: 300, arena: true })
-    actions.push({
-      type: 'effect',
-      kind: 'slash',
-      at: { x: MARKET.skeleton.x, y: MARKET.skeleton.y },
-      ms: 300,
-    })
-    actions.push({ type: 'skeleton', pose: 'down' })
-    actions.push({ type: 'bubble', text: '赢了！', wait: 700, arena: true })
+    actions.push({ type: 'bubble', text: '两只宝箱都没寻着，空手回南厅吧。', wait: 1000 })
   }
-
-  actions.push({ type: 'log', event: 'badge' })
-  actions.push({ type: 'badge' })
-  actions.push({ type: 'bubble', text: '勇者徽章到手！', wait: 1600, arena: true, tone: 'gold' })
+  walkPath(back)
+  actions.push({ type: 'log', event: 'return' })
   actions.push({ type: 'end' })
 
   return { start: MARKET.spawn, actions }

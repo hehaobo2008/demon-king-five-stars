@@ -1,9 +1,43 @@
-// 正篇第三图：双锁档案库路线。
-// 重块压住红/黄压板才开对应门；客人会找两份档案，再前往挑战房。
-// 门开着被实际穿过会记红门/黄门，评价据此判断「一份档案 + 近门」的五星线。
+// 正篇第五单：双锁档案库路线（32×24 双档经营图）。
+// 抄书人不打锤、不拿徽章：真走到西档 (5,7)、东档 (26,8) 各登记一次（同一份只记一次），
+// 两份抄齐后真走到选定的交档出口（默认东出口 (27,20)）才出评价。
+// 重块压住红/黄压板才开对应近门抄近路；不开门走东西外侧后路仍可满分。
+// 某份档案被隔栅封死就先取另一份、回选定出口交差，评价写明缺哪份。
+// 路牌在可走格上沿箭头直走一段（互指/绕圈有次数上限，超限回到目标导向）。
 import { ARCHIVE, buildGrid5 } from './map.js'
 import { tileKey, isFloor } from './game.js'
-import { DIRS, SIGN_DIRS, bfsWalkable, straightRun, faceToward } from './route-utils.js'
+import { DIRS, SIGN_DIRS, bfsWalkable, straightRun } from './route-utils.js'
+
+// 交档结算判定（纯逻辑）：按客人当时脚下格核对本局选中的出口。
+// 站对选定出口 → kind 'return'，site/坐标取自真实脚下格；
+// 站错出口或没到出口 → kind 'returnMiss'，带上选的是哪侧、实际停在哪，
+// 已取档案不动，评价据此写「预约未完成」，不解锁下一单。
+export function archiveReturnLog(selectedSide, x, y) {
+  const side = selectedSide === 'west' ? 'west' : 'east'
+  const chosen = ARCHIVE.exits[side]
+  const atSide =
+    Object.keys(ARCHIVE.exits).find(
+      (k) => ARCHIVE.exits[k].x === x && ARCHIVE.exits[k].y === y,
+    ) || null
+  if (atSide === side) {
+    return {
+      kind: 'return',
+      extra: { site: side, x, y, label: `走到${chosen.name}交档` },
+    }
+  }
+  const at = atSide ? ARCHIVE.exits[atSide] : null
+  const atDesc = at ? `${at.name} (${at.x},${at.y})` : `非出口格 (${x},${y})`
+  return {
+    kind: 'returnMiss',
+    extra: {
+      selected: side,
+      x,
+      y,
+      atSide,
+      label: `本局选${chosen.name}交档，却停在${atDesc}，档案没交成`,
+    },
+  }
+}
 
 export function planRouteArchive(game) {
   const grid = buildGrid5()
@@ -26,109 +60,63 @@ export function planRouteArchive(game) {
     return true
   }
 
-  if (!bfsWalkable(ARCHIVE.spawn, ARCHIVE.challengeStop, canWalk)) return null
+  const exitSide = game.archiveExit === 'west' ? 'west' : 'east'
+  const exit = ARCHIVE.exits[exitSide]
+
+  // 去选定交档出口的路必须通；隔栅封死出口时返回 null，开门留在布置
+  if (!bfsWalkable(ARCHIVE.spawn, exit, canWalk)) return null
+  // 入口四邻全被堵死时客人寸步难行，同样拒开门
+  const spawnFree = DIRS.some(([dx, dy]) =>
+    canWalk(ARCHIVE.spawn.x + dx, ARCHIVE.spawn.y + dy),
+  )
+  if (!spawnFree) return null
 
   const actions = []
   let cur = { ...ARCHIVE.spawn }
-  let hasShield = false
-  const taken = new Set()
-  const doorsLogged = new Set()
+  const taken = new Set() // 已登记的档案 id
+  const skipped = new Set() // 这趟走不到的档案 id
+  const doorsLogged = new Set() // 每扇近门只记一次真穿越
 
-  const archives = ARCHIVE.archives.map((a) => ({ ...a, key: tileKey(a.x, a.y) }))
+  const archiveAt = (x, y) =>
+    ARCHIVE.archives.find((a) => a.x === x && a.y === y) || null
 
-  const standPath = (archive) => {
-    let best = null
-    for (const [dx, dy] of DIRS) {
-      const t = { x: archive.x + dx, y: archive.y + dy }
-      if (!canWalk(t.x, t.y)) continue
-      const p = bfsWalkable(cur, t, canWalk)
-      if (p && (!best || p.length < best.length)) best = p
-    }
-    return best
+  const logArchive = (a) => {
+    taken.add(a.id)
+    const left = ARCHIVE.archives.filter((x) => !taken.has(x.id))
+    actions.push({ type: 'archive', site: a.id, name: a.name, x: a.x, y: a.y })
+    actions.push({
+      type: 'bubble',
+      text: left.length
+        ? `${a.name}的档案抄好了，还差${left[0].short}那一本。`
+        : `${a.name}的档案抄好了，两份齐了。`,
+      wait: 850,
+    })
   }
 
-  // 门开着时优先走对应的近门；路牌若已把人带到后门旁，
-  // 顶部相邻判定会先取档案，不会强行折回。
-  const doorPath = (archive) => {
-    const door = ARCHIVE.doors.find((d) => d.archive === archive.id)
-    if (!door || !doorOpen[door.id]) return null
-    const gate = { x: door.x, y: door.y }
-    // 去近门的途中避开档案四周，免得从后门旁边路过时先被自动取走
-    const adj = new Set(
-      DIRS.map(([dx, dy]) => tileKey(archive.x + dx, archive.y + dy)),
-    )
-    const approach = (x, y) => canWalk(x, y) && !adj.has(tileKey(x, y))
-    const toDoor = bfsWalkable(cur, gate, approach)
-    if (!toDoor) return null
-    let best = null
-    for (const [dx, dy] of DIRS) {
-      const t = { x: archive.x + dx, y: archive.y + dy }
-      if (!canWalk(t.x, t.y)) continue
-      const rest = bfsWalkable(gate, t, canWalk)
-      if (!rest) continue
-      const joined = toDoor.concat(rest.slice(1))
-      if (!best || joined.length < best.length) best = joined
-    }
-    return best
-  }
-
-  // 默认只取一份：优先取“已开近门”对应的档案，否则取最近的一份。
-  // 第二份只在路牌真的把人带到它旁边时才取，空摆不会自动拿齐。
-  const pickPrimary = () => {
-    for (const d of ARCHIVE.doors) {
-      if (!doorOpen[d.id]) continue
-      const a = archives.find((x) => x.id === d.archive)
-      if (!a) continue
-      if (doorPath(a) || standPath(a)) return a
-    }
-    let best = null
-    let len = Infinity
-    for (const a of archives) {
-      const p = standPath(a)
-      if (p && p.length < len) {
-        best = a
-        len = p.length
-      }
-    }
-    return best
-  }
-
-  let primary = pickPrimary()
-  let secondary = primary ? archives.find((a) => a.id !== primary.id) : null
-  let secondaryRequested = false
-
-  const primaryPath = () => {
-    if (!primary || taken.has(primary.key)) return null
-    return doorPath(primary) || standPath(primary)
-  }
-
+  // 走路就是纯走路；踩上未登记的档案格就停下登记，再把剩下的路走完。
+  // 真踩上开着的近门格记一笔穿门（每门一次），门开着不替代档案。
   const walkPath = (path) => {
     let segStart = 0
-    const doorsHere = []
     for (let i = 1; i < path.length; i++) {
       const t = path[i]
+      const a = archiveAt(t.x, t.y)
       const door = doorByKey.get(tileKey(t.x, t.y))
-      if (door && doorOpen[door.id] && !doorsLogged.has(door.id)) doorsHere.push(door)
-      const item = game.items.get(tileKey(t.x, t.y))
-      if (!hasShield && item && item.type === 'shield' && !item.taken) {
+      if (a && !taken.has(a.id)) {
         actions.push({ type: 'move', path: path.slice(segStart, i + 1) })
+        logArchive(a)
+        segStart = i
+      } else if (door && doorOpen[door.id] && !doorsLogged.has(door.id)) {
+        actions.push({ type: 'move', path: path.slice(segStart, i + 1) })
+        doorsLogged.add(door.id)
         actions.push({
-          type: 'pickupShield',
-          x: t.x,
-          y: t.y,
-          say: '正好用得上！',
-          hold: 1000,
+          type: 'log',
+          event: door.id === 'red' ? 'redDoor' : 'yellowDoor',
         })
-        hasShield = true
         segStart = i
       }
     }
     if (segStart < path.length - 1) {
       actions.push({ type: 'move', path: path.slice(segStart) })
-    }
-    for (const d of doorsHere) {
-      doorsLogged.add(d.id)
-      actions.push({ type: 'log', event: d.id === 'red' ? 'redDoor' : 'yellowDoor' })
     }
     cur = { x: path[path.length - 1].x, y: path[path.length - 1].y }
   }
@@ -139,40 +127,20 @@ export function planRouteArchive(game) {
 
   actions.push({
     type: 'bubble',
-    text: '我是抄书人，先取一份档案，再看路引。',
+    text: `我是抄书人，西档、东档都要抄一份，再送去${exit.name}交档。`,
     wait: 1200,
   })
-  const spawnItem = game.items.get(tileKey(ARCHIVE.spawn.x, ARCHIVE.spawn.y))
-  if (spawnItem && spawnItem.type === 'shield' && !spawnItem.taken) {
-    actions.push({
-      type: 'pickupShield',
-      x: ARCHIVE.spawn.x,
-      y: ARCHIVE.spawn.y,
-      say: '正好用得上！',
-      hold: 1000,
-    })
-    hasShield = true
-  }
 
   let guard = 0
-  while (guard++ < 150) {
-    if (cur.x === ARCHIVE.challengeStop.x && cur.y === ARCHIVE.challengeStop.y) break
-
-    const adjacent = (a) =>
-      a && !taken.has(a.key) && Math.abs(a.x - cur.x) + Math.abs(a.y - cur.y) === 1
-    let near = null
-    if (adjacent(primary)) near = primary
-    else if (secondaryRequested && adjacent(secondary)) near = secondary
-    if (near) {
-      taken.add(near.key)
-      actions.push({ type: 'archive', site: near.id, name: near.name, x: near.x, y: near.y })
-      actions.push({ type: 'bubble', text: `${near.name}的档案，收下。`, wait: 850 })
-      if (near === primary) {
-        primary = null
-      }
+  while (guard++ < 260) {
+    // 脚下就是还没登记的档案：先抄
+    const here = archiveAt(cur.x, cur.y)
+    if (here && !taken.has(here.id)) {
+      logArchive(here)
       continue
     }
 
+    // 路牌在可走岔口/路段上直接沿箭头走一段
     if (!signsIgnored) {
       const sign = game.items.get(tileKey(cur.x, cur.y))
       if (sign && sign.type === 'sign') {
@@ -187,8 +155,6 @@ export function planRouteArchive(game) {
               signRedirects++
               if (signRedirects >= 8) signsIgnored = true
               walkPath(seg)
-              // 路牌被实际跟随后，客人愿意绕去第二间；没放牌不会多拿
-              secondaryRequested = true
               continue
             }
           }
@@ -196,82 +162,51 @@ export function planRouteArchive(game) {
       }
     }
 
-    let path = primaryPath()
-    if (!path) primary = null
-    if (
-      !path &&
-      secondaryRequested &&
-      secondary &&
-      !taken.has(secondary.key)
-    ) {
-      path = doorPath(secondary) || standPath(secondary)
+    // 目标：还没抄过的档案里最近的一份；都抄过或都走不到就收程
+    let best = null
+    for (const a of ARCHIVE.archives) {
+      if (taken.has(a.id) || skipped.has(a.id)) continue
+      const path = bfsWalkable(cur, a, canWalk)
       if (!path) {
-        taken.add(secondary.key)
-        secondary = null
+        skipped.add(a.id)
+        continue
       }
+      if (!best || path.length < best.path.length) best = { a, path }
     }
-    if (!path) path = bfsWalkable(cur, ARCHIVE.challengeStop, canWalk)
-    if (!path) return null
-    if (path.length <= 1) break
-    walkPath([path[0], path[1]])
+    if (!best) break
+    if (best.path.length <= 1) {
+      logArchive(best.a)
+      continue
+    }
+    walkPath([best.path[0], best.path[1]])
   }
 
-  if (cur.x !== ARCHIVE.challengeStop.x || cur.y !== ARCHIVE.challengeStop.y) {
-    const path = bfsWalkable(cur, ARCHIVE.challengeStop, canWalk)
-    if (!path) return null
-    walkPath(path)
-  }
-
-  const at = { ...cur }
-  actions.push({ type: 'face', dir: faceToward(at, ARCHIVE.skeleton) })
-  actions.push({
-    type: 'bubble',
-    text: '档案看完了，最后去挑战房拿徽章。',
-    wait: 1100,
-    arena: true,
-  })
-  actions.push({ type: 'skeleton', pose: 'raise' })
-  actions.push({ type: 'bubble', text: '它举起大锤了……', wait: 900, arena: true })
-  actions.push({ type: 'skeleton', pose: 'strike' })
-  actions.push({ type: 'effect', kind: 'strike', at, ms: 250 })
-
-  if (hasShield) {
-    actions.push({ type: 'effect', kind: 'block', at, ms: 350 })
-    actions.push({ type: 'log', event: 'block' })
-    actions.push({ type: 'bubble', text: '有盾！挡住了。', wait: 800, arena: true })
-    actions.push({
-      type: 'effect',
-      kind: 'slash',
-      at: { x: ARCHIVE.skeleton.x, y: ARCHIVE.skeleton.y },
-      ms: 300,
-    })
-    actions.push({ type: 'skeleton', pose: 'down' })
-    actions.push({ type: 'bubble', text: '徽章归我了！', wait: 900, arena: true })
-  } else {
-    actions.push({ type: 'effect', kind: 'hit', at, ms: 350 })
-    actions.push({ type: 'stagger', ms: 420 })
-    actions.push({ type: 'log', event: 'hit' })
+  // 回程：真的走到选定交档出口，走到了才出评价
+  const back = bfsWalkable(cur, exit, canWalk)
+  if (!back) return null
+  const missing = ARCHIVE.archives.filter((a) => !taken.has(a.id))
+  if (missing.length === 0) {
     actions.push({
       type: 'bubble',
-      text: '哎哟……被砸中了！',
-      wait: 900,
-      arena: true,
-      tone: 'hurt',
+      text: `两份档案都抄齐了，去${exit.name}交档！`,
+      wait: 1000,
     })
-    actions.push({ type: 'bubble', text: '稳住，反击！', wait: 300, arena: true })
+  } else if (missing.length === 1) {
     actions.push({
-      type: 'effect',
-      kind: 'slash',
-      at: { x: ARCHIVE.skeleton.x, y: ARCHIVE.skeleton.y },
-      ms: 300,
+      type: 'bubble',
+      text: `${missing[0].name}走不到，缺${missing[0].short}那一本，先去${exit.name}交差吧。`,
+      wait: 1000,
     })
-    actions.push({ type: 'skeleton', pose: 'down' })
-    actions.push({ type: 'bubble', text: '赢了！', wait: 700, arena: true })
+  } else {
+    actions.push({
+      type: 'bubble',
+      text: `两份档案都走不到，空手去${exit.name}交差吧。`,
+      wait: 1000,
+    })
   }
-
-  actions.push({ type: 'log', event: 'badge' })
-  actions.push({ type: 'badge' })
-  actions.push({ type: 'bubble', text: '勇者徽章到手！', wait: 1600, arena: true, tone: 'gold' })
+  walkPath(back)
+  // 交档文案不再预排：执行层按当时脚下格调用 archiveReturnLog 生成真实记录
+  actions.push({ type: 'log', event: 'return', exitSide })
   actions.push({ type: 'end' })
 
   return { start: ARCHIVE.spawn, actions }

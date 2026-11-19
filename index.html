@@ -19,6 +19,15 @@
       </header>
 
       <div class="play-area">
+        <div class="board-column">
+          <section id="workshop-order" class="workshop-order" aria-label="工坊取件进度" hidden>
+            <div class="workshop-heading"><span>工坊取件单</span><span id="workshop-count">零件 0 / 2</span></div>
+            <div class="workshop-objectives" aria-live="polite">
+              <span id="workshop-top"><b>A</b> 上层 <small>待取</small></span>
+              <span id="workshop-bottom"><b>B</b> 下层 <small>待取</small></span>
+              <span id="workshop-return"><b>↵</b> 入口 <small>交件</small></span>
+            </div>
+          </section>
         <div class="canvas-wrap frame">
           <canvas id="game" width="768" height="576" aria-label="魔王的地牢地图"></canvas>
           <div id="night-curtain" class="night-curtain" hidden><span class="night-curtain-plaque">夜场下半场 · 东门护卫客入场</span></div>
@@ -65,6 +74,13 @@
               <div class="receipt-teeth" aria-hidden="true"></div>
             </div>
           </div>
+        </div>
+          <section id="workshop-dock" class="workshop-dock" aria-label="工坊操作台" hidden>
+            <div class="workshop-route-state"><span id="workshop-planks">上板 未铺 · 下板 未铺</span><span class="workshop-hazard-key">橙弧：摆砣扫过处</span></div>
+            <div id="workshop-voice" class="workshop-voice"><span class="workshop-voice-idle">工匠自动寻路取件，留意橙色摆砣。</span></div>
+            <div id="workshop-actions" class="workshop-actions"></div>
+            <p class="workshop-brake-note">原位止摆 1.8 秒，只能拉一次；停住的摆砣仍会碰伤。</p>
+          </section>
         </div>
 
         <aside id="sidebar" class="frame ledger">
@@ -122,8 +138,16 @@
                       <span>东门</span>
                     </button>
                   </div>
+                  <div id="archive-exit" class="archive-exit" hidden title="抄齐西档、东档后，客人真走到亮起的出口交档才算完成">
+                    <button id="exit-west" class="exit-tab west" type="button" title="从西门交档 · 西出口 (4,20)">
+                      <span>从西门交档</span>
+                    </button>
+                    <button id="exit-east" class="exit-tab east active" type="button" title="从东门交档 · 东出口 (27,20)">
+                      <span>从东门交档</span>
+                    </button>
+                  </div>
                 </div>
-                <p class="guest-quote" id="guest-quote"><img id="guest-quote-mark" class="guest-quote-mark" alt="" /><span id="guest-quote-text">「我是新手剑士，想拿到<em class="kw">勇者徽章</em>。侧室的<em class="kw">宝箱</em>我要开，守卫那一锤我也想<em class="kw">挡</em>。」</span></p>
+                <p class="guest-quote" id="guest-quote"><img id="guest-quote-mark" class="guest-quote-mark" alt="" /><span id="guest-quote-text">「我是新手剑士，想拿到<em class="kw">勇者徽章</em>。侧室的<em class="kw">宝箱</em>我要开，守卫那一锤我也想<em class="kw">挡</em>。我满血 <em class="kw">100</em>，它一锤 <em class="kw">35</em>：空手硬直错过空档，挨到 <em class="kw">30</em> 血吃不住下一锤，就会<em class="kw">撤退</em>回南厅；有盾挡住、趁空档反击打倒守卫，才拿得到徽章。」</span></p>
               </div>
               <div class="btn-row">
                 <button id="btn-open" class="btn primary">开门营业</button>
@@ -184,6 +208,15 @@
                 <div class="card-info">
                   <div class="card-name">桥板</div>
                   <div class="card-use">搭在桥位，跨过整段水</div>
+                </div>
+                <div class="card-price"><span class="coin"></span><span class="price"></span></div>
+              </div>
+
+              <div class="card" data-type="plank" title="按住拖到标出的检修板位" hidden>
+                <img alt="检修板" draggable="false" />
+                <div class="card-info">
+                  <div class="card-name">检修板</div>
+                  <div class="card-use">铺在板位，走整段安全线</div>
                 </div>
                 <div class="card-price"><span class="coin"></span><span class="price"></span></div>
               </div>

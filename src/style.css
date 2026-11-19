@@ -194,6 +194,11 @@ h1 {
 }
 
 /* ===== 工作台两栏 ===== */
+.board-column {
+  flex: none;
+  min-width: 0;
+}
+
 .play-area {
   display: flex;
   gap: 16px;
@@ -318,6 +323,12 @@ h1 {
 
 .bubble-text {
   min-width: 0;
+}
+
+/* 首单气泡按内容宽度排版：不随 left 坐标收缩，上限仍走 .bubble 的 max-width，
+   再由 positionBubble 按真实宽度收进地图 */
+.bubble.bubble-fit {
+  width: max-content;
 }
 
 .bubble-avatar {
@@ -1067,6 +1078,49 @@ h1 {
 }
 
 .night-tab:focus-visible {
+  outline: 2px solid #7a2e2e;
+  outline-offset: 1px;
+}
+
+/* 档案库：交档出口二选一，亮的一边就是客人要真走到的口 */
+.archive-exit {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  color: #4a3215;
+}
+
+.exit-tab {
+  display: inline-flex;
+  align-items: center;
+  font-family: inherit;
+  font-size: 10px;
+  padding: 1px 4px;
+  border: 1.5px solid #8a6a3b;
+  background: #d9c193;
+  color: #4a3215;
+  cursor: inherit;
+  transition: filter 0.12s ease;
+}
+
+#exit-west.active {
+  background: #6b2f2b;
+  border-color: #c96a52;
+  color: #ffd8c8;
+}
+
+#exit-east.active {
+  background: #7a5a1e;
+  border-color: #c9a24b;
+  color: #ffe4a8;
+}
+
+.exit-tab:hover {
+  filter: brightness(1.06);
+}
+
+.exit-tab:focus-visible {
   outline: 2px solid #7a2e2e;
   outline-offset: 1px;
 }
@@ -2408,6 +2462,16 @@ h1 {
   color: #963a30;
 }
 
+/* 主路箱：真发生了但不算寻宝，中性灰点，不冒充得分绿勾 */
+.review-events li.is-note {
+  color: #6b5a42;
+}
+
+.review-events li.is-note::before {
+  content: '·';
+  color: #8a7a5e;
+}
+
 .review-events li:last-child {
   border-bottom: none;
 }
@@ -2618,5 +2682,298 @@ h1 {
   .sound-toggle img {
     width: 14px;
     height: 14px;
+  }
+}
+
+.workshop-mode {
+  background: radial-gradient(ellipse at 45% 30%, #263439, #111c22 62%, #0c1218);
+}
+
+.workshop-mode .canvas-wrap {
+  border-color: #55777d;
+  box-shadow: inset 0 0 0 1px #81a5a5, 5px 5px 0 #080f13;
+  background: #101d27;
+}
+
+.workshop-order,
+.workshop-dock {
+  padding: 10px 12px;
+  background: #17272f;
+  border: 2px solid #55777d;
+  box-shadow: 5px 5px 0 #080f13;
+  color: #dce8e5;
+  line-height: 1.45;
+}
+
+.workshop-order {
+  border-bottom: 0;
+}
+
+.workshop-heading {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  color: #bfcfc9;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+#workshop-count {
+  color: #f3cb7c;
+}
+
+.workshop-objectives {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  font-size: 13px;
+}
+
+.workshop-objectives > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px;
+  background: #24343c;
+  border: 1px solid #50626a;
+  white-space: nowrap;
+}
+
+.workshop-objectives b {
+  color: #f7cc78;
+  font-size: 14px;
+}
+
+.workshop-objectives small {
+  margin-left: auto;
+  color: #b6c3c4;
+  font-size: 11px;
+}
+
+.workshop-objectives .done {
+  border-color: #78ba9f;
+  background: #214439;
+}
+
+.workshop-objectives .done small,
+.workshop-objectives .ready small {
+  color: #b1efd0;
+}
+
+.workshop-objectives .ready {
+  border-color: #b1efd0;
+}
+
+.workshop-dock {
+  border-top: 0;
+}
+
+.workshop-route-state {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 11px;
+  color: #c4d4d2;
+}
+
+.workshop-hazard-key {
+  color: #ffb478;
+}
+
+.workshop-voice {
+  display: grid;
+  align-items: center;
+  min-height: 43px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.workshop-voice > * {
+  grid-area: 1 / 1;
+}
+
+.workshop-voice-idle {
+  color: #b6c3c4;
+}
+
+.workshop-voice:has(.coach:not([hidden]), .bubble:not([hidden])) .workshop-voice-idle {
+  visibility: hidden;
+}
+
+.workshop-voice .coach,
+.workshop-voice .bubble {
+  position: static;
+  transform: none;
+  width: 100%;
+  max-width: none;
+  padding: 4px 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  color: #e1ebe7;
+  font-size: 12px;
+  text-align: left;
+  justify-content: flex-start;
+  animation: none;
+  transition: none;
+}
+
+.workshop-voice .coach-avatar,
+.workshop-voice .bubble-avatar,
+.workshop-voice .coach::before,
+.workshop-voice .coach::after,
+.workshop-voice .bubble::after {
+  display: none;
+}
+
+.workshop-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.workshop-actions .btn {
+  min-height: 42px;
+  height: auto;
+  font-size: 12px;
+}
+
+.workshop-actions #btn-open {
+  background: #326756;
+  border-color: #95cbae;
+}
+
+.workshop-actions #btn-reset {
+  background: #263b44;
+  border-color: #5f7780;
+  white-space: normal;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.workshop-actions #btn-swing {
+  opacity: 1;
+  color: #bac9cc;
+  border-color: #667c83;
+  background: #22343d;
+  animation: none;
+}
+
+.workshop-actions #btn-swing[data-state="ready"] {
+  color: #231b12;
+  background: #e2ae60;
+  border-color: #ffe0a2;
+  box-shadow: inset 0 2px #fff0c1, 2px 2px #080f13;
+}
+
+.workshop-actions #btn-swing[data-state="holding"] {
+  color: #fff1d0;
+  background: #69482a;
+  border-color: #e2ae60;
+}
+
+.workshop-actions #btn-swing[data-state="spent"] {
+  border-style: dashed;
+}
+
+.workshop-brake-note {
+  margin: 7px 0 0;
+  color: #b6c3c4;
+  font-size: 11px;
+}
+
+.workshop-mode #sidebar {
+  background: #16232b;
+  border-color: #50686e;
+  box-shadow: inset 0 0 0 1px #7b8b83, 5px 5px 0 #080f13;
+}
+
+.workshop-mode .guest-reserve {
+  background: #22343e;
+  border-color: #50686e;
+  box-shadow: inset 0 3px #b5a275;
+  color: #dce8e5;
+}
+
+.workshop-mode .guest-title,
+.workshop-mode .guest-quote {
+  color: #c4d4d2;
+}
+
+.workshop-mode .guest-quote {
+  min-height: 0;
+}
+
+.workshop-mode .guest-quote .kw {
+  color: #f0ce8b;
+}
+
+.workshop-mode .trap-slot {
+  display: none;
+}
+
+.workshop-mode .shop .card[data-type="plank"] {
+  order: -1;
+  border-color: #819b87;
+  background: #283d3c;
+}
+
+@media (max-width: 1120px), (max-aspect-ratio: 1/1) {
+  .workshop-mode .stage {
+    padding-inline: 12px;
+  }
+
+  .workshop-mode .play-area {
+    max-width: none;
+    gap: 12px;
+  }
+
+  .workshop-mode .ledger-main {
+    flex-direction: column;
+  }
+
+  .workshop-mode .shop,
+  .workshop-mode .guest-reserve {
+    width: 100%;
+    flex: none;
+  }
+
+  .workshop-mode .shop {
+    order: -1;
+  }
+}
+
+@media (max-width: 600px) {
+  .workshop-order,
+  .workshop-dock {
+    padding: 8px;
+  }
+
+  .workshop-objectives {
+    gap: 4px;
+    font-size: 12px;
+  }
+
+  .workshop-objectives > span {
+    gap: 3px;
+    padding: 4px;
+  }
+
+  .workshop-objectives small {
+    font-size: 10px;
+  }
+
+  .workshop-actions {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .workshop-voice {
+    min-height: 48px;
+  }
+
+  .workshop-brake-note {
+    font-size: 10.5px;
   }
 }

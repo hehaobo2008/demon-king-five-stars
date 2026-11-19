@@ -12,7 +12,6 @@ import {
   ROOMS,
   SKELETON,
   TIDE,
-  TRAP_STOP,
   buildGrid,
   buildGrid2,
   buildGrid3,
@@ -36,7 +35,7 @@ import {
   restoreItems,
   addLog,
 } from './game.js'
-import { planRoute, WALK } from './walk.js'
+import { planRoute, planApproach1, planFromJunctionL1, planFromJunctionR1, planReturn1, lookInsert, fightOutcome1, chestRoomAt, previewOutcome1, WALK, FIGHT1 } from './walk.js'
 import {
   planNightFull,
   planNightPreview,
@@ -45,6 +44,8 @@ import {
   nightGuestName,
 } from './night-route.js'
 import { buildReview } from './review.js'
+import { archiveReturnLog } from './archive-route.js'
+import { PENDULUM_MOTION, pendulumPose, pendulumContacts } from './pendulum-route.js'
 import {
   makeBaseMap,
   renderScene,
@@ -56,7 +57,6 @@ import {
   coinFrameDataURL,
   hourglassDataURL,
   logIconDataURL,
-  lastPendulumAngle,
   speakerDataURL,
   quoteMarkDataURL,
   turnIconDataURL,
@@ -134,6 +134,9 @@ const nightWestBtn = document.getElementById('night-west')
 const nightEastBtn = document.getElementById('night-east')
 const nightWestAvatarEl = document.getElementById('night-west-avatar')
 const nightEastAvatarEl = document.getElementById('night-east-avatar')
+const archiveExitEl = document.getElementById('archive-exit')
+const exitWestBtn = document.getElementById('exit-west')
+const exitEastBtn = document.getElementById('exit-east')
 const certEl = document.getElementById('five-star-cert')
 const certStarsEl = document.getElementById('cert-stars')
 const certLabelEl = document.getElementById('cert-label')
@@ -143,6 +146,17 @@ const guestQuoteEl = document.getElementById('guest-quote')
 const guestQuoteTextEl = document.getElementById('guest-quote-text')
 const guestQuoteMarkEl = document.getElementById('guest-quote-mark')
 const guestAvatarEl = document.getElementById('guest-avatar')
+const boardColumnEl = document.querySelector('.board-column')
+const workshopOrderEl = document.getElementById('workshop-order')
+const workshopDockEl = document.getElementById('workshop-dock')
+const workshopVoiceEl = document.getElementById('workshop-voice')
+const workshopActionsEl = document.getElementById('workshop-actions')
+const workshopCountEl = document.getElementById('workshop-count')
+const workshopPlanksEl = document.getElementById('workshop-planks')
+const workshopTopEl = document.getElementById('workshop-top')
+const workshopBottomEl = document.getElementById('workshop-bottom')
+const workshopReturnEl = document.getElementById('workshop-return')
+const primaryActionsEl = btnOpen.parentElement
 const logListEl = document.getElementById('log-list')
 const logProgressEl = document.getElementById('log-progress')
 const logStarEls = [...logProgressEl.querySelectorAll('.log-star')]
@@ -173,11 +187,8 @@ const tagTurnIconEl = document.getElementById('tag-turn-icon')
 const MAP_DEFS = {
   1: {
     skeleton: SKELETON,
-    crossbow: { x: 12, y: 9 },
-    beamLeft: 9,
-    trapStop: TRAP_STOP,
-    arena: { x: 18.5, y: 6.2 },
-    stand: { x: 23, y: 3 },
+    arena: { x: 16, y: 6.2 },
+    stand: { x: 21, y: 3 },
   },
   2: {
     skeleton: MAP2.skeleton,
@@ -195,19 +206,13 @@ const MAP_DEFS = {
     stand: MARKET.stand,
   },
   4: {
-    skeleton: TIDE.skeleton,
-    arena: TIDE.arena,
-    stand: TIDE.stand,
+    // 潮汐厅无守卫、无徽章台：客人只看两把水尺，走回干堤入口交差
   },
   5: {
-    skeleton: ARCHIVE.skeleton,
-    arena: ARCHIVE.arena,
-    stand: ARCHIVE.stand,
+    // 档案库无守卫、无徽章台：抄书人只抄两份档案，走到选定出口交档
   },
   6: {
-    skeleton: PENDULUM.skeleton,
-    arena: PENDULUM.arena,
-    stand: PENDULUM.stand,
+    // 钟摆工坊无守卫、无徽章台：工匠只取上下两件零件，走回入口交差
   },
   7: {
     skeleton: MOSS.skeleton,
@@ -224,12 +229,9 @@ const games = {
   1: createGame(buildGrid(), [SKELETON]),
   2: createGame(buildGrid2(), [MAP2.skeleton]),
   3: createGame(buildGrid3(), [MARKET.skeleton]),
-  4: createGame(buildGrid4(), [TIDE.skeleton]),
-  5: createGame(buildGrid5(), [
-    ARCHIVE.skeleton,
-    ...ARCHIVE.archives.map((a) => ({ x: a.x, y: a.y })),
-  ]),
-  6: createGame(buildGrid6(), [PENDULUM.skeleton]),
+  4: createGame(buildGrid4(), []),
+  5: createGame(buildGrid5(), []),
+  6: createGame(buildGrid6(), []),
   7: createGame(buildGrid7(), [
     MOSS.skeleton,
     { x: MOSS.sample.x, y: MOSS.sample.y },
@@ -239,6 +241,8 @@ const games = {
     NIGHT.guests[1].skeleton,
   ]),
 }
+// 第五单交档出口选择：默认东门；准备期点「从西门交档 / 从东门交档」切换
+games[5].archiveExit = 'east'
 let game = games[1]
 // 第 2 至 8 关开门后要亮暖光的真实入口：各图客人实际从这一格进场
 function orderEntryTile(n) {
@@ -266,6 +270,15 @@ const bases = {
 }
 let base = bases[1]
 let currentMap = MAP_DEFS[1]
+// 当前地图的实际宽高（格数）：显示与点选一律从这里取，不写死 COLS/ROWS
+function mapDims() {
+  const g = game && game.grid
+  return g && g.length && g[0].length
+    ? { cols: g[0].length, rows: g.length }
+    : { cols: COLS, rows: ROWS }
+}
+canvas.width = base.width
+canvas.height = base.height
 // 余额动效以「上一帧真正显示的数字」为基准：移动/取消不跳钱，换单只换数
 const shownGold = {
   1: games[1].gold,
@@ -295,12 +308,21 @@ window.__ui = () => ({
   nightGuest,
   nightPreviewGuest,
   nightBadges: { ...nightBadges },
+  archiveExit: games[5].archiveExit,
   nightBlocked: nightBlockedGuests(games[8]),
   speed,
   simT: Math.round(simT),
   trapMode: crossbow.mode,
   trapUsed: crossbow.used,
   trapWindow: crossbow.windowOpen,
+  workshop: order === 6 ? {
+    time: workshopTime(),
+    stopAt: swingStopAt,
+    remaining: swingStopAt == null ? 0 : Math.max(0, swingStopAt + PENDULUM_MOTION.stopMs - workshopTime()),
+    pendulums: workshopPendulums(),
+    takenParts: [...game.takenParts],
+    reducedMotion,
+  } : null,
   onbStep,
   guide: guideState
     ? { room: guideState.room || null, tile: guideState.tile || null }
@@ -311,6 +333,9 @@ window.__ui = () => ({
         y: +guest.y.toFixed(2),
         hasShield: guest.hasShield,
         hasBadge: guest.hasBadge,
+        facing: guest.facing || null,
+        moving: !!guest.moving,
+        blocking: !!(guest.blockStart && simT - guest.blockStart < guest.blockMs),
       }
     : null,
   skeletonPose: skeleton.pose,
@@ -347,9 +372,18 @@ let footprintPreview = null
 let footprintPreviewKey = ''
 let trapUiSig = ''
 let swingUiSig = ''
-let swingUsed = false
-let swingWarn = null
-let swingStopped = new Map() // id -> { angle, start }：止摆时冻结在当时的角度
+let swingStart = 0
+let swingStopAt = null
+let swingRemainder = 0
+let swingHits = new Map()
+
+function workshopTime() {
+  return mode === 'business' ? simT - swingStart : 0
+}
+
+function workshopPendulums() {
+  return PENDULUM.pendulums.map((p) => pendulumPose(p, workshopTime(), swingStopAt))
+}
 let logShownOrder = 0
 let logShownCount = 0
 let progressOrder = 0
@@ -496,7 +530,7 @@ const ORDER_INFO = {
   1: {
     title: '今日预约 · 新手剑士',
     quote:
-      '「我是新手剑士，想拿到<em class="kw">勇者徽章</em>。侧室的<em class="kw">宝箱</em>我要开，守卫那一锤我也想<em class="kw">挡</em>。」',
+      '「我是新手剑士，想拿到<em class="kw">勇者徽章</em>。侧室的<em class="kw">宝箱</em>我要开，守卫那一锤我也想<em class="kw">挡</em>。我满血 <em class="kw">100</em>，它一锤 <em class="kw">35</em>：空手硬直错过空档，挨到 <em class="kw">30</em> 血吃不住下一锤，就会<em class="kw">撤退</em>回南厅；有盾挡住、趁空档反击打倒守卫，才拿得到徽章。」',
   },
   2: {
     title: '今日预约 · 机关迷',
@@ -506,22 +540,22 @@ const ORDER_INFO = {
   3: {
     title: '今日预约 · 淘货客',
     quote:
-      '「我是回声集市的淘货客，想拿<em class="kw">勇者徽章</em>。西铺、东铺的<em class="kw">宝箱</em>至少让我翻一只；守卫那锤能<em class="kw">挡</em>就挡。」',
+      '「我是回声集市的淘货客，想带<em class="kw">草料纪念品</em>和<em class="kw">陶器</em>回去。西铺、东铺各开一只<em class="kw">宝箱</em>取一件，谁先都行；两件齐了我就回南厅。」',
   },
   4: {
     title: '今日预约 · 潮汐工',
     quote:
-      '「我是看潮的匠人，想拿<em class="kw">勇者徽章</em>。先到<em class="kw">水尺</em>记水位；桥板搭好我就从桥上过，不然绕两岸干路。」',
+      '「我是看潮的匠人，想把<em class="kw">西岸水尺</em>和<em class="kw">东岸水尺</em>的读数都带回去。<em class="kw">桥板</em>搭好我就从桥上过，不然走南边<em class="kw">干堤</em>绕两岸；两笔读数齐了，真走回干堤入口才算交差。」',
   },
   5: {
     title: '今日预约 · 抄书人',
     quote:
-      '「我是档案库的抄书人，想拿<em class="kw">勇者徽章</em>。默认先抄一份；<em class="kw">路牌</em>把我从后门引到另一间，就两份都抄。红黄<em class="kw">近门</em>开了、我真穿过去，也认。」',
+      '「我是档案库的抄书人，<em class="kw">西档</em>和<em class="kw">东档</em>都要抄一份，谁先都行；抄齐了真走到选定的<em class="kw">交档出口</em>才算交差。<em class="kw">重块</em>压对红黄压板开近门抄近路，不开门走外侧后路也绕得到。」',
   },
   6: {
     title: '今日预约 · 钟摆工',
     quote:
-      '「我是钟摆工坊的工匠，想拿<em class="kw">勇者徽章</em>。我要一件<em class="kw">零件</em>；钟摆只停一次，得在它扫下来前拉闸，或者干脆走干净南道。」',
+      '「帮我取回 <em class="kw">A 上层</em>、<em class="kw">B 下层</em>两件零件，谁先都行。你铺路，我来走；取齐后还要回<em class="kw">入口交件</em>。」',
   },
   7: {
     title: '今日预约 · 采苔人',
@@ -585,20 +619,20 @@ let onboardingRetired = false
 let onbStep = 'off' // chest | shield | done | off
 let guideState = null // { room } | { tile } | null
 const GUIDE_ROOM = ROOMS.sideA
-// 建议盾格偏好：依次挑「实际会经过且未被占用」的空地
+// 建议盾格偏好：依次挑「实际会经过且未被占用」的空地（新主路 x15..16）
 const SHIELD_SPOT_PREFS = [
-  [11, 12],
-  [10, 12],
-  [10, 13],
-  [11, 13],
-  [10, 11],
-  [10, 10],
-  [11, 14],
-  [10, 14],
-  [10, 9],
-  [10, 8],
-  [10, 7],
-  [10, 6],
+  [15, 13],
+  [16, 13],
+  [15, 14],
+  [16, 14],
+  [15, 15],
+  [16, 15],
+  [15, 16],
+  [16, 16],
+  [15, 17],
+  [16, 17],
+  [15, 18],
+  [16, 18],
 ]
 const skeleton = { x: currentMap.skeleton.x, y: currentMap.skeleton.y, pose: 'idle' }
 let fx = null
@@ -641,7 +675,7 @@ for (const el of cardEls) {
 
 const CARD_USE_COPY = {
   1: {
-    chest: '放进侧室，客人会去开',
+    chest: '摆进侧室或门口，他进门才开',
     shield: '摆在必经之路，捡起挡锤',
     sign: '摆上点击，给客人指路',
   },
@@ -651,27 +685,24 @@ const CARD_USE_COPY = {
     sign: '摆上点击，给客人指路',
   },
   3: {
-    chest: '放进西铺或东铺，客人会去开',
-    shield: '摆在客人经过的路上，捡起挡锤',
+    chest: '西铺、东铺各摆一只，客人各取一件',
     sign: '插在罗盘岔口，给客人引路',
     barrier: '占一格挡路，改客人走法',
   },
   4: {
-    shield: '摆在客人经过的路上，捡起挡锤',
     sign: '放在岔口，给客人指一段路',
-    barrier: '占一格挡路，改客人走法',
+    barrier: '占一格挡路；堵住兜口就封死一岸水尺',
     bridge: '拖到标出的桥位，架通整段水',
   },
   5: {
-    shield: '摆在客人经过的路上，捡起挡锤',
     sign: '放在岔口，给客人指一段路',
-    barrier: '占一格挡路，改客人走法',
-    weight: '压上红/黄压板，开对应门',
+    barrier: '占一格挡路；封住档案或出口就改走法',
+    weight: '压上红/黄压板，开对应近门抄近路',
   },
   6: {
-    shield: '摆在客人经过的路上，捡起挡锤',
     sign: '放在岔口，给客人指一段路',
-    barrier: '占一格挡路，改客人走法',
+    barrier: '占一格挡路；封住取件点就改走法',
+    plank: '拖到标出的检修板位，铺通整段空隙走安全线',
   },
   7: {
     shield: '摆在客人经过的路上，捡起挡锤',
@@ -745,6 +776,17 @@ function updateNightPreviewUI() {
   nightWestBtn.setAttribute('aria-pressed', west ? 'true' : 'false')
   nightEastBtn.setAttribute('aria-pressed', west ? 'false' : 'true')
 }
+
+function updateArchiveExitUI() {
+  const show = order === 5 && mode === 'setup'
+  archiveExitEl.hidden = !show
+  if (!show) return
+  const west = games[5].archiveExit === 'west'
+  exitWestBtn.classList.toggle('active', west)
+  exitEastBtn.classList.toggle('active', !west)
+  exitWestBtn.setAttribute('aria-pressed', west ? 'true' : 'false')
+  exitEastBtn.setAttribute('aria-pressed', west ? 'false' : 'true')
+}
 // 卡片小金币用顶部旋转金币的静态第一帧
 const staticCoinURL = coinFrameDataURL(0)
 for (const coin of document.querySelectorAll('.card .coin')) {
@@ -803,28 +845,31 @@ function applyCursor(grab) {
 
 applyCursor(false)
 
-// 画布按整数 CSS 像素/格收齐，保持 4:3；横排账房外框与画布等高
+// 画布按整数 CSS 像素/格收齐，宽高比跟随当前地图；横排账房外框与画布等高
 const portraitMedia = window.matchMedia('(max-width: 1120px), (max-aspect-ratio: 1/1)')
 function syncCanvasSize() {
+  const { cols, rows } = mapDims()
   const vw = document.documentElement.clientWidth
   const vh = document.documentElement.clientHeight
+  const workshopChrome = order === 6 ? workshopOrderEl.offsetHeight + workshopDockEl.offsetHeight : 0
   if (portraitMedia.matches) {
-    const maxW = Math.min(900, Math.min(vh * 0.58, 640) * 4 / 3)
-    const avail = Math.min(vw - 32, maxW)
-    const tile = Math.max(8, Math.floor((avail - 6) / COLS))
-    canvas.style.width = tile * COLS + 'px'
-    canvas.style.height = tile * ROWS + 'px'
-    playArea.style.width = tile * COLS + 6 + 'px'
+    const maxW = Math.min(900, Math.min(vh * 0.58, 640) * (cols / rows))
+    const avail = Math.min(vw - (order === 6 ? 24 : 32), maxW)
+    const tile = Math.max(8, Math.floor((avail - 6) / cols))
+    canvas.style.width = tile * cols + 'px'
+    canvas.style.height = tile * rows + 'px'
+    playArea.style.width = tile * cols + 6 + 'px'
     sidebar.style.height = ''
   } else {
-    const boardH = Math.min(720, vh - 164)
+    const boardH = Math.min(720, vh - 164 - workshopChrome)
     const maxW = vw - 480
-    const tile = Math.max(8, Math.floor(Math.min(boardH / ROWS, maxW / COLS)))
-    canvas.style.width = tile * COLS + 'px'
-    canvas.style.height = tile * ROWS + 'px'
+    const tile = Math.max(8, Math.floor(Math.min(boardH / rows, maxW / cols)))
+    canvas.style.width = tile * cols + 'px'
+    canvas.style.height = tile * rows + 'px'
     playArea.style.width = ''
-    sidebar.style.height = Math.round(tile * ROWS + 6) + 'px'
+    sidebar.style.height = Math.round(tile * rows + 6 + workshopChrome) + 'px'
   }
+  boardColumnEl.style.width = parseFloat(canvas.style.width) + 6 + 'px'
   if (mode === 'setup') updateOnboarding()
 }
 window.addEventListener('resize', syncCanvasSize)
@@ -839,7 +884,7 @@ async function refreshMapArt() {
       await Promise.race([
         document.fonts.load(
           '12px "Fusion Pixel 12px"',
-          '五星好评入口通道侧室挑战房补给廊弩廊训练房军械库回声集市西铺草料东铺陶器潮汐蓄水厅西岸东岸双锁档案库西档案间东档案间红门黄门钟摆工坊上层钟摆南道苔火巡廊内院外廊铃位苔火样本夜场总店西门寻宝房东门护卫房主厅第一二场·',
+          '五星好评入口通道侧室挑战房补给廊弩廊训练房军械库回声集市西铺草料东铺陶器潮汐蓄水厅西岸东岸水尺南干堤北桥中桥返回点双锁档案库西档案间东档案间红门黄门钟摆工坊上零件下检修板中廊南联络廊苔火巡廊内院外廊铃位苔火样本夜场总店西门寻宝房东门护卫房主厅第一二场·',
         ),
         new Promise((_, reject) => setTimeout(() => reject(new Error('font-timeout')), 1500)),
       ])
@@ -857,6 +902,8 @@ async function refreshMapArt() {
     bases[7] = makeBaseMap(7)
     bases[8] = makeBaseMap(8)
     base = bases[order]
+    canvas.width = base.width
+    canvas.height = base.height
   } catch (e) {
     /* 重绘失败保留原底图 */
   }
@@ -886,16 +933,18 @@ function canvasBox() {
 function tileAt(cx, cy) {
   const b = canvasBox()
   if (cx < b.left || cx >= b.left + b.width || cy < b.top || cy >= b.top + b.height) return null
-  const x = Math.floor(((cx - b.left) / b.width) * COLS)
-  const y = Math.floor(((cy - b.top) / b.height) * ROWS)
+  const { cols, rows } = mapDims()
+  const x = Math.floor(((cx - b.left) / b.width) * cols)
+  const y = Math.floor(((cy - b.top) / b.height) * rows)
   return { x, y }
 }
 
 function tileCenterClient(x, y) {
   const b = canvasBox()
+  const { cols, rows } = mapDims()
   return {
-    x: b.left + ((x + 0.5) / COLS) * b.width,
-    y: b.top + ((y + 0.5) / ROWS) * b.height,
+    x: b.left + ((x + 0.5) / cols) * b.width,
+    y: b.top + ((y + 0.5) / rows) * b.height,
   }
 }
 
@@ -944,7 +993,10 @@ function showBubble(text, at = null, tone = null) {
       guest ? guest.variant : GUEST_VARIANT[order] || 'knight',
     )
   }
-  bubbleEl.className = 'bubble' + (tone ? ' tone-' + tone : '')
+  // 首单加 bubble-fit：宽度按内容排（上限 230px），不随 left 收缩，
+  // positionBubble 的收边夹取因此拿到的是真实宽度
+  bubbleEl.className =
+    'bubble' + (order === 1 ? ' bubble-fit' : '') + (tone ? ' tone-' + tone : '')
   bubbleEl.hidden = false
   // 重新触发轻弹动画
   bubbleEl.style.animation = 'none'
@@ -978,21 +1030,23 @@ function showNightCurtain() {
 }
 
 function positionBubble() {
+  if (order === 6) return
   const pos = bubbleAnchor || (guest ? { x: guest.x, y: guest.y } : null)
   if (!pos) return
+  const { cols, rows } = mapDims()
   const parent = bubbleEl.parentElement
-  const W = parent ? parent.clientWidth : COLS * 32
-  const H = parent ? parent.clientHeight : ROWS * 32
+  const W = parent ? parent.clientWidth : cols * 32
+  const H = parent ? parent.clientHeight : rows * 32
   const w = bubbleEl.offsetWidth || 200
   const h = bubbleEl.offsetHeight || 30
-  let cxPx = ((pos.x + 0.5) / COLS) * W
+  let cxPx = ((pos.x + 0.5) / cols) * W
   // 水平收进画布内：二单右侧也别被裁掉
   const minX = w / 2 + 4
   const maxX = W - w / 2 - 4
   if (cxPx < minX) cxPx = minX
   if (cxPx > maxX) cxPx = maxX
 
-  const topAnchor = (pos.y / ROWS) * H
+  const topAnchor = (pos.y / rows) * H
   let below = false
   let anchorY = topAnchor
   if (bubbleAnchor) {
@@ -1001,7 +1055,7 @@ function positionBubble() {
   } else if (topAnchor - h - 8 < 2) {
     // 普通气泡贴到上沿时翻到人物脚下方
     below = true
-    anchorY = ((pos.y + 1) / ROWS) * H
+    anchorY = ((pos.y + 1) / rows) * H
   }
   if (below && anchorY + 8 + h > H - 2) {
     if (!bubbleAnchor && topAnchor - h - 8 >= 2) {
@@ -1025,41 +1079,51 @@ function updateLogProgress() {
   const archiveSites = new Set(
     game.log.filter((e) => e.kind === 'archive' && e.site).map((e) => e.site),
   )
-  const usedDoor =
-    kinds.has('redDoor') || kinds.has('yellowDoor')
   const slots =
     order === 1
       ? [
-          { done: kinds.has('chest'), label: '开箱' },
+          {
+            done: game.log.some((e) => e.kind === 'chest' && e.room && e.standIn),
+            label: '进侧室开箱',
+          },
           { done: kinds.has('block'), label: '挡锤' },
           { done: kinds.has('badge'), label: '徽章' },
         ]
       : order === 3
         ? [
-            { done: kinds.has('chest'), label: '开箱' },
-            { done: kinds.has('block') || chestShops.size >= 2, label: '挡锤或第二箱' },
-            { done: kinds.has('badge'), label: '徽章' },
+            { done: chestShops.has('west'), label: '西铺取货' },
+            { done: chestShops.has('east'), label: '东铺取货' },
+            { done: kinds.has('return'), label: '回入口' },
           ]
         : order === 4
           ? [
-              { done: kinds.has('gauge'), label: '水尺' },
-              { done: kinds.has('bridge') || kinds.has('block'), label: '跨桥或挡锤' },
-              { done: kinds.has('badge'), label: '徽章' },
+              {
+                done: game.log.some((e) => e.kind === 'gauge' && e.bank === 'west'),
+                label: '西岸读数',
+              },
+              {
+                done: game.log.some((e) => e.kind === 'gauge' && e.bank === 'east'),
+                label: '东岸读数',
+              },
+              { done: kinds.has('return'), label: '回入口' },
             ]
           : order === 5
             ? [
-                { done: archiveSites.size > 0, label: '取档案' },
-                {
-                  done: archiveSites.size >= 2 || (archiveSites.size > 0 && usedDoor),
-                  label: '两档或近门',
-                },
-                { done: kinds.has('badge'), label: '徽章' },
+                { done: archiveSites.has('west'), label: '西档抄好' },
+                { done: archiveSites.has('east'), label: '东档抄好' },
+                { done: kinds.has('return'), label: '出口交档' },
               ]
             : order === 6
               ? [
-                  { done: kinds.has('part'), label: '零件' },
-                  { done: !kinds.has('pendulumHit'), label: '没被钟摆打到' },
-                  { done: kinds.has('badge'), label: '徽章' },
+                  {
+                    done: game.log.some((e) => e.kind === 'part' && e.site === 'top'),
+                    label: '上层零件',
+                  },
+                  {
+                    done: game.log.some((e) => e.kind === 'part' && e.site === 'bottom'),
+                    label: '下层零件',
+                  },
+                  { done: kinds.has('return'), label: '回入口' },
                 ]
               : order === 7
                 ? [
@@ -1159,6 +1223,7 @@ function showLogWaiting() {
 }
 
 function updateLogUI() {
+  updateWorkshopProgress()
   updateLogProgress()
   if (!game.log.length) {
     if (logShownOrder !== order || !logListEl.querySelector('.log-waiting')) {
@@ -1483,9 +1548,11 @@ function showReview() {
       kind === 'hit' ||
       kind === 'shot' ||
       kind === 'pendulumHit' ||
-      kind === 'patrol'
+      kind === 'patrol' ||
+      kind === 'retreat' ||
+      kind === 'returnMiss'
     const li = document.createElement('li')
-    li.className = setback ? 'is-setback' : 'is-done'
+    li.className = setback ? 'is-setback' : kind === 'chestPath' ? 'is-note' : 'is-done'
     li.textContent = text
     reviewEvents.appendChild(li)
   })
@@ -1604,7 +1671,7 @@ btnNext.addEventListener('click', () => {
     resetBusiness()
     fourthUnlocked = true
     setOrder(4)
-    status('接下了潮汐蓄水厅。桥板和其他道具共用预算，备好再开门。')
+    status('接下了潮汐蓄水厅。两把水尺一岸一把，桥板和其他道具共用预算，备好再开门。')
     return
   }
   if (order === 4) {
@@ -1612,7 +1679,7 @@ btnNext.addEventListener('click', () => {
     resetBusiness()
     fifthUnlocked = true
     setOrder(5)
-    status('接下了双锁档案库。重块压对压板，两扇门和后门都看清再开门。')
+    status('接下了双锁档案库。两扇近门、两条后路、两个交档口，选好出口再开门。')
     return
   }
   if (order === 5) {
@@ -1620,7 +1687,7 @@ btnNext.addEventListener('click', () => {
     resetBusiness()
     sixthUnlocked = true
     setOrder(6)
-    status('接下了钟摆工坊。两条钟摆捷径、干净南道，止摆只有一次。')
+    status('接下了钟摆工坊。上下两件零件都要取，检修板走安全线，止摆只有一次。')
     return
   }
   if (order === 6) {
@@ -1657,7 +1724,7 @@ window.addEventListener('keydown', (e) => {
 })
 
 // 全局按键：布置 Enter 开门；营业 R 保留摆法重开；1/2 调倍速；
-// 二单/六单的真实预警期间，空格等同按亮起的拉闸/止摆按钮。
+// 空格触发二单预警拉闸，或六单营业中的一次全局止摆。
 window.addEventListener('keydown', (e) => {
   if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return
   if (!reviewCard.hidden) return
@@ -1724,7 +1791,7 @@ function buildRoute(g, guestOverride = null) {
   const markers = []
   let pickedShield = false
   let endTile = null
-  let gaugeSeen = false
+  let gaugeBanks = new Set()
   const dangerKeys = new Set()
   const push = (p) => {
     const last = raw[raw.length - 1]
@@ -1741,7 +1808,12 @@ function buildRoute(g, guestOverride = null) {
   if (plan) {
     for (const a of plan.actions) {
       if (a.type === 'move') {
-        for (const p of a.path) push(p)
+        for (const p of a.path) {
+          push(p)
+          if (order === 6 && PENDULUM.pendulums.some((s) => s.x === p.x && s.y === p.y)) {
+            addDanger(p, 'pendulum')
+          }
+        }
         endTile = a.path[a.path.length - 1]
       } else if (a.type === 'open') {
         markers.push({ kind: 'chest', x: a.x, y: a.y })
@@ -1754,12 +1826,23 @@ function buildRoute(g, guestOverride = null) {
         markers.push({ kind: 'part', x: a.x, y: a.y })
       } else if (a.type === 'moss') {
         markers.push({ kind: 'moss', x: a.x, y: a.y })
-      } else if (a.type === 'pendulum') {
-        addDanger(a.at, 'pendulum')
       } else if (a.type === 'patrol') {
         addDanger(a.at, 'patrol')
       } else if (a.type === 'log' && a.event === 'gauge') {
-        gaugeSeen = true
+        if (a.bank) gaugeBanks.add(a.bank)
+      } else if (a.type === 'log' && a.event === 'bridge') {
+        // 战报桥标记跟着真实跨桥记录走：踩上桥面又折返不算跨
+        const span = TIDE.spans.find((s) => s.y === a.spanY)
+        if (span) {
+          markers.push({
+            kind: 'bridge',
+            x: Math.round((span.x1 + span.x2) / 2),
+            y: span.y,
+          })
+        }
+      } else if (a.type === 'log' && a.event === 'retreat') {
+        // 首单撤退：在战斗格标一个危险记号，脚印随后真走回南厅出口
+        addDanger(a.at, 'retreat')
       } else if (a.type === 'trap') {
         if (a.stop) push(a.stop)
         if (a.beam) {
@@ -1781,23 +1864,9 @@ function buildRoute(g, guestOverride = null) {
         }
       }
     }
-    if (gaugeSeen) {
-      markers.push({ kind: 'gauge', x: TIDE.gauge.x, y: TIDE.gauge.y })
-    }
-    if (order === 4) {
-      for (const span of TIDE.spans) {
-        const hasBridge = [...source.items.values()].some(
-          (it) => it.type === 'bridge' && it.y === span.y,
-        )
-        if (!hasBridge) continue
-        if (raw.some((t) => t.y === span.y && t.x >= span.x1 && t.x <= span.x2)) {
-          markers.push({
-            kind: 'bridge',
-            x: Math.round((span.x1 + span.x2) / 2),
-            y: span.y,
-          })
-        }
-      }
+    for (const bank of gaugeBanks) {
+      const g = TIDE.gauges[bank]
+      if (g) markers.push({ kind: 'gauge', x: g.x, y: g.y })
     }
     if (order === 5) {
       for (const d of ARCHIVE.doors) {
@@ -1975,6 +2044,8 @@ function clearGoldFx() {
 function specialPlaceReason(type, x, y, ignoreKey = null) {
   const base = placeReason(game, x, y, ignoreKey)
   if (order === 4) {
+    const gaugeSpot = Object.values(TIDE.gauges).some((g) => g.x === x && g.y === y)
+    if (gaugeSpot) return 'gauge-spot'
     const slot = TIDE.bridgeSlots.has(tileKey(x, y))
     if (type === 'bridge') {
       if (!slot) return 'bridge-slot'
@@ -1989,11 +2060,30 @@ function specialPlaceReason(type, x, y, ignoreKey = null) {
     }
     if (slot) return 'bridge-slot'
   }
-  if (order === 5 && type === 'weight') {
-    if (!ARCHIVE.plates.some((p) => p.x === x && p.y === y)) return 'weight-plate'
+  if (order === 5) {
+    // 档案格、两个交档出口与入口都是固定目标：道具不能压上去（压上去客人就走不到了）
+    if (ARCHIVE.archives.some((a) => a.x === x && a.y === y)) return 'archive-spot'
+    if (Object.values(ARCHIVE.exits).some((e) => e.x === x && e.y === y)) return 'exit-spot'
+    if (ARCHIVE.spawn.x === x && ARCHIVE.spawn.y === y) return 'exit-spot'
+    if (type === 'weight' && !ARCHIVE.plates.some((p) => p.x === x && p.y === y)) {
+      return 'weight-plate'
+    }
   }
   if (order === 6) {
     if (PENDULUM.parts.some((p) => p.x === x && p.y === y)) return 'part-spot'
+    const slot = PENDULUM.plankSlots.has(tileKey(x, y))
+    if (type === 'plank') {
+      if (!slot) return 'plank-slot'
+      if (base !== 'ok') return base
+      const other = [...game.items.values()].some(
+        (it) =>
+          it.type === 'plank' &&
+          it.y === y &&
+          tileKey(it.x, it.y) !== ignoreKey,
+      )
+      return other ? 'plank-taken' : 'ok'
+    }
+    if (slot) return 'plank-slot'
   }
   if (order === 7) {
     const slot = MOSS.bells.some((b) => b.x === x && b.y === y)
@@ -2021,7 +2111,40 @@ function updatePlaqueSubtitle() {
   subtitleEl.textContent = `第${CN_ORDINALS[n]}单 · ${LEVEL_NAMES[n]}`
 }
 
+function updateWorkshopLayout() {
+  const active = order === 6
+  document.body.classList.toggle('workshop-mode', active)
+  workshopOrderEl.hidden = !active
+  workshopDockEl.hidden = !active
+  if (active && btnSwing.parentElement !== workshopActionsEl) {
+    workshopVoiceEl.append(coachEl, bubbleEl)
+    workshopActionsEl.append(primaryActionsEl, btnSwing)
+  } else if (!active && btnSwing.parentElement === workshopActionsEl) {
+    canvasWrapEl.append(coachEl, bubbleEl)
+    guestReserveEl.insertBefore(primaryActionsEl, trapSlotEl)
+    trapSlotEl.append(btnSwing)
+  }
+}
+
+function updateWorkshopProgress() {
+  if (order !== 6) return
+  workshopCountEl.textContent = `零件 ${game.takenParts.size} / 2`
+  for (const [id, el] of [['top', workshopTopEl], ['bottom', workshopBottomEl]]) {
+    const taken = game.takenParts.has(id)
+    el.classList.toggle('done', taken)
+    el.querySelector('small').textContent = taken ? '已取 ✓' : '待取'
+  }
+  const returned = game.log.some((e) => e.kind === 'return')
+  workshopReturnEl.classList.toggle('done', returned && game.takenParts.size === 2)
+  workshopReturnEl.classList.toggle('ready', !returned && game.takenParts.size === 2)
+  workshopReturnEl.querySelector('small').textContent = returned ? game.takenParts.size === 2 ? '已交 ✓' : '缺件' : game.takenParts.size === 2 ? '请返回' : '交件'
+  const planks = new Set([...game.items.values()].filter((i) => i.type === 'plank').map((i) => i.y))
+  workshopPlanksEl.textContent = `上板 ${planks.has(6) ? '已通' : '未铺'} · 下板 ${planks.has(16) ? '已通' : '未铺'}`
+}
+
 function updateHUD() {
+  updateWorkshopLayout()
+  updateWorkshopProgress()
   updateMapFrameGlow()
   updatePlaqueSubtitle()
   applyGuestTheme()
@@ -2037,13 +2160,13 @@ function updateHUD() {
       : order === 7
       ? { shield: true, sign: true, barrier: true, bell: true }
       : order === 6
-        ? { shield: true, sign: true, barrier: true }
+        ? { sign: true, barrier: true, plank: true }
         : order === 5
-          ? { shield: true, sign: true, barrier: true, weight: true }
+          ? { sign: true, barrier: true, weight: true }
           : order === 4
-            ? { shield: true, sign: true, barrier: true, bridge: true }
+            ? { sign: true, barrier: true, bridge: true }
             : order === 3
-              ? { chest: true, shield: true, sign: true, barrier: true }
+              ? { chest: true, sign: true, barrier: true }
               : { chest: true, shield: true, sign: true }
   for (const el of cardEls) el.hidden = !visible[el.dataset.type]
   updateCardCopy()
@@ -2092,6 +2215,7 @@ function updateHUD() {
   updateTrapButton()
   updateSwingButton()
   updateNightPreviewUI()
+  updateArchiveExitUI()
   updateOnboarding()
   // 布置期的真实路线脚印；营业后收起
   footprintsBase = mode === 'setup' ? buildFootprints(game) : null
@@ -2143,19 +2267,32 @@ function updateSwingButton() {
     swingTimerFillEl.style.transform = 'scaleX(0)'
     return
   }
-  const warning = mode === 'business' && !!swingWarn
-  const armed = warning && !swingUsed && !swingWarn.pressed
+  const remaining = swingStopAt == null ? 0 : Math.max(0, swingStopAt + PENDULUM_MOTION.stopMs - workshopTime())
+  const armed = mode === 'business' && !!walker && swingStopAt == null
   btnSwing.disabled = !armed
   btnSwing.classList.toggle('armed', armed)
-  btnSwing.classList.toggle('timing', armed)
+  btnSwing.classList.toggle('timing', remaining > 0)
   btnSwing.classList.toggle('standby', mode === 'setup')
-  if (!armed) swingTimerFillEl.style.transform = 'scaleX(0)'
-  let label = '钟摆待命 · 全局一次止摆'
+  swingTimerFillEl.style.transform = `scaleX(${remaining / PENDULUM_MOTION.stopMs})`
+  btnSwing.title = '全局只能拉一次，全部钟摆原位停 1.8 秒营业时间；停在路中的摆砣仍会碰中。'
+  let state = 'standby'
+  let label = '拉闸待命 · 开门后可用 1 次'
   if (mode === 'business') {
-    if (swingUsed) label = '止摆已用'
-    else if (warning) label = '止摆停住钟摆 [空格]'
-    else label = '钟摆待命 · 走过才预警'
+    if (remaining > 0) {
+      state = 'holding'
+      label = `原位止摆 ${(remaining / 1000).toFixed(1)}s · 剩 0 次`
+    } else if (swingStopAt != null) {
+      state = 'spent'
+      label = '拉闸已用完 · 钟摆继续摆动'
+    } else if (walker) {
+      state = 'ready'
+      label = '拉闸止摆 · 剩 1 次 [空格]'
+    } else {
+      state = 'ended'
+      label = '本趟结束 · 未使用拉闸'
+    }
   }
+  btnSwing.dataset.state = state
   swingLabelEl.textContent = label
 }
 
@@ -2164,6 +2301,8 @@ function setOrder(n) {
   order = n
   game = games[n]
   base = bases[n]
+  canvas.width = base.width
+  canvas.height = base.height
   currentMap = MAP_DEFS[n]
   window.__game = game
   clearGoldFx()
@@ -2189,8 +2328,10 @@ function setOrder(n) {
     applyNightStage(1)
     setNightGuestUI(1)
   } else {
-    skeleton.x = currentMap.skeleton.x
-    skeleton.y = currentMap.skeleton.y
+    if (currentMap.skeleton) {
+      skeleton.x = currentMap.skeleton.x
+      skeleton.y = currentMap.skeleton.y
+    }
     const info = ORDER_INFO[order]
     guestTitleEl.textContent = info.title
     guestQuoteTextEl.innerHTML = info.quote
@@ -2220,40 +2361,24 @@ function setOrder(n) {
       : order === 7
       ? '外廊可避开巡卫；古铃能把巡卫引到一侧，样本在内院。'
       : order === 6
-        ? '两条钟摆捷径、干净南道和中间检修道；全局只有一次止摆。'
+        ? '上层、下层两件零件都要真踩点取到；检修板铺安全线，或穿中廊南廊；取齐回入口交差。'
         : order === 5
-      ? '空摆只取一份；路牌可从后门引到第二间；重块开近门后要真穿过去。'
+      ? '西档、东档都要真走到；重块开近门抄近路，或走外侧后路；抄齐后到选定的出口交档。'
       : order === 4
-        ? '桥板拖到标出的桥位；客人先看水尺，再跨桥或带盾挡锤。'
+        ? '西岸、东岸两把水尺都要真走到；桥板架桥位，或走南干堤绕行，读齐回干堤入口交差。'
         : order === 3
-          ? '宝箱放进西铺或东铺；路牌插在罗盘岔口才引路，隔栅可挡路改道。'
+          ? '西铺、东铺各摆一只宝箱，客人各取一件；路牌插在罗盘岔口才引路，隔栅可挡路改道。'
           : order === 2
             ? '路牌放在岔口并朝上，客人就绕补给廊；其他方向走近路。'
             : '把道具拖到空地砖上摆放',
   )
   updateLogUI()
   updateHUD()
+  // 换单后按新地图宽高重算画布 CSS 尺寸与账房排版，不等窗口 resize
+  syncCanvasSize()
 }
 
 // ---------- 首单上手引导 ----------
-
-function itemInRoom(item, room) {
-  return item.x >= room.x1 && item.x <= room.x2 && item.y >= room.y1 && item.y <= room.y2
-}
-
-// 首单实际会踩到的地砖（含开箱/路牌绕行），用于判断「盾牌放得走不走得到」
-function walkedTilesOrder1() {
-  const set = new Set()
-  const plan = planRoute(game, 1)
-  if (plan) {
-    for (const a of plan.actions) {
-      if (a.type === 'move') {
-        for (const t of a.path) set.add(tileKey(t.x, t.y))
-      }
-    }
-  }
-  return set
-}
 
 function setCoach(text, leftPct, topPct, arrowRight = false) {
   coachTextEl.textContent = text
@@ -2300,9 +2425,10 @@ function suggestShieldTile(walked) {
 }
 
 function coachSpotForTile(t) {
+  const { cols, rows } = mapDims()
   return {
-    left: Math.min(72, ((t.x + 1.25) / COLS) * 100),
-    top: Math.min(86, Math.max(8, ((t.y + 0.5) / ROWS) * 100)),
+    left: Math.min(72, ((t.x + 1.25) / cols) * 100),
+    top: Math.min(86, Math.max(8, ((t.y + 0.5) / rows) * 100)),
   }
 }
 
@@ -2338,17 +2464,17 @@ function updateOnboarding() {
     return
   }
   if (order === 3) {
-    // 正篇：铺面宝箱 + 罗盘岔口 + 隔栅
+    // 正篇：两铺各取一件 + 罗盘岔口 + 隔栅
     onbStep = 'route'
     if (!planRoute(game, 3)) {
       guideState = null
-      setCoach('隔栅封死了去挑战房的路，先挪开或收回一格再开门。', 37, 55)
+      setCoach('隔栅封死了回南厅的路，先挪开或收回一格再开门。', 37, 55)
     } else {
-      guideState = { room: null, tile: { x: 11, y: 12 } }
+      guideState = { room: null, tile: { x: 15, y: 18 } }
       setCoach(
-        '宝箱放进西铺或东铺；路牌插在带罗盘的岔口才会引路，隔栅可挡路改道。',
-        36,
-        58,
+        '西铺、东铺各摆一只宝箱，客人各取一件；路牌插在带罗盘的岔口才引路，隔栅可挡路改道。',
+        42,
+        70,
       )
     }
     return
@@ -2357,10 +2483,14 @@ function updateOnboarding() {
     onbStep = 'route'
     if (!planRoute(game, 4)) {
       guideState = null
-      setCoach('隔栅封死了去挑战房的路，先挪开或收回一格再开门。', 37, 55)
+      setCoach('隔栅封死了回干堤入口的路，先挪开或收回一格再开门。', 37, 55)
     } else {
-      guideState = { room: null, tile: { x: 7, y: 10 } }
-      setCoach('桥板拖到标出的桥位；先到水尺，再跨桥或带盾挡锤。', 36, 58)
+      guideState = { room: null, tile: { x: TIDE.gauges.west.x, y: TIDE.gauges.west.y } }
+      setCoach(
+        '两把水尺都要真走到：桥板拖到标出的桥位，或不架桥走南干堤；读齐后回干堤入口才交差。',
+        30,
+        58,
+      )
     }
     return
   }
@@ -2368,12 +2498,12 @@ function updateOnboarding() {
     onbStep = 'route'
     if (!planRoute(game, 5)) {
       guideState = null
-      setCoach('去挑战房的路被隔栅封死了，先挪开再开门。', 37, 55)
+      setCoach('隔栅封死了去交档出口的路，先挪开或收回一格再开门。', 37, 55)
     } else {
-      guideState = { room: null, tile: { x: 4, y: 8 } }
+      guideState = { room: null, tile: { x: ARCHIVE.archives[0].x, y: ARCHIVE.archives[0].y } }
       setCoach(
-        '空摆只取一份；路牌从后门引到另一间会多取；开近门并实际穿过也五星。',
-        33,
+        '西档、东档都要抄，谁先都行；重块开近门抄近路，不开门走外侧后路。抄齐后真走到亮起的出口交档。',
+        30,
         58,
       )
     }
@@ -2381,12 +2511,14 @@ function updateOnboarding() {
   }
   if (order === 6) {
     onbStep = 'route'
-    if (!planRoute(game, 6)) {
-      guideState = null
-      setCoach('隔栅封死了去挑战房的路，先挪开再开门。', 37, 55)
+    guideState = null
+    const route = planRoute(game, 6)
+    if (!route) {
+      setCoach('隔栅封死了回入口的路，先挪开再开门。', 0, 0)
+    } else if (new Set(route.actions.filter((a) => a.type === 'part').map((a) => a.site)).size < 2) {
+      setCoach('有零件被隔栅挡住了；挪开后再开门，才能取齐。', 0, 0)
     } else {
-      guideState = { room: null, tile: { x: 11, y: 7 } }
-      setCoach('两条钟摆捷径、干净南道；钟摆只停一次，走过才会预警。', 35, 58)
+      setCoach('拖检修板到缺口可绕行；也能直接开门，让工匠穿过钟摆廊。', 0, 0)
     }
     return
   }
@@ -2426,37 +2558,53 @@ function updateOnboarding() {
   }
   const items = [...game.items.values()]
   const chests = items.filter((it) => it.type === 'chest')
-  const chestInRoom = chests.find(
-    (it) => itemInRoom(it, ROOMS.sideA) || itemInRoom(it, ROOMS.sideB),
-  )
+  const shields = items.filter((it) => it.type === 'shield')
+  // 提示按这趟预览路线的真实结果说：会不会进侧室开箱、挥锤前捡不捡得到盾
+  const pv = previewOutcome1(game)
 
-  if (!chestInRoom) {
+  if (!chests.length) {
     onbStep = 'chest'
     guideState = { room: GUIDE_ROOM, tile: null }
-    setCoach(
-      chests.length
-        ? '宝箱要放进亮起的侧室，他才会进去开。'
-        : '把宝箱拖进亮起的侧室，他会进去开箱。',
-      34,
-      28,
-    )
+    setCoach('把宝箱拖进侧室，或摆在侧室门口他瞧得见的格。', 34, 28)
     setOpenSuggested(true)
     return
   }
 
-  const walked = walkedTilesOrder1()
-  const shields = items.filter((it) => it.type === 'shield')
-  const goodShield = shields.find((it) => walked.has(tileKey(it.x, it.y)))
+  if (!pv.roomOpen) {
+    onbStep = 'chest'
+    const hidden = chests.find((it) => chestRoomAt(it.x, it.y))
+    if (hidden) {
+      // 箱在房里但这趟走不进去开：多半被半截墙挡住视线
+      guideState = { room: null, tile: { x: hidden.x, y: hidden.y } }
+      const where = coachSpotForTile(hidden)
+      setCoach(
+        '照这个走法，他会错过侧室的箱。可以把牌朝侧室，也可以把箱往门边挪。',
+        where.left,
+        where.top,
+      )
+    } else {
+      guideState = { room: GUIDE_ROOM, tile: null }
+      setCoach(
+        pv.pathOpen
+          ? '主路的箱他会开，但不算进侧室寻宝。挪一只进侧室，或摆到侧室门口。'
+          : '这趟看不到这个箱。试着放到侧室门内、路过能看见的地方。',
+        34,
+        28,
+      )
+    }
+    setOpenSuggested(true)
+    return
+  }
 
-  if (!goodShield) {
+  if (!pv.shieldBeforeFight) {
     onbStep = 'shield'
-    const spot = suggestShieldTile(walked)
+    const spot = suggestShieldTile(pv.preFightWalked)
     guideState = spot ? { room: null, tile: spot } : null
     const where = spot ? coachSpotForTile(spot) : { left: 51, top: 64 }
     setCoach(
       shields.length
-        ? '这格剑士走不到，把盾牌挪到亮起的建议格。'
-        : '再摆一面盾，拖到亮起的建议格。他路过时会捡起来挡锤。',
+        ? '这面盾落锤前捡不到，挪到去程路上的亮起建议格；空手挨两锤就会撤退。'
+        : '再摆一面盾，拖到亮起的建议格。捡起挡住锤才能反击取章；空手挨两锤就撤退。',
       where.left,
       where.top,
     )
@@ -2518,6 +2666,23 @@ function chooseNightPreview(index) {
 nightWestBtn.addEventListener('click', () => chooseNightPreview(1))
 nightEastBtn.addEventListener('click', () => chooseNightPreview(2))
 
+// 档案库布置：选交档出口，脚印按新出口重算，地图上亮出选中的那个口
+function setArchiveExit(side) {
+  if (mode !== 'setup' || order !== 5 || games[5].archiveExit === side) return
+  games[5].archiveExit = side
+  sfx.sign()
+  clearFootprintPreview()
+  updateArchiveExitUI()
+  updateHUD()
+  status(
+    side === 'west'
+      ? '交档出口改到西门：抄齐两份后真走到西出口 (4,20)。'
+      : '交档出口改到东门：抄齐两份后真走到东出口 (27,20)。',
+  )
+}
+exitWestBtn.addEventListener('click', () => setArchiveExit('west'))
+exitEastBtn.addEventListener('click', () => setArchiveExit('east'))
+
 // 营业倍速：随时可切，走动中的时钟不重置也不跳步
 spd1El.addEventListener('click', () => setSpeed(1))
 spd2El.addEventListener('click', () => setSpeed(2))
@@ -2540,13 +2705,13 @@ btnTrap.addEventListener('click', () => {
   updateTrapButton()
 })
 
-// 钟摆止摆：只在实际预警窗口内、全局一次
 btnSwing.addEventListener('click', () => {
-  if (order !== 6 || mode !== 'business' || swingUsed || !swingWarn) return
-  if (performance.now() - swingWarn.startReal >= swingWarn.ms) return
-  swingUsed = true
-  swingWarn.pressed = true
-  swingWarn.stopAngle = reducedMotion ? 0 : lastPendulumAngle(swingWarn.id) ?? 0
+  if (order !== 6 || mode !== 'business' || !walker || swingStopAt != null) return
+  swingStopAt = workshopTime()
+  addLog(game, 'pendulumStop', { label: '全局拉闸，原位停摆 1.8 秒', time: swingStopAt })
+  updateLogUI()
+  sfx.block()
+  status('全部钟摆原位停 1.8 秒营业时间，工匠继续走；注意路中的摆砣。')
   updateSwingButton()
 })
 
@@ -2604,20 +2769,21 @@ function startBusiness() {
     applyNightStage(1)
     setNightGuestUI(1)
   } else {
-    plan = planRoute(game, order)
+    // 首关只排接近段：走到岔口 (15,12) 时由 decide 动作读牌生成续程
+    plan = order === 1 ? planApproach1(game) : planRoute(game, order)
   }
   if (!plan) {
     status(
       order === 6
-        ? '隔栅把工坊的路封死了，先挪开或收回一格再开门。'
+        ? '隔栅封死了回工坊入口的路，先挪开或收回一格再开门。'
         : order === 7
           ? '隔栅把巡廊的路封死了，先挪开或收回一格再开门。'
           : order === 4
-            ? '桥位和干路都走不通，或隔栅封住了必经路，先调整再开门。'
+            ? '隔栅封死了回干堤入口的路，先挪开或收回一格再开门。'
             : order === 5
-              ? '隔栅把去挑战房的路封死了，先挪开或收回一格再开门。'
+              ? '隔栅封死了去交档出口的路，先挪开或收回一格再开门。'
               : order === 3
-                ? '隔栅封死了去挑战房的路，先挪开或收回一格再开门。'
+                ? '隔栅封死了回南厅的路，先挪开或收回一格再开门。'
                 : '客人找不到去挑战房的路',
       'fail',
     )
@@ -2625,9 +2791,12 @@ function startBusiness() {
   }
   sfx.openDoor()
   runHasTrap = plan.actions.some((a) => a.type === 'trap')
-  swingUsed = false
-  swingWarn = null
-  swingStopped = new Map()
+  // 固定步长从整数毫秒起跑，避免浮点余数让台词或行走多等一拍。
+  if (order === 6) simT = Math.round(simT)
+  swingStart = simT
+  swingStopAt = null
+  swingRemainder = 0
+  swingHits = new Map()
   bridgeSplash = null
   lastBridgeRow = null
   hitStop = null
@@ -2659,6 +2828,7 @@ function startBusiness() {
     hasArchive: false,
     hasPart: false,
     hasMoss: false,
+    hp: FIGHT1.HP, // 首单战斗血量；重试重新开门时从这里满血开始
     variant: order === 8 ? NIGHT.guests[0].variant : GUEST_VARIANT[order] || 'knight',
     facing: 'down',
     walkPhase: 0,
@@ -2759,9 +2929,10 @@ function resetBusiness() {
   alarmEl.hidden = true
   btnTrap.classList.remove('timing')
   trapTimerFillEl.style.transform = 'scaleX(0)'
-  swingUsed = false
-  swingWarn = null
-  swingStopped = new Map()
+  swingStart = simT
+  swingStopAt = null
+  swingRemainder = 0
+  swingHits = new Map()
   btnSwing.classList.remove('armed', 'timing', 'standby')
   swingTimerFillEl.style.transform = 'scaleX(0)'
   runHasTrap = true
@@ -2834,6 +3005,7 @@ function stepWalker(t, realT) {
       return
     }
     if (a.type === 'move') {
+      if (order === 6 && !bubbleEl.hidden) hideBubble()
       const total = (a.path.length - 1) * WALK.STEP_MS
       const el = t - walker.actionStart
       if (el >= total) {
@@ -2873,18 +3045,29 @@ function stepWalker(t, realT) {
     }
     if (a.type === 'open') {
       if (openChest(game, a.x, a.y)) {
-        addLog(
-          game,
-          'chest',
-          a.guest
-            ? { guest: a.guest, guestName: a.guestName, label: a.label || '打开宝箱' }
-            : a.shop
-              ? {
-                  shop: a.shop,
-                  label: a.shop === 'west' ? '打开西铺宝箱' : '打开东铺宝箱',
-                }
-              : null,
-        )
+        let extra = a.guest
+          ? { guest: a.guest, guestName: a.guestName, label: a.label || '打开宝箱' }
+          : a.shop
+            ? {
+                shop: a.shop,
+                label:
+                  a.shop === 'west' ? '西铺取到草料纪念品' : '东铺取到陶器',
+              }
+            : null
+        if (order === 1) {
+          // 首单：记下箱在哪间侧室、开盖那一刻人站没站进同一间房——
+          // 只有「走进侧室开那间房的箱」才算寻宝，主路箱照开但不计星
+          const room = chestRoomAt(a.x, a.y)
+          const standIn =
+            !!room &&
+            chestRoomAt(Math.round(guest.x), Math.round(guest.y)) === room
+          extra = {
+            room,
+            standIn,
+            label: room ? '打开侧室宝箱' : '打开主路宝箱',
+          }
+        }
+        addLog(game, 'chest', extra)
         updateLogUI()
         sfx.chest()
         // 真开箱：抬臂展示 + 三粒星芒
@@ -2910,6 +3093,10 @@ function stepWalker(t, realT) {
       continue
     }
     if (a.type === 'part') {
+      if (order === 6 && (guest.x !== a.x || guest.y !== a.y)) {
+        advanceWalker(t)
+        continue
+      }
       game.takenParts.add(a.site)
       if (guest) guest.hasPart = true
       addLog(game, 'part', { site: a.site, label: `取到${a.name}` })
@@ -2988,6 +3175,61 @@ function stepWalker(t, realT) {
       advanceWalker(t)
       continue
     }
+    if (a.type === 'decide') {
+      // 首关岔口 / 徽章后回程：实际走到才读脚下的路牌，按节点生成对应续程骨架接在后面
+      const st = {
+        cur: { x: Math.round(guest.x), y: Math.round(guest.y) },
+        hasShield: guest.hasShield,
+      }
+      const cont =
+        a.node === 'jR'
+          ? planFromJunctionR1(game, st)
+          : a.node === 'back'
+            ? planReturn1(game, st)
+            : planFromJunctionL1(game, st)
+      walker.actions.push(...cont)
+      advanceWalker(t)
+      continue
+    }
+    if (a.type === 'look') {
+      // 脚落地再看周围：看见可见未开的箱子才插入「走过去开 → 回本格」，回来再 look 一次；
+      // 没看见就直接 advance 走下一格。与脚印预展开共用 lookInsert 规则。
+      const at = { x: Math.round(guest.x), y: Math.round(guest.y) }
+      const ins = lookInsert(
+        game,
+        buildGrid(),
+        at,
+        a.say || '眼前有只宝箱，过去开。',
+        guest.hasShield,
+        new Set(),
+      )
+      if (ins) {
+        walker.actions.splice(walker.i + 1, 0, ...ins.seq, { type: 'look', at, say: a.say })
+      }
+      advanceWalker(t)
+      continue
+    }
+    if (a.type === 'fight') {
+      // 锤砸在举锤锁定的格（a.at）；碰没碰上人按落锤这一拍的真实站位判，
+      // 盾 + 血量也取此刻真值：开箱绕路上捡的盾也算数。
+      // 与脚印预展开（expandLooks1）共用 fightOutcome1，预览提示与实战一致。
+      const at = { x: Math.round(guest.x), y: Math.round(guest.y) }
+      walker.actions.splice(walker.i + 1, 0, ...fightOutcome1(game, guest.hasShield, a.at, at, guest.hp))
+      advanceWalker(t)
+      continue
+    }
+    if (a.type === 'hp') {
+      // 战斗血量落账（挨锤扣 35）；数值已由 fightOutcome1 算好，这里只写真值
+      guest.hp = a.set
+      advanceWalker(t)
+      continue
+    }
+    if (a.type === 'consumeShield') {
+      // 挡锤消耗盾：盾碎离手，守卫露空档；此后不再持盾
+      guest.hasShield = false
+      advanceWalker(t)
+      continue
+    }
     if (a.type === 'badge') {
       guest.hasBadge = true
       game.badgeTaken = true
@@ -2999,11 +3241,32 @@ function stepWalker(t, realT) {
       continue
     }
     if (a.type === 'log') {
+      if (order === 6 && a.event === 'return' &&
+          (guest.x !== PENDULUM.exit.x || guest.y !== PENDULUM.exit.y)) {
+        advanceWalker(t)
+        continue
+      }
+      if (order === 5 && a.event === 'return') {
+        // 第五单交档结算：按当时脚下格核对本局选中的出口，不信预排文案。
+        // 站错出口/没到出口记 returnMiss：已取档案保留，评价写预约未完成。
+        const gx = Math.round(guest.x)
+        const gy = Math.round(guest.y)
+        const verdict = archiveReturnLog(game.archiveExit, gx, gy)
+        addLog(game, verdict.kind, verdict.extra)
+        updateLogUI()
+        if (verdict.kind === 'returnMiss') {
+          status(verdict.extra.label, 'fail')
+          showBubble(verdict.extra.label, null, 'hurt')
+          sfx.warn()
+        }
+        advanceWalker(t)
+        continue
+      }
       addLog(
         game,
         a.event,
-        a.guest || a.label
-          ? { guest: a.guest, guestName: a.guestName, label: a.label }
+        a.guest || a.label || a.reason || a.bank
+          ? { guest: a.guest, guestName: a.guestName, label: a.label, reason: a.reason, bank: a.bank }
           : null,
       )
       updateLogUI()
@@ -3045,70 +3308,6 @@ function stepWalker(t, realT) {
         continue
       }
       return
-    }
-    if (a.type === 'pendulum') {
-      const SWING_MS = 2400
-      if (swingStopped.has(a.id)) {
-        advanceWalker(t)
-        continue
-      }
-      if (!a.started) {
-        a.started = true
-        a.phase = 'warn'
-        a.phaseStart = t
-        swingWarn = {
-          id: a.id,
-          at: a.at,
-          startReal: realT,
-          ms: SWING_MS,
-          pressed: false,
-        }
-        updateSwingButton()
-        hideBubble()
-        status(
-          swingUsed ? '钟摆预警：止摆已用，只能硬挨' : '钟摆预警！2.4 秒内点「止摆」',
-          swingUsed ? 'fail' : undefined,
-        )
-        sfx.warn()
-      }
-      if (a.phase === 'warn') {
-        if (swingWarn && swingWarn.pressed) {
-          addLog(game, 'pendulumStop')
-          updateLogUI()
-          swingStopped.set(swingWarn.id, {
-            angle: swingWarn.stopAngle || 0,
-            start: performance.now(),
-          })
-          sfx.block()
-          status('钟摆停住了')
-          a.phase = 'done'
-          a.phaseStart = t
-          swingWarn = null
-          updateSwingButton()
-        } else if (swingWarn && realT - swingWarn.startReal >= swingWarn.ms) {
-          addLog(game, 'pendulumHit')
-          updateLogUI()
-          fx = { kind: 'hit', at: { x: guest.x, y: guest.y }, start: t, ms: 350 }
-          stagger = { start: t, ms: 420 }
-          sfx.hit()
-          showBubble('钟摆扫过来了！', null, 'hurt')
-          status('没来得及止摆，客人被钟摆扫到', 'fail')
-          a.phase = 'done'
-          a.phaseStart = t
-          swingWarn = null
-          updateSwingButton()
-        }
-        return
-      }
-      if (a.phase === 'done') {
-        if (t - a.phaseStart >= 480) {
-          advanceWalker(t)
-          continue
-        }
-        return
-      }
-      advanceWalker(t)
-      continue
     }
     if (a.type === 'trap') {
       // 机械弩：预警四秒 → 暂停后先跨过亮线再记平安；错过则先步入亮线格、沿亮线中箭
@@ -3348,6 +3547,16 @@ function stepWalker(t, realT) {
       if (order === 8) {
         nightBadges[2] = nightBadges[2] || !!(guest && guest.hasBadge)
         status('整晚营业结束。两位客人的总评价单出来了。')
+      } else if (order === 3) {
+        status('逛店结束。看看淘货客留下的评价单吧。')
+      } else if (order === 4) {
+        status('看潮结束。看看潮汐工留下的评价单吧。')
+      } else if (order === 5) {
+        status('交档结束。看看抄书人留下的评价单吧。')
+      } else if (order === 6) {
+        status('交件结束。看看工匠留下的评价单吧。')
+      } else if (order === 1 && a.retreat) {
+        status('客人血量不足，撤退回南厅了。看看他留下的评价单吧。')
       } else {
         status('训练战结束。看看客人留下的评价单吧。')
       }
@@ -3363,7 +3572,7 @@ function stepWalker(t, realT) {
 function playPlaceSound(type) {
   if (type === 'bell') sfx.bell()
   else if (type === 'weight') sfx.gate()
-  else if (type === 'bridge') sfx.bridge()
+  else if (type === 'bridge' || type === 'plank') sfx.bridge()
   else if (type === 'barrier') sfx.barrier()
   else sfx.land()
 }
@@ -3388,7 +3597,7 @@ function startDrag(source, type, dir, e) {
     px: e.clientX,
     py: e.clientY,
     offsetY,
-    cellScreen: b.width / COLS,
+    cellScreen: b.width / mapDims().cols,
     target: null,
     overShop: false,
   }
@@ -3653,13 +3862,23 @@ window.addEventListener('pointerup', () => {
               ? '弹回：桥板只能搭在水道标出的整段桥位'
               : reason === 'bridge-taken'
                 ? '弹回：这段桥位已经搭了桥板'
+                : reason === 'gauge-spot'
+                  ? '弹回：水尺是固定目标，道具不能压上去'
                 : reason === 'weight-plate'
                   ? '弹回：重块只能压在红/黄压板上'
+                  : reason === 'archive-spot'
+                    ? '弹回：档案是固定目标，道具不能压上去'
+                    : reason === 'exit-spot'
+                      ? '弹回：入口和交档出口要留空，道具不能摆'
                   : reason === 'bell-slot'
                     ? '弹回：古铃只能挂在标出的两处铃位'
                     : reason === 'part-spot'
                       ? '弹回：零件点是固定目标'
-                      : '弹回：没落在地图上',
+                      : reason === 'plank-slot'
+                        ? '弹回：检修板只能铺在标出的整段板位'
+                        : reason === 'plank-taken'
+                          ? '弹回：这段板位已经铺了检修板'
+                          : '弹回：没落在地图上',
       'fail',
     )
   }
@@ -3709,7 +3928,36 @@ function frame(realT) {
     if (realT >= hitStop.until) hitStop = null
     else dt = 0
   }
-  simT += dt * speed
+  const workshopRunning = order === 6 && mode === 'business'
+  if (workshopRunning) {
+    // 固定营业步长，避免渲染帧率、倍速和减少动效改变接触结论。
+    swingRemainder += dt * speed
+    while (swingRemainder >= PENDULUM_MOTION.stepMs) {
+      swingRemainder -= PENDULUM_MOTION.stepMs
+      simT += PENDULUM_MOTION.stepMs
+      stepWalker(simT, realT)
+      if (!walker || !guest) continue
+      const hits = pendulumContacts(guest, workshopPendulums(), swingHits)
+      for (const hit of hits) {
+        addLog(game, 'pendulumHit', {
+          id: hit.id,
+          sweep: hit.sweep,
+          time: workshopTime(),
+          x: guest.x,
+          y: guest.y,
+          label: `${hit.name}扫到工匠`,
+        })
+      }
+      if (hits.length) {
+        updateLogUI()
+        fx = { kind: 'hit', at: { x: guest.x, y: guest.y }, start: simT, ms: 350 }
+        sfx.hit()
+        status('工匠碰到了摆砣，继续取件；可以赶空档或铺检修板绕行。', 'fail')
+      }
+    }
+  } else {
+    simT += dt * speed
+  }
   const t = simT
   if (!reducedMotion) drawCoinFrame(coinCtx, Math.floor(realT / 140) % 4)
 
@@ -3748,7 +3996,7 @@ function frame(realT) {
       hideGhost()
     }
   }
-  stepWalker(t, realT)
+  if (!workshopRunning) stepWalker(t, realT)
 
   // 水厅桥面反馈：认整条已经架好的 TIDE.spans，而不是只认脚下那块桥板
   let activeBridgeRow = null
@@ -3917,45 +4165,27 @@ function frame(realT) {
   // 二单警报：挂在邻边墙面，像素沙漏 + 真实剩余秒数（倍速不影响四秒）
   const trapRemain =
     order === 2 && crossbow.windowOpen ? Math.max(0, 4000 - (realT - crossbow.warnStart)) : null
-  const swingRemain =
-    order === 6 && swingWarn
-      ? Math.max(0, swingWarn.ms - (realT - swingWarn.startReal))
-      : null
   const showTrapAlarm = trapRemain != null && crossbow.mode === 'warning'
-  const showSwingAlarm = order === 6 && swingRemain != null
-  if (showTrapAlarm || showSwingAlarm) {
+  if (showTrapAlarm) {
     alarmEl.hidden = false
-    if (showSwingAlarm) {
-      alarmTextEl.textContent = swingUsed
-        ? `钟摆预警 · 止摆已用 ${(swingRemain / 1000).toFixed(1)}s`
-        : `钟摆预警 ${(swingRemain / 1000).toFixed(1)}s`
-      const anchor = swingWarn.at
-      alarmEl.style.left = (anchor.x / COLS) * 100 + '%'
-      alarmEl.style.top = (anchor.y / ROWS) * 100 + '%'
-    } else {
-      alarmTextEl.textContent = `弩机预警 ${(trapRemain / 1000).toFixed(1)}s`
-      const anchor =
-        currentMap.alarm || { x: currentMap.crossbow.x + 2.5, y: currentMap.crossbow.y + 1.8 }
-      alarmEl.style.left = (anchor.x / COLS) * 100 + '%'
-      alarmEl.style.top = (anchor.y / ROWS) * 100 + '%'
-    }
+    alarmTextEl.textContent = `弩机预警 ${(trapRemain / 1000).toFixed(1)}s`
+    const anchor =
+      currentMap.alarm || { x: currentMap.crossbow.x + 2.5, y: currentMap.crossbow.y + 1.8 }
+    const d = mapDims()
+    alarmEl.style.left = (anchor.x / d.cols) * 100 + '%'
+    alarmEl.style.top = (anchor.y / d.rows) * 100 + '%'
   } else if (!alarmEl.hidden) {
     alarmEl.hidden = true
   }
   // 进度条嵌在拉闸按钮下沿：满到空；收起时只动透明度与 transform，按钮高度不变
   trapTimerFillEl.style.transform = `scaleX(${trapRemain != null ? trapRemain / 4000 : 0})`
   if (order === 6) {
-    swingTimerFillEl.style.transform = `scaleX(${
-      swingRemain != null && !swingUsed ? swingRemain / swingWarn.ms : 0
-    })`
-    const swingSig = `${mode}|${order}|${swingUsed}|${!!swingWarn}`
+    const remaining = swingStopAt == null ? 0 : Math.max(0, swingStopAt + PENDULUM_MOTION.stopMs - workshopTime())
+    swingTimerFillEl.style.transform = `scaleX(${remaining / PENDULUM_MOTION.stopMs})`
+    const swingSig = `${mode}|${swingStopAt}|${!!walker}|${Math.ceil(remaining / 100)}`
     if (swingSig !== swingUiSig) {
       swingUiSig = swingSig
       updateSwingButton()
-    }
-    if (swingRemain != null && !swingUsed) {
-      const label = `止摆停住钟摆 [空格] · ${(swingRemain / 1000).toFixed(1)}s`
-      if (swingLabelEl.textContent !== label) swingLabelEl.textContent = label
     }
   }
   // 弩机按钮随状态换文案（待命 / 拉闸 / 已暂停 / 已了结）
@@ -4022,6 +4252,12 @@ function frame(realT) {
           .filter(([key, it]) => it.type === 'bridge' && key !== hiddenKey)
           .map(([, it]) => ({ x: it.x, y: it.y, sink: it.y === activeBridgeRow }))
       : null
+  const workshopPlanks =
+    order === 6
+      ? [...game.items.entries()]
+          .filter(([key, it]) => it.type === 'plank' && key !== hiddenKey)
+          .map(([, it]) => ({ x: it.x, y: it.y }))
+      : null
   const archiveDoors =
     order === 5
       ? Object.fromEntries(
@@ -4031,6 +4267,14 @@ function frame(realT) {
             return [d.id, !!(it && it.type === 'weight' && k !== hiddenKey)]
           }),
         )
+      : null
+  const archiveExitInfo =
+    order === 5
+      ? (() => {
+          const side = games[5].archiveExit === 'west' ? 'west' : 'east'
+          const e = ARCHIVE.exits[side]
+          return { side, x: e.x, y: e.y }
+        })()
       : null
   let mossPatrol = null
   if (order === 7) {
@@ -4103,7 +4347,8 @@ function frame(realT) {
         }
       : null,
     dust: dustScene,
-    skeleton,
+    skeleton: order === 4 || order === 5 || order === 6 ? null : skeleton,
+    guardOrder: order,
     skeletons:
       order === 8
         ? NIGHT.guests.map((g, i) => ({
@@ -4139,19 +4384,27 @@ function frame(realT) {
     invalid: invalidScene,
     pop: popScene,
     bridges: tideBridges,
+    planks: workshopPlanks,
     bridgeSplash: bridgeSplashScene,
     waterFx: order === 4,
-    gaugeOn: order === 4 && game.log.some((e) => e.kind === 'gauge'),
+    gaugesOn:
+      order === 4
+        ? [
+            ...new Set(
+              game.log.filter((e) => e.kind === 'gauge' && e.bank).map((e) => e.bank),
+            ),
+          ]
+        : null,
     doors: archiveDoors,
+    archiveExit: archiveExitInfo,
     doorMotes: doorMotesScene,
     archives: order === 5 ? game.takenArchives : null,
     pendulums:
       order === 6
         ? {
-            list: PENDULUM.pendulums,
-            activeId: swingWarn ? swingWarn.id : null,
-            warning: !!swingWarn,
-            stopped: swingStopped,
+            poses: workshopPendulums(),
+            time: workshopTime(),
+            stopAt: swingStopAt,
           }
         : null,
     parts: order === 6 ? game.takenParts : null,
@@ -4159,7 +4412,8 @@ function frame(realT) {
     mossBells: order === 7 ? mossPatrol.bells : null,
     moss: order === 7 ? { taken: game.takenMoss } : null,
     stand: currentMap.stand,
-    standBadge: order === 8 ? false : !game.badgeTaken,
+    // 集市北厅是账房、潮汐厅/档案库/钟摆工坊没有徽章台；夜场按双台另算
+    standBadge: order === 8 || order === 3 || order === 4 || order === 5 || order === 6 ? false : !game.badgeTaken,
     pastGuests: order === 8 && nightPastGuest ? [nightPastGuest] : null,
     entryGlow: entryGlowScene,
     stands:
